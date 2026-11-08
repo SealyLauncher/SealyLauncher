@@ -37,12 +37,14 @@ macOS/Linux 目前只配置构建与打包任务，测试按约定暂不执行�
 ## 设计方向验证
 
 ```powershell
-cargo run -p sealy-app --bin m3_demo
+cargo run -p sealy-app
 ```
 
-打开 Material 3 原型窗口：导航栏、Filled/Outlined 按钮、卡片、chips、FAB、线性进度、
-ripple 与 state layer，可用顶部 4 个 seed 实时换色、切换亮/暗主题。
-静态预览在 [design/preview/index.html](design/preview/index.html)。
+打开真实窗口：主页为磁贴布局，设置页可切换 4 套主题（纸张 / 墨色 / 陶土 / 青瓷），
+选择立即写入 `SealyData/settings.json`。
+静态预览在 [design/preview/home-v4.html](design/preview/home-v4.html) 与
+[design/preview/oobe-v4.html](design/preview/oobe-v4.html)，界面规范在
+[.agents/skills/bakaxl-flow-ui/](.agents/skills/bakaxl-flow-ui/SKILL.md)。
 
 ## CI / 发布
 

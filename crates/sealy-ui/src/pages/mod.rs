@@ -1,18 +1,18 @@
-//! Page renderers. Pages never perform I/O; they read [`ShellState`] and emit
-//! commands through `Context::listener`.
+//! Page routing.
 
-pub mod accounts;
-pub mod downloads;
-pub mod home;
-pub mod instances;
-pub mod settings;
+mod accounts;
+mod downloads;
+mod home;
+mod instances;
+pub(crate) mod placeholder;
+mod settings;
 
 use crate::app::SealyShell;
 use crate::kit::{AnyElement, Context};
 use crate::state::{Route, ShellState};
 
-/// Renders the active route.
-pub fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyElement {
+/// Renders the active page below the window chrome.
+pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyElement {
     match state.route {
         Route::Home => home::render(state, cx),
         Route::Instances => instances::render(state, cx),

@@ -1,108 +1,182 @@
-//! Settings page: flat rows, no section headings, real portable path display.
+//! Settings: theme presets, language and facts about the portable root.
 
-use sealy_core::config::Language;
+use sealy_core::config::{Language, ThemeName};
 
 use crate::app::SealyShell;
-use crate::components;
-use crate::i18n;
+use crate::components::{action_bar, choice_button, field_row, head_band, quiet_button};
 use crate::kit::*;
 use crate::state::ShellState;
-use crate::theme;
+use crate::theme::{self, ThemeTokens};
 
-fn row(label: impl Into<SharedString>, control: impl IntoElement) -> AnyElement {
-    let label: SharedString = label.into();
-    div()
-        .flex()
-        .items_center()
-        .justify_between()
-        .gap_4()
-        .py_4()
-        .child(
-            div()
-                .text_size(px(14.0))
-                .text_color(rgb(theme::TEXT))
-                .child(label),
-        )
-        .child(control.into_any_element())
-        .into_any_element()
-}
-
-/// Renders settings.
-pub fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyElement {
+pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyElement {
+    let t = state.theme();
     let lang = state.language();
-    let zh_active = lang == Language::ZhCn;
-    let en_active = lang == Language::EnUs;
 
-    let language_control = div()
-        .flex()
-        .items_center()
-        .gap_2()
-        .child(
-            components::segment("中文", zh_active)
-                .id("language-zh")
-                .cursor_pointer()
-                .on_click(cx.listener(|shell, _, _, cx| {
-                    shell.state.set_language(Language::ZhCn);
-                    cx.notify();
-                })),
-        )
-        .child(
-            components::segment("English", en_active)
-                .id("language-en")
-                .cursor_pointer()
-                .on_click(cx.listener(|shell, _, _, cx| {
-                    shell.state.set_language(Language::EnUs);
-                    cx.notify();
-                })),
-        );
+    let swatches = ThemeName::ALL
+        .into_iter()
+        .map(|name| swatch(name, state.theme_name(), &t, cx))
+        .collect::<Vec<_>>();
 
-    let mut rows: Vec<AnyElement> = Vec::new();
-    rows.push(row(i18n::settings_language(lang), language_control));
-    rows.push(components::separator().into_any_element());
-    rows.push(row(
-        i18n::settings_theme(lang),
-        components::pill(i18n::settings_dark(lang)),
-    ));
-    rows.push(components::separator().into_any_element());
-    rows.push(row(
-        i18n::settings_motion(lang),
-        components::pill(i18n::settings_system(lang)),
-    ));
-    rows.push(components::separator().into_any_element());
-    rows.push(row(
-        i18n::settings_source(lang),
-        components::pill(i18n::settings_auto(lang)),
-    ));
-    rows.push(components::separator().into_any_element());
-    rows.push(row(
-        i18n::settings_oem(lang),
-        components::pill(i18n::settings_oem_off(lang)),
-    ));
-    rows.push(components::separator().into_any_element());
-    rows.push(row(
-        i18n::settings_data_dir(lang),
-        div()
-            .max_w(px(420.0))
-            .text_size(px(11.0))
-            .text_color(rgb(theme::MUTED))
-            .child(state.paths.data.display().to_string()),
-    ));
-    rows.push(components::separator().into_any_element());
-    rows.push(row(
-        i18n::settings_version(lang),
-        components::pill(format!("SealyLauncher {}", sealy_core::version())),
-    ));
+    let data_dir = state.paths.root.display().to_string();
 
     div()
         .size_full()
         .flex()
-        .items_center()
-        .justify_center()
-        .p(px(theme::PAGE_PADDING))
+        .flex_col()
+        .child(head_band("05", "设置", &t))
         .child(
             div()
-                .w(px(theme::CONTENT_MAX_WIDTH))
-                .child(components::glass_panel().p(px(24.0)).children(rows)),
+                .flex_1()
+                .p(px(theme::PAGE_PADDING))
+                .flex()
+                .flex_col()
+                .child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .gap(px(10.0))
+                        .child(
+                            div()
+                                .text_size(px(13.0))
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .text_color(rgb(t.text))
+                                .child("主题"),
+                        )
+                        .child(div().flex().gap(px(10.0)).children(swatches)),
+                )
+                .child(div().h(px(28.0)))
+                .child(
+                    div()
+                        .w(px(720.0))
+                        .flex()
+                        .flex_col()
+                        .child(
+                            div()
+                                .h(px(56.0))
+                                .flex()
+                                .items_center()
+                                .justify_between()
+                                .border_b_1()
+                                .border_color(rgb(t.line_soft))
+                                .child(
+                                    div()
+                                        .text_size(px(13.0))
+                                        .text_color(rgb(t.text))
+                                        .child("语言"),
+                                )
+                                .child(
+                                    div()
+                                        .flex()
+                                        .gap(px(8.0))
+                                        .child(
+                                            choice_button("简体中文", lang == Language::ZhCn, &t)
+                                                .id("lang-zh")
+                                                .on_click(cx.listener(|shell, _, _, cx| {
+                                                    shell.state.set_language(Language::ZhCn);
+                                                    cx.notify();
+                                                })),
+                                        )
+                                        .child(
+                                            choice_button("English", lang == Language::EnUs, &t)
+                                                .id("lang-en")
+                                                .on_click(cx.listener(|shell, _, _, cx| {
+                                                    shell.state.set_language(Language::EnUs);
+                                                    cx.notify();
+                                                })),
+                                        ),
+                                ),
+                        )
+                        .child(field_row("数据目录", data_dir, &t))
+                        .child(field_row(
+                            "版本",
+                            format!("{} · portable", sealy_core::version()),
+                            &t,
+                        )),
+                ),
         )
+        .child(
+            action_bar(&t).child(div().flex_1()).child(
+                quiet_button("打开数据目录", &t)
+                    .id("open-data")
+                    .on_click(cx.listener(|shell, _, _, cx| {
+                        shell.state.notify("打开目录将在 Phase 2 接入");
+                        cx.notify();
+                    })),
+            ),
+        )
+        .into_any_element()
+}
+
+fn swatch(
+    name: ThemeName,
+    active: ThemeName,
+    current: &ThemeTokens,
+    cx: &mut Context<SealyShell>,
+) -> AnyElement {
+    let preset = ThemeTokens::preset(name);
+    let selected = name == active;
+    let index = ThemeName::ALL
+        .iter()
+        .position(|candidate| *candidate == name)
+        .unwrap_or(0);
+
+    let label = match name {
+        ThemeName::Paper => "纸张",
+        ThemeName::Ink => "墨色",
+        ThemeName::Clay => "陶土",
+        ThemeName::Celadon => "青瓷",
+    };
+
+    div()
+        .id(("theme", index))
+        .role(Role::Button)
+        .aria_label(label)
+        .w(px(96.0))
+        .h(px(64.0))
+        .p(px(10.0))
+        .flex()
+        .flex_col()
+        .justify_between()
+        .rounded(px(theme::RADIUS_TILE))
+        .bg(rgb(preset.bg))
+        .border_1()
+        .border_color(if selected {
+            rgb(current.text)
+        } else {
+            rgb(current.line)
+        })
+        .cursor_pointer()
+        .hover(move |s| s.border_color(rgb(current.muted)))
+        .child(
+            div()
+                .flex()
+                .items_center()
+                .gap(px(6.0))
+                .child(
+                    div()
+                        .w(px(28.0))
+                        .h(px(12.0))
+                        .rounded(px(1.0))
+                        .bg(rgb(preset.block)),
+                )
+                .child(
+                    div()
+                        .w(px(10.0))
+                        .h(px(10.0))
+                        .rounded(px(1.0))
+                        .bg(rgb(preset.accent)),
+                ),
+        )
+        .child(
+            div()
+                .text_size(px(11.0))
+                .font_weight(FontWeight::MEDIUM)
+                .text_color(rgb(preset.text))
+                .child(label),
+        )
+        .on_click(cx.listener(move |shell, _, _, cx| {
+            shell.state.set_theme(name);
+            cx.notify();
+        }))
         .into_any_element()
 }

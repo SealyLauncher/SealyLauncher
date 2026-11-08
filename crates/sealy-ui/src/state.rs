@@ -1,16 +1,17 @@
 //! UI shell state and navigation routes.
 
 use sealy_core::Bootstrap;
-use sealy_core::config::{Language, Settings, save_settings};
+use sealy_core::config::{Language, Settings, ThemeName, save_settings};
 use sealy_core::paths::LauncherPaths;
 
 use crate::i18n;
 use crate::kit::IconName;
+use crate::theme::ThemeTokens;
 
 /// Top-level pages.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Route {
-    /// Immersive home/launch page.
+    /// Tile-based home.
     Home,
     /// Instance list.
     Instances,
@@ -43,6 +44,17 @@ impl Route {
         }
     }
 
+    /// One-based index rendered in the page head.
+    pub fn ordinal(self) -> &'static str {
+        match self {
+            Self::Home => "01",
+            Self::Instances => "02",
+            Self::Downloads => "03",
+            Self::Accounts => "04",
+            Self::Settings => "05",
+        }
+    }
+
     /// Navigation label.
     pub fn label(self, lang: Language) -> &'static str {
         match (self, lang) {
@@ -59,7 +71,7 @@ impl Route {
         }
     }
 
-    /// Lucide icon for the navigation rail.
+    /// Lucide icon for the tile that opens this route.
     pub fn icon(self) -> IconName {
         match self {
             Self::Home => IconName::LayoutDashboard,
@@ -71,7 +83,7 @@ impl Route {
     }
 }
 
-/// Mutable shell state shared by the title bar, rail and pages.
+/// Mutable shell state shared by the title bar and pages.
 #[derive(Debug, Clone)]
 pub struct ShellState {
     /// Current route.
@@ -95,16 +107,39 @@ impl ShellState {
         }
     }
 
+    /// Active theme preset name.
+    pub fn theme_name(&self) -> ThemeName {
+        self.settings.appearance.theme
+    }
+
+    /// Resolved token values for the active preset.
+    pub fn theme(&self) -> ThemeTokens {
+        ThemeTokens::preset(self.theme_name())
+    }
+
     /// Current language.
     pub fn language(&self) -> Language {
         self.settings.language
     }
 
+    /// Switches the theme preset and persists settings.
+    pub fn set_theme(&mut self, name: ThemeName) {
+        if self.settings.appearance.theme == name {
+            return;
+        }
+        self.settings.appearance.theme = name;
+        self.persist();
+    }
+
     /// Changes the language and persists settings.
     pub fn set_language(&mut self, language: Language) {
         self.settings.language = language;
+        self.persist();
+    }
+
+    fn persist(&mut self) {
         match save_settings(&self.paths, &self.settings) {
-            Ok(()) => self.notice = Some(i18n::toast_settings_saved(language).to_owned()),
+            Ok(()) => self.notice = Some(i18n::toast_settings_saved(self.language()).to_owned()),
             Err(err) => {
                 tracing::warn!(error = %err, "failed to save settings");
                 self.notice = Some(err.to_string());

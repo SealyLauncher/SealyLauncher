@@ -1,25 +1,27 @@
-//! Phase 1 application shell: title bar, navigation rail, route transitions.
+//! Application shell: window chrome, page routing and transient notices.
 
 use gpui_kit::component::TitleBar;
 
-use crate::components;
 use crate::kit::*;
-use crate::motion;
 use crate::pages;
-use crate::state::{Route, ShellState};
+use crate::state::ShellState;
 use crate::theme;
 
 /// Starts the GPUI application and opens the shell window.
 pub fn run(bootstrap: sealy_core::Bootstrap) {
     gpui_kit::application()
-        .with_assets(gpui_kit::assets::Assets)
+        .with_assets(gpui_kit::assets::AllAssets)
         .run(|cx| {
             gpui_kit::init(cx);
 
-            let bounds = Bounds::centered(None, size(px(1180.0), px(760.0)), cx);
+            let bounds = Bounds::centered(
+                None,
+                size(px(theme::WINDOW_WIDTH), px(theme::WINDOW_HEIGHT)),
+                cx,
+            );
             let options = WindowOptions {
                 window_bounds: Some(WindowBounds::Windowed(bounds)),
-                window_min_size: Some(size(px(960.0), px(640.0))),
+                window_min_size: Some(size(px(theme::MIN_WIDTH), px(theme::MIN_HEIGHT))),
                 ..TitleBar::window_options()
             };
 
@@ -44,21 +46,13 @@ impl SealyShell {
 
 impl Render for SealyShell {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let lang = self.state.language();
-        let route = self.state.route;
+        let tokens = self.state.theme();
         let page = pages::render(&self.state, cx);
-        let page_id = ElementId::named_usize("route-page", route.index());
-
-        let nav_items = Route::ALL
-            .iter()
-            .map(|route| nav_item(*route, self.state.route, lang, cx))
-            .collect::<Vec<_>>();
-
         let notice = self
             .state
             .notice
-            .as_ref()
-            .map(|message| toast(message.clone(), cx));
+            .clone()
+            .map(|message| toast(message, &tokens, cx));
 
         div()
             .id("shell")
@@ -67,180 +61,64 @@ impl Render for SealyShell {
             .size_full()
             .flex()
             .flex_col()
-            .bg(rgb(theme::CANVAS))
-            .text_color(rgb(theme::TEXT))
+            .bg(rgb(tokens.bg))
+            .text_color(rgb(tokens.text))
             .child(
-                TitleBar::new().child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap_2()
-                        .px_3()
-                        .child(
-                            div()
-                                .w(px(16.0))
-                                .h(px(16.0))
-                                .rounded_full()
-                                .bg(rgb(theme::ACCENT)),
-                        )
-                        .child(
-                            div()
-                                .text_sm()
-                                .font_weight(FontWeight::SEMIBOLD)
-                                .child(format!("SealyLauncher v{}", sealy_core::version())),
-                        ),
-                ),
+                TitleBar::new()
+                    .bg(rgb(tokens.surface))
+                    .text_color(rgb(tokens.text))
+                    .child(brand(&tokens)),
             )
-            .child(
-                div()
-                    .flex()
-                    .flex_1()
-                    .overflow_hidden()
-                    .child(nav_rail(nav_items))
-                    .child(
-                        div()
-                            .relative()
-                            .flex_1()
-                            .h_full()
-                            .overflow_hidden()
-                            .child(components::background_stage())
-                            .child(
-                                div()
-                                    .absolute()
-                                    .top(px(0.0))
-                                    .left(px(0.0))
-                                    .size_full()
-                                    .child(
-                                        div().child(page).with_animation(
-                                            page_id,
-                                            Animation::new(motion::PAGE)
-                                                .with_easing(motion::ease_out_cubic),
-                                            |el, delta| {
-                                                el.opacity(delta).mt(px((1.0 - delta) * 10.0))
-                                            },
-                                        ),
-                                    ),
-                            )
-                            .children(notice),
-                    ),
-            )
+            .child(div().flex_1().overflow_hidden().child(page))
+            .children(notice)
     }
 }
 
-fn nav_rail(items: Vec<AnyElement>) -> Div {
+fn brand(tokens: &theme::ThemeTokens) -> AnyElement {
     div()
-        .w(px(theme::NAV_WIDTH))
-        .h_full()
-        .flex_shrink_0()
-        .flex()
-        .flex_col()
-        .items_center()
-        .gap_1()
-        .py_3()
-        .bg(rgba(0x0B0D12D9))
-        .border_1()
-        .border_color(rgba(0xFFFFFF0A))
-        .child(
-            div()
-                .w(px(36.0))
-                .h(px(36.0))
-                .flex()
-                .items_center()
-                .justify_center()
-                .rounded(px(theme::RADIUS_MD))
-                .bg(rgb(theme::ACCENT))
-                .child(
-                    div()
-                        .text_size(px(16.0))
-                        .font_weight(FontWeight::BOLD)
-                        .text_color(rgb(0x06121A))
-                        .child("S"),
-                ),
-        )
-        .child(div().h(px(18.0)))
-        .children(items)
-        .child(div().flex_1())
-        .child(
-            div()
-                .w(px(36.0))
-                .h(px(36.0))
-                .flex()
-                .items_center()
-                .justify_center()
-                .rounded_full()
-                .bg(rgb(theme::SURFACE_RAISED))
-                .child(
-                    div()
-                        .text_size(px(13.0))
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(rgb(theme::ACCENT))
-                        .child("S"),
-                ),
-        )
-}
-
-fn nav_item(
-    route: Route,
-    active_route: Route,
-    lang: sealy_core::config::Language,
-    cx: &mut Context<SealyShell>,
-) -> AnyElement {
-    let active = route == active_route;
-    let label = route.label(lang);
-
-    div()
-        .id(("nav", route.index()))
-        .role(Role::Button)
-        .aria_label(label)
-        .w(px(44.0))
-        .h(px(44.0))
         .flex()
         .items_center()
-        .justify_center()
-        .rounded(px(theme::RADIUS_MD))
-        .cursor_pointer()
-        .when(active, |this| {
-            this.bg(rgba(0x4CC2FF1F))
-                .border_1()
-                .border_color(rgba(0x4CC2FF3D))
-        })
+        .gap(px(10.0))
+        .px(px(14.0))
         .child(
-            Icon::new(route.icon())
-                .w(px(19.0))
-                .h(px(19.0))
-                .text_color(if active {
-                    rgb(theme::ACCENT)
-                } else {
-                    rgb(theme::MUTED)
-                }),
+            div()
+                .text_size(px(10.5))
+                .font_weight(FontWeight::BOLD)
+                .text_color(rgb(tokens.text))
+                .child("SEALY"),
         )
-        .on_click(cx.listener(move |shell, _, _, cx| {
-            shell.state.route = route;
-            cx.notify();
-        }))
+        .child(
+            div()
+                .text_size(px(10.5))
+                .font_weight(FontWeight::MEDIUM)
+                .text_color(rgb(tokens.faint))
+                .child("LAUNCHER"),
+        )
         .into_any_element()
 }
 
-fn toast(message: String, cx: &mut Context<SealyShell>) -> AnyElement {
-    components::glass_panel()
+fn toast(message: String, tokens: &theme::ThemeTokens, cx: &mut Context<SealyShell>) -> AnyElement {
+    div()
         .id("notice")
         .role(Role::Button)
         .aria_label(message.clone())
         .absolute()
-        .bottom(px(24.0))
+        .bottom(px(theme::ACTION_BAR_HEIGHT + 16.0))
         .right(px(24.0))
-        .px_4()
-        .py_3()
+        .px(px(14.0))
+        .py(px(10.0))
+        .rounded(px(theme::RADIUS_TILE))
+        .bg(rgb(tokens.block))
         .cursor_pointer()
+        .child(
+            div()
+                .text_size(px(12.0))
+                .text_color(rgb(tokens.block_text))
+                .child(message),
+        )
         .on_click(cx.listener(|shell, _, _, cx| {
             shell.state.notice = None;
             cx.notify();
         }))
-        .child(
-            div()
-                .text_size(px(12.0))
-                .text_color(rgb(theme::TEXT))
-                .child(message),
-        )
         .into_any_element()
 }

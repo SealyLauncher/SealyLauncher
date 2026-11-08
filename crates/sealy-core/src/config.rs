@@ -21,16 +21,39 @@ pub enum Language {
     EnUs,
 }
 
-/// Theme selection.
+/// Theme preset selection.
+///
+/// Every preset exposes the same token names; only the values change.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
-pub enum ThemeMode {
-    /// Dark "deep sea" theme.
+pub enum ThemeName {
+    /// Warm paper with black emphasis (default).
     #[default]
-    #[serde(rename = "dark")]
-    Dark,
-    /// Reserved for a later light theme.
-    #[serde(rename = "light")]
-    Light,
+    #[serde(rename = "paper")]
+    Paper,
+    /// Inverted dark shell.
+    #[serde(rename = "ink")]
+    Ink,
+    /// Warm clay with terracotta emphasis.
+    #[serde(rename = "clay")]
+    Clay,
+    /// Cool celadon with teal emphasis.
+    #[serde(rename = "celadon")]
+    Celadon,
+}
+
+impl ThemeName {
+    /// All presets in display order.
+    pub const ALL: [Self; 4] = [Self::Paper, Self::Ink, Self::Clay, Self::Celadon];
+
+    /// Stable identifier used by settings and OEM overrides.
+    pub fn id(self) -> &'static str {
+        match self {
+            Self::Paper => "paper",
+            Self::Ink => "ink",
+            Self::Clay => "clay",
+            Self::Celadon => "celadon",
+        }
+    }
 }
 
 /// Download source policy.
@@ -66,17 +89,14 @@ pub enum MotionSetting {
 /// Appearance settings.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AppearanceSettings {
-    /// Theme mode.
-    pub theme: ThemeMode,
-    /// Whether the home background may rotate through imagery.
-    pub background_slideshow: bool,
+    /// Theme preset.
+    pub theme: ThemeName,
 }
 
 impl Default for AppearanceSettings {
     fn default() -> Self {
         Self {
-            theme: ThemeMode::Dark,
-            background_slideshow: true,
+            theme: ThemeName::Paper,
         }
     }
 }

@@ -117,7 +117,6 @@ checksum = "5a15f179cd60c4584b8a8c596927aadc462e27f2ca70c04e0071964a73ba7a75"
 dependencies = [
  "cfg-if",
  "const-random",
- "getrandom 0.3.4",
  "once_cell",
  "version_check",
  "zerocopy",
@@ -3640,17 +3639,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "material-colors"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "57a5bf6a9d1cf6319a36cebc589b9a681a6b1c699e162f27c020877783579cc7"
-dependencies = [
- "ahash",
- "indexmap",
- "serde",
-]
-
-[[package]]
 name = "maybe-rayon"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5670,7 +5658,6 @@ name = "sealy-ui"
 version = "0.1.0"
 dependencies = [
  "gpui-kit",
- "material-colors",
  "sealy-core",
  "tracing",
 ]
