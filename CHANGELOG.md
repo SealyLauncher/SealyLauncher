@@ -16,6 +16,9 @@
 
 ## [Unreleased]
 
+- 2026-11-08 — 引导页账号步骤：向导从 3 步变 4 步（语言 → 声音 → 账号 → 完成），账号步骤必须至少有一个账号才能继续（无账号时「下一步」置灰且 oobe_next 直接返回）；提供「离线账号」（内联输入名字，回车确认 / Esc 取消）与「Microsoft 登录」（设备码卡片，登录成功自动进入下一步）两条路径，start_microsoft 抽到 uth_flow 供账号页与向导共用。主页左下角在没有实例时显示「无实例 / 先在实例页新建」，不再用假数据占位。
+
+
 - 2026-11-08 — 发版链路修复：GitHub 的 `macos-14` 标签在本账号返回「configuration not supported」，改用 `macos-latest`；`publish` 改为只要 Windows/Linux 成功就发布，macOS 失败不再拖累整次发版；Windows release 构建设置 `SEALY_REQUIRE_ICON=1`，找不到 `rc.exe` 直接失败，确保 exe 一定带图标。首个自动发版产出 `v0.1.2`（三平台 + SHA256SUMS）。`n- 2026-11-08 — 打包与发版：Release 工作流改为**每次推 main 自动发版**（patch 自增 → 提交 chore(release): vX.Y.Z [skip ci] → 打 tag → 三平台构建 → 发布 Release + SHA256SUMS），支持手动 workflow_dispatch 选 patch/minor/major/none；新增 packaging/windows/sealy.ico、packaging/macos/SealyLauncher.icns、packaging/linux/sealy-launcher.png，crates/sealy-app/build.rs 在找到 c.exe 时把图标嵌进 exe（找不到则跳过，不阻断构建），macOS Info.plist 引用 CFBundleIconFile，Linux 包附带 png。
 
 

@@ -9,7 +9,10 @@ use crate::kit::IconName;
 use crate::theme::ThemeTokens;
 
 /// Number of first-run wizard steps.
-pub const OOBE_STEPS: usize = 3;
+pub const OOBE_STEPS: usize = 4;
+
+/// Wizard step that requires an account.
+pub const OOBE_ACCOUNT_STEP: usize = 2;
 
 /// Which versions the downloads page lists.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -517,6 +520,9 @@ impl ShellState {
 
     /// Advances one step, finishing the wizard after the last one.
     pub fn oobe_next(&mut self) {
+        if self.oobe_step == Some(OOBE_ACCOUNT_STEP) && self.accounts.accounts.is_empty() {
+            return;
+        }
         match self.oobe_step {
             Some(step) if step + 1 < OOBE_STEPS => self.oobe_step = Some(step + 1),
             Some(_) => {

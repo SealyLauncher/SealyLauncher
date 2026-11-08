@@ -35,6 +35,15 @@ pub(crate) fn render(state: &ShellState, step: usize, cx: &mut Context<SealyShel
                 "You can change this later in Settings",
             ),
         ),
+        2 => (
+            tr(lang, "账号", "Account"),
+            tr(lang, "\\ 玩家身份", "\\ Player profile"),
+            tr(
+                lang,
+                "启动器需要一个账号才能继续",
+                "The launcher needs one account to continue",
+            ),
+        ),
         _ => (
             tr(lang, "设置向导", "Setup"),
             tr(lang, "\\ 已完成", "\\ Done"),
@@ -45,6 +54,7 @@ pub(crate) fn render(state: &ShellState, step: usize, cx: &mut Context<SealyShel
     let body = match step {
         0 => step_language(state, &t, cx),
         1 => step_audio(state, &t, cx),
+        2 => step_account(state, &t, cx),
         _ => step_done(state, &t, cx),
     };
 
@@ -191,6 +201,300 @@ fn step_audio(state: &ShellState, t: &ThemeTokens, cx: &mut Context<SealyShell>)
                 ),
         )
         .into_any_element()
+}
+
+fn step_account(state: &ShellState, t: &ThemeTokens, cx: &mut Context<SealyShell>) -> AnyElement {
+    let lang = state.language();
+
+    if let Some(login) = &state.microsoft_login {
+        return step_account_code(login, t, lang, cx);
+    }
+
+    if let Some(draft) = &state.account_draft {
+        return offline_editor(draft, t, lang, cx);
+    }
+
+    if let Some(account) = state.accounts.current() {
+        return div()
+            .w(px(560.0))
+            .flex()
+            .flex_col()
+            .items_start()
+            .gap(px(16.0))
+            .child(
+                div()
+                    .text_size(px(26.0))
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_color(rgb(t.text))
+                    .child(tr(lang, "账号已就绪", "Account ready")),
+            )
+            .child(
+                div()
+                    .w_full()
+                    .h(px(64.0))
+                    .px(px(16.0))
+                    .flex()
+                    .items_center()
+                    .gap(px(12.0))
+                    .rounded(px(theme::RADIUS_TILE))
+                    .border_1()
+                    .border_color(rgb(t.line))
+                    .bg(rgb(t.surface))
+                    .child(
+                        div()
+                            .text_size(px(16.0))
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(rgb(t.text))
+                            .child(account.name.clone()),
+                    )
+                    .child(div().text_size(px(11.0)).text_color(rgb(t.muted)).child(
+                        match account.kind {
+                            sealy_core::accounts::AccountKind::Microsoft => {
+                                tr(lang, "正版账号", "Microsoft account")
+                            }
+                            sealy_core::accounts::AccountKind::Authlib => {
+                                tr(lang, "外置登录", "Authlib account")
+                            }
+                            sealy_core::accounts::AccountKind::Offline => {
+                                tr(lang, "离线账号", "Offline account")
+                            }
+                        },
+                    )),
+            )
+            .into_any_element();
+    }
+
+    div()
+        .w(px(660.0))
+        .flex()
+        .flex_col()
+        .items_center()
+        .gap(px(20.0))
+        .child(
+            div()
+                .text_size(px(24.0))
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(rgb(t.text))
+                .child(tr(lang, "先添加一个账号", "Add an account first")),
+        )
+        .child(
+            div()
+                .flex()
+                .gap(px(14.0))
+                .child(
+                    account_card(
+                        tr(lang, "离线账号", "Offline account"),
+                        tr(
+                            lang,
+                            "不需要联网，输入名字即可开始",
+                            "No network needed — just pick a name",
+                        ),
+                        t,
+                    )
+                    .id("oobe-account-offline")
+                    .role(Role::Button)
+                    .aria_label("oobe-offline")
+                    .on_click(cx.listener(|shell, _, _, cx| {
+                        shell.state.account_draft = Some(String::new());
+                        cx.notify();
+                    })),
+                )
+                .child(
+                    account_card(
+                        tr(lang, "Microsoft 登录", "Microsoft sign-in"),
+                        tr(
+                            lang,
+                            "用正版账号登录，自动获取皮肤",
+                            "Sign in with a Microsoft account",
+                        ),
+                        t,
+                    )
+                    .id("oobe-account-microsoft")
+                    .role(Role::Button)
+                    .aria_label("oobe-microsoft")
+                    .on_click(cx.listener(|shell, _, _, cx| {
+                        crate::auth_flow::start(&mut shell.state, cx);
+                        cx.notify();
+                    })),
+                ),
+        )
+        .into_any_element()
+}
+
+/// Device-code card shown while the wizard waits for the browser sign-in.
+fn step_account_code(
+    login: &crate::state::MicrosoftLogin,
+    t: &ThemeTokens,
+    lang: Language,
+    cx: &mut Context<SealyShell>,
+) -> AnyElement {
+    let code = if login.user_code.is_empty() {
+        "……".to_owned()
+    } else {
+        login.user_code.clone()
+    };
+    let url = if login.verification_uri.is_empty() {
+        "microsoft.com/link".to_owned()
+    } else {
+        login
+            .verification_uri
+            .trim_start_matches("https://")
+            .to_owned()
+    };
+
+    div()
+        .flex()
+        .flex_col()
+        .items_center()
+        .gap(px(14.0))
+        .child(
+            div()
+                .text_size(px(16.0))
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(rgb(t.text))
+                .child(tr(lang, "在浏览器中打开", "Open in your browser")),
+        )
+        .child(div().text_size(px(20.0)).text_color(rgb(t.text)).child(url))
+        .child(
+            div()
+                .mt(px(4.0))
+                .px(px(26.0))
+                .h(px(72.0))
+                .flex()
+                .items_center()
+                .rounded(px(theme::RADIUS_TILE))
+                .border_1()
+                .border_color(rgb(t.line))
+                .bg(rgb(t.surface))
+                .child(
+                    div()
+                        .text_size(px(32.0))
+                        .font_weight(FontWeight::BOLD)
+                        .text_color(rgb(t.text))
+                        .child(code),
+                ),
+        )
+        .child(div().text_size(px(12.0)).text_color(rgb(t.muted)).child(tr(
+            lang,
+            "输入上方代码并完成登录，完成后自动继续",
+            "Enter the code above; the wizard continues automatically",
+        )))
+        .child(
+            quiet_button(tr(lang, "取消登录", "Cancel"), t)
+                .id("oobe-microsoft-cancel")
+                .role(Role::Button)
+                .aria_label("oobe-microsoft-cancel")
+                .on_click(cx.listener(|shell, _, _, cx| {
+                    if let Some(login) = &shell.state.microsoft_login {
+                        login
+                            .cancel
+                            .store(true, std::sync::atomic::Ordering::Relaxed);
+                    }
+                    shell.state.microsoft_login = None;
+                    cx.notify();
+                })),
+        )
+        .into_any_element()
+}
+
+/// Inline name editor used for the offline account.
+fn offline_editor(
+    draft: &str,
+    t: &ThemeTokens,
+    lang: Language,
+    cx: &mut Context<SealyShell>,
+) -> AnyElement {
+    div()
+        .flex()
+        .flex_col()
+        .items_center()
+        .gap(px(16.0))
+        .child(
+            div()
+                .text_size(px(22.0))
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(rgb(t.text))
+                .child(tr(lang, "输入玩家名字", "Pick a player name")),
+        )
+        .child(
+            div()
+                .w(px(380.0))
+                .h(px(56.0))
+                .px(px(16.0))
+                .flex()
+                .items_center()
+                .rounded(px(theme::RADIUS_TILE))
+                .border_1()
+                .border_color(rgb(t.text))
+                .bg(rgb(t.surface))
+                .child(
+                    div()
+                        .text_size(px(18.0))
+                        .text_color(rgb(t.text))
+                        .child(draft.to_owned()),
+                )
+                .child(div().w(px(2.0)).h(px(20.0)).bg(rgb(t.text))),
+        )
+        .child(
+            div()
+                .flex()
+                .items_center()
+                .gap(px(12.0))
+                .child(div().text_size(px(11.0)).text_color(rgb(t.muted)).child(tr(
+                    lang,
+                    "回车确认 · Esc 取消",
+                    "Enter to confirm · Esc to cancel",
+                )))
+                .child(
+                    quiet_button(tr(lang, "取消", "Cancel"), t)
+                        .id("oobe-account-cancel")
+                        .role(Role::Button)
+                        .aria_label("oobe-account-cancel")
+                        .on_click(cx.listener(|shell, _, _, cx| {
+                            shell.state.cancel_account();
+                            cx.notify();
+                        })),
+                )
+                .child(
+                    quiet_button(tr(lang, "确认", "Confirm"), t)
+                        .id("oobe-account-confirm")
+                        .role(Role::Button)
+                        .aria_label("oobe-account-confirm")
+                        .on_click(cx.listener(|shell, _, _, cx| {
+                            shell.state.commit_account();
+                            cx.notify();
+                        })),
+                ),
+        )
+        .into_any_element()
+}
+
+fn account_card(title: &str, description: &str, t: &ThemeTokens) -> Div {
+    div()
+        .w(px(280.0))
+        .p(px(20.0))
+        .flex()
+        .flex_col()
+        .gap(px(8.0))
+        .rounded(px(theme::RADIUS_TILE))
+        .bg(rgb(t.surface))
+        .border_1()
+        .border_color(rgb(t.line))
+        .cursor_pointer()
+        .child(
+            div()
+                .text_size(px(16.0))
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(rgb(t.text))
+                .child(title.to_owned()),
+        )
+        .child(
+            div()
+                .text_size(px(12.0))
+                .line_height(relative(1.5))
+                .text_color(rgb(t.muted))
+                .child(description.to_owned()),
+        )
 }
 
 fn step_done(state: &ShellState, t: &ThemeTokens, cx: &mut Context<SealyShell>) -> AnyElement {
@@ -370,12 +674,14 @@ fn actions(
 
     let next_label = tr(lang, "下一步", "Next");
     let finish_label = tr(lang, "进入启动器", "Open launcher");
+    let blocked = step == crate::state::OOBE_ACCOUNT_STEP && state.accounts.accounts.is_empty();
 
     bar.child(
         primary_button(if last { finish_label } else { next_label }, t)
             .id("oobe-next")
             .role(Role::Button)
             .aria_label(if last { finish_label } else { next_label })
+            .when(blocked, |this| this.opacity(0.35))
             .on_click(cx.listener(|shell, _, _, cx| {
                 shell.state.oobe_next();
                 cx.notify();

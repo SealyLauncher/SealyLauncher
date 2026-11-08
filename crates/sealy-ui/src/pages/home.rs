@@ -14,9 +14,7 @@ use crate::state::{Route, ShellState};
 use crate::theme::{self, ThemeTokens};
 
 /// Instance shown until Phase 2 supplies real instance data.
-const PLACEHOLDER_INSTANCE: &str = "Fabric 1.21.11";
 /// Instance metadata line under the name.
-const PLACEHOLDER_META: &str = "1.21.11 · Fabric 0.16.5";
 /// Account name placeholder until Phase 3.
 const PLACEHOLDER_USER: &str = "Haikuorenyuyue";
 
@@ -38,7 +36,10 @@ pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyEle
                 instance.version_id.clone()
             },
         ),
-        None => (PLACEHOLDER_INSTANCE.to_owned(), PLACEHOLDER_META.to_owned()),
+        None => (
+            tr(lang, "无实例", "No instance").to_owned(),
+            tr(lang, "先在实例页新建", "Create one on the instances page").to_owned(),
+        ),
     };
 
     let t_home = nav_tile(Route::Home, state.route, &t, lang, cx);
