@@ -29,6 +29,8 @@
 - 2026-11-08 — 原型验证：新增 `sealy-ui::m3`（`palette` 用 `material-colors 0.5.0` 从 seed 派生 24 个角色色、`widgets` 提供导航栏/按钮/卡片/chip/FAB/线性进度/ripple、`demo` 为可运行窗口）与 `cargo run -p sealy-app --bin m3_demo`；支持 4 个 seed 实时换色与亮/暗切换，截图见 `design/preview/gpui-m3-*.png`。
 - 2026-11-08 — 设计探索：按 GPUI Kit 设计指南（原生、克制、精确）与 LumilioCL 的界面语言新增 `design/preview/direction-6.html` —— 暖白画布 + 单一像素叙事 hero + 抖动接缝 + 橙色强调 + 底部 dock，并附截图 `direction-6.png`。
 - 2026-11-08 — 设计探索：新增 `design/preview/direction-7.html`，把像素叙事与杂志式排版合并：分栏 hero（左排版 / 右像素画）、等宽字体小标签、发丝分隔线、列表化“最近启动”、黑色“游戏记录”卡 + 像素点阵数字；截图 `direction-7.png`。
+- 2026-11-08 — 调研：实际运行 BakaXL 3.5.1，记录其 OOBE 结构与视觉语言（三区布局、面包屑标题、底部操作带、选项卡预览、拖动/长按确认），截图存于 `design/preview/bakaxl-oobe-*.png`；首页被强制更新弹窗阻断，未能截取，改以内容结构参考。
+- 2026-11-08 — 设计探索：推翻此前方向，新增首页草稿 `design/preview/home-v1.html`：左侧信息面板（实例 / 参数 / 世界 / 启动 / 账号）+ 右侧全幅夜景（程序生成）+ 公告浮层 + 最近启动磁贴；截图 `home-v1.png`。
 
 ### Verified
 

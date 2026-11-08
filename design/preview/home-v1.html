@@ -1,0 +1,539 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>SealyLauncher · 首页 v1</title>
+<style>
+  :root {
+    --bg: #0b0e12;
+    --panel: #11151b;
+    --surface: #171c23;
+    --surface-2: #1d232b;
+    --line: #232a33;
+    --line-soft: #1b212a;
+    --text: #e9edf3;
+    --text-2: #b9c1cd;
+    --muted: #7f8896;
+    --faint: #5b6472;
+    --green: #3fb950;
+    --green-hi: #4ed162;
+    --green-soft: #12301a;
+    --sans: "Inter", "Segoe UI Variable Text", "Segoe UI", "PingFang SC", "Microsoft YaHei UI", system-ui, sans-serif;
+    --mono: ui-monospace, "SFMono-Regular", "Cascadia Mono", Consolas, monospace;
+    --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    display: grid; place-items: center;
+    background: #05070a;
+    font-family: var(--sans);
+    color: var(--text);
+    -webkit-font-smoothing: antialiased;
+  }  .mono { font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase; }
+
+  .app {
+    position: relative;
+    width: 1280px; height: 800px;
+    display: flex;
+    background: var(--bg);
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  }
+
+  /* ================= left panel ================= */
+  .panel {
+    width: 344px; flex: none;
+    background: var(--panel);
+    border-right: 1px solid var(--line);
+    display: flex; flex-direction: column;
+    padding: 18px 20px 16px;
+  }
+  .brand { display: flex; align-items: center; gap: 9px; }
+  .brand .mark {
+    width: 26px; height: 26px; border-radius: 7px;
+    background: var(--green); color: #06120a;
+    display: grid; place-items: center;
+    font-weight: 800; font-size: 13px;
+  }
+  .brand .word { font-weight: 650; font-size: 13.5px; letter-spacing: 0.02em; }
+  .brand .ver { margin-left: auto; color: var(--faint); }
+
+  .instance { margin-top: 30px; }
+  .instance .cap { color: var(--muted); }
+  .instance h1 {
+    margin-top: 9px;
+    font-size: 31px; line-height: 1.12; font-weight: 680;
+    letter-spacing: -0.028em;
+  }
+  .instance .sub { margin-top: 7px; color: var(--muted); font-size: 12px; }
+
+  .facts { margin-top: 22px; border-top: 1px solid var(--line-soft); }
+  .fact {
+    display: flex; align-items: center; justify-content: space-between;
+    height: 34px; border-bottom: 1px solid var(--line-soft);
+    font-size: 12px;
+  }
+  .fact .k { color: var(--muted); }
+  .fact .v { color: var(--text-2); font-weight: 500; }
+
+  .worlds { margin-top: 20px; }
+  .worlds .cap { color: var(--muted); display: flex; justify-content: space-between; }
+  .world {
+    display: flex; align-items: center; gap: 10px;
+    margin-top: 8px; padding: 8px;
+    border-radius: 8px; cursor: pointer;
+    transition: background 0.14s var(--ease);
+  }
+  .world:hover { background: var(--surface); }
+  .world .ico {
+    width: 30px; height: 30px; border-radius: 6px;
+    background: var(--surface-2); border: 1px solid var(--line);
+    display: grid; place-items: center; flex: none;
+    color: #7fd08a;
+  }
+  .world .ico svg { width: 15px; height: 15px; }
+  .world .nm { font-size: 12.5px; font-weight: 600; }
+  .world .mt { font-size: 10.5px; color: var(--muted); margin-top: 3px; }
+  .world .time { margin-left: auto; color: var(--faint); font-size: 10px; }
+
+  .spacer { flex: 1; }
+
+  .play {
+    height: 50px; width: 100%;
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    border: 0; border-radius: 10px; cursor: pointer;
+    background: var(--green); color: #06120a;
+    font-family: inherit; font-size: 15.5px; font-weight: 700; letter-spacing: 0.01em;
+    box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.25);
+    transition: background 0.15s var(--ease), transform 0.15s var(--ease);
+  }
+  .play:hover { background: var(--green-hi); }
+  .play:active { transform: translateY(1px); }
+  .play svg { width: 16px; height: 16px; }
+
+  .ghost {
+    margin-top: 8px;
+    height: 38px; width: 100%;
+    display: flex; align-items: center; justify-content: center; gap: 7px;
+    border: 1px solid var(--line); border-radius: 9px;
+    background: transparent; color: var(--text-2);
+    font-family: inherit; font-size: 12.5px; font-weight: 500;
+    cursor: pointer;
+    transition: background 0.15s var(--ease), border-color 0.15s var(--ease);
+  }
+  .ghost:hover { background: var(--surface); border-color: #2e3742; }
+  .ghost svg { width: 13px; height: 13px; color: var(--faint); }
+
+  .account {
+    margin-top: 12px; padding-top: 12px;
+    border-top: 1px solid var(--line-soft);
+    display: flex; align-items: center; gap: 10px;
+    cursor: pointer;
+  }
+  .account .ava {
+    width: 32px; height: 32px; border-radius: 8px;
+    background: var(--surface-2);
+    display: grid; place-items: center;
+    font-size: 13px; font-weight: 700; color: #c9b6ff;
+    border: 1px solid var(--line);
+  }
+  .account .who { font-size: 12.5px; font-weight: 600; }
+  .account .tag { font-size: 10.5px; color: var(--muted); margin-top: 3px; }
+  .account .more { margin-left: auto; color: var(--faint); }
+
+  /* ================= right stage ================= */
+  .stage { position: relative; flex: 1; min-width: 0; overflow: hidden; }
+  .art { position: absolute; inset: 0; }
+  .art svg { width: 100%; height: 100%; display: block; }
+  .veil {
+    position: absolute; inset: 0;
+    background:
+      linear-gradient(180deg, rgba(7, 10, 14, 0.72) 0%, rgba(7, 10, 14, 0.05) 26%),
+      linear-gradient(0deg, rgba(7, 10, 14, 0.92) 0%, rgba(7, 10, 14, 0.1) 42%);
+  }
+
+  .topbar {
+    position: absolute; top: 0; left: 0; right: 0;
+    height: 56px;
+    display: flex; align-items: center; gap: 4px;
+    padding: 0 22px;
+  }
+  .tab {
+    position: relative;
+    padding: 8px 12px;
+    border: 0; background: transparent;
+    color: rgba(255, 255, 255, 0.66);
+    font-family: inherit; font-size: 13px; font-weight: 500;
+    border-radius: 7px; cursor: pointer;
+    transition: color 0.14s var(--ease), background 0.14s var(--ease);
+  }
+  .tab:hover { color: #fff; background: rgba(255, 255, 255, 0.07); }
+  .tab.on { color: #fff; font-weight: 600; }
+  .tab.on::after {
+    content: ""; position: absolute; left: 12px; right: 12px; bottom: 2px;
+    height: 2px; border-radius: 2px; background: var(--green);
+  }
+  .topbar .grow { flex: 1; }
+  .iconbtn {
+    width: 32px; height: 32px; display: grid; place-items: center;
+    border: 0; border-radius: 8px; background: transparent;
+    color: rgba(255, 255, 255, 0.7); cursor: pointer;
+    transition: background 0.14s var(--ease), color 0.14s var(--ease);
+  }
+  .iconbtn:hover { background: rgba(255, 255, 255, 0.09); color: #fff; }
+  .iconbtn svg { width: 16px; height: 16px; }
+
+  /* news */
+  .news {
+    position: absolute; top: 72px; right: 22px;
+    width: 296px;
+    background: rgba(14, 18, 23, 0.82);
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    border-radius: 12px;
+    padding: 14px 16px 6px;
+    backdrop-filter: blur(14px);
+  }
+  .news .head {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 4px;
+  }
+  .news .head .t { font-size: 12.5px; font-weight: 650; letter-spacing: 0.01em; }
+  .news .head .all { color: var(--faint); font-size: 11px; }
+  .news-item {
+    display: flex; flex-direction: column; gap: 4px;
+    padding: 10px 0;
+    border-top: 1px solid rgba(255, 255, 255, 0.07);
+    cursor: pointer;
+  }
+  .news-item:first-of-type { border-top: 0; }
+  .news-item .line { display: flex; align-items: center; gap: 8px; }
+  .news-item .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--green); flex: none; }
+  .news-item .txt {
+    font-size: 12.5px; color: var(--text-2); line-height: 1.45;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .news-item:hover .txt { color: #fff; }
+  .news-item .date { color: var(--faint); padding-left: 13px; }
+
+  /* recent */
+  .recent {
+    position: absolute; left: 22px; right: 22px; bottom: 20px;
+  }
+  .recent .head {
+    display: flex; align-items: baseline; gap: 10px; margin-bottom: 10px;
+  }
+  .recent .head .t { font-size: 12.5px; font-weight: 650; }
+  .recent .head .hint { color: rgba(255, 255, 255, 0.42); font-size: 11px; }
+  .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .tile {
+    position: relative;
+    height: 96px;
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: var(--surface);
+    cursor: pointer;
+    transition: transform 0.16s var(--ease), border-color 0.16s var(--ease);
+  }
+  .tile:hover { transform: translateY(-2px); border-color: rgba(255, 255, 255, 0.26); }
+  .tile .cover { position: absolute; inset: 0; }
+  .tile .cover svg { width: 100%; height: 100%; display: block; }
+  .tile .grad {
+    position: absolute; inset: 0;
+    background: linear-gradient(0deg, rgba(6, 9, 12, 0.88) 0%, rgba(6, 9, 12, 0) 62%);
+  }
+  .tile .body {
+    position: absolute; left: 11px; right: 11px; bottom: 9px;
+    display: flex; align-items: flex-end; justify-content: space-between; gap: 8px;
+  }
+  .tile .name { font-size: 12.5px; font-weight: 650; }
+  .tile .id { color: rgba(255, 255, 255, 0.5); font-size: 10px; margin-top: 3px; }
+  .tile .badge {
+    font-family: var(--mono); font-size: 9px; letter-spacing: 0.06em;
+    padding: 2px 5px; border-radius: 4px;
+    background: rgba(255, 255, 255, 0.14); color: #fff;
+  }
+  .tile.add {
+    display: grid; place-items: center;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px dashed rgba(255, 255, 255, 0.18);
+    color: rgba(255, 255, 255, 0.55);
+  }
+  .tile.add .inner { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  .tile.add svg { width: 18px; height: 18px; }
+  .tile.add span { font-size: 11.5px; }
+</style>
+</head>
+<body>
+  <div class="app">
+    <!-- left panel -->
+    <aside class="panel">
+      <div class="brand">
+        <div class="mark">S</div>
+        <div class="word">SealyLauncher</div>
+        <div class="ver mono">0.1.0</div>
+      </div>
+
+      <div class="instance">
+        <div class="cap mono">当前实例</div>
+        <h1>Fabric 1.21.11</h1>
+        <div class="sub">1.21.11 · Fabric 0.16.5 · 上次游玩 2 小时前</div>
+      </div>
+
+      <div class="facts">
+        <div class="fact"><span class="k">Java</span><span class="v">17.0.9 · Microsoft</span></div>
+        <div class="fact"><span class="k">内存</span><span class="v">512 – 4096 MB</span></div>
+        <div class="fact"><span class="k">下载源</span><span class="v">自动 · BMCLAPI</span></div>
+      </div>
+
+      <div class="worlds">
+        <div class="cap mono"><span>世界</span><span>02</span></div>
+        <div class="world">
+          <div class="ico">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8"/><path d="M4 12h16M12 4c2.6 2.4 2.6 13.6 0 16M12 4c-2.6 2.4-2.6 13.6 0 16"/></svg>
+          </div>
+          <div>
+            <div class="nm">Aurora</div>
+            <div class="mt">1.21.11 · 生存</div>
+          </div>
+          <div class="time mono">2 小时前</div>
+        </div>
+        <div class="world">
+          <div class="ico">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8"/><path d="M4 12h16M12 4c2.6 2.4 2.6 13.6 0 16M12 4c-2.6 2.4-2.6 13.6 0 16"/></svg>
+          </div>
+          <div>
+            <div class="nm">Skyblock</div>
+            <div class="mt">1.20.1 · 创造</div>
+          </div>
+          <div class="time mono">3 天前</div>
+        </div>
+      </div>
+
+      <div class="spacer"></div>
+
+      <button class="play">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.2v13.6L19 12z"/></svg>
+        开始游戏
+      </button>
+      <button class="ghost">
+        打开游戏目录
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+      </button>
+
+      <div class="account">
+        <div class="ava">L</div>
+        <div>
+          <div class="who">Lumizio</div>
+          <div class="tag">离线账号 · 8F3A</div>
+        </div>
+        <div class="more">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 6 6 6-6 6"/></svg>
+        </div>
+      </div>
+    </aside>
+
+    <!-- right stage -->
+    <section class="stage">
+      <div class="art"><svg id="scene" viewBox="0 0 160 100" preserveAspectRatio="xMidYMid slice" aria-hidden="true"></svg></div>
+      <div class="veil"></div>
+
+      <nav class="topbar">
+        <button class="tab on">主页</button>
+        <button class="tab">实例</button>
+        <button class="tab">下载</button>
+        <button class="tab">账号</button>
+        <div class="grow"></div>
+        <button class="iconbtn" aria-label="搜索">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="11" cy="11" r="6.4"/><path d="m16 16 4 4"/></svg>
+        </button>
+        <button class="iconbtn" aria-label="通知">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M18 15.5V10a6 6 0 1 0-12 0v5.5L4.5 18h15z"/><path d="M10 21h4"/></svg>
+        </button>
+        <button class="iconbtn" aria-label="设置">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="12" cy="12" r="2.6"/><path d="M12 4.2v2M12 17.8v2M4.2 12h2M17.8 12h2M6.6 6.6l1.4 1.4M16 16l1.4 1.4M17.4 6.6 16 8M8 16l-1.4 1.4"/></svg>
+        </button>
+      </nav>
+
+      <aside class="news">
+        <div class="head">
+          <span class="t">公告</span>
+          <span class="all">全部 ›</span>
+        </div>
+        <div class="news-item">
+          <div class="line"><i class="dot"></i><span class="txt">1.21.11 已可安装，Fabric 0.16.5 同步更新</span></div>
+          <div class="date mono">11-08</div>
+        </div>
+        <div class="news-item">
+          <div class="line"><i class="dot"></i><span class="txt">BMCLAPI 线路维护，下载可能变慢</span></div>
+          <div class="date mono">11-06</div>
+        </div>
+        <div class="news-item">
+          <div class="line"><i class="dot"></i><span class="txt">新增 aurora 生存服整合包自动更新</span></div>
+          <div class="date mono">11-02</div>
+        </div>
+      </aside>
+
+      <div class="recent">
+        <div class="head">
+          <span class="t">最近启动</span>
+          <span class="hint">双击卡片直接进入</span>
+        </div>
+        <div class="tiles">
+          <div class="tile">
+            <div class="cover"><svg viewBox="0 0 120 60" preserveAspectRatio="none"><defs><linearGradient id="c1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1b3a5c"/><stop offset="1" stop-color="#0f1d2b"/></linearGradient></defs><rect width="120" height="60" fill="url(#c1)"/><path d="M0 44 18 32 34 40 52 28 72 38 92 30 110 40 120 34v26H0z" fill="#0b1620"/><circle cx="96" cy="14" r="6" fill="#dfe9f5" opacity=".65"/></svg></div>
+            <div class="grad"></div>
+            <div class="body"><div><div class="name">Fabric 1.21.11</div><div class="id">2 小时前</div></div><span class="badge">FABRIC</span></div>
+          </div>
+          <div class="tile">
+            <div class="cover"><svg viewBox="0 0 120 60" preserveAspectRatio="none"><defs><linearGradient id="c2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3b2a4d"/><stop offset="1" stop-color="#171226"/></linearGradient></defs><rect width="120" height="60" fill="url(#c2)"/><path d="M0 42 22 34 40 44 58 34 80 44 100 36 120 42v18H0z" fill="#140f20"/><circle cx="30" cy="16" r="5" fill="#e6dcff" opacity=".55"/></svg></div>
+            <div class="grad"></div>
+            <div class="body"><div><div class="name">Aurora 整合包</div><div class="id">3 天前</div></div><span class="badge">128 MODS</span></div>
+          </div>
+          <div class="tile">
+            <div class="cover"><svg viewBox="0 0 120 60" preserveAspectRatio="none"><defs><linearGradient id="c3" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#243f33"/><stop offset="1" stop-color="#0e1a14"/></linearGradient></defs><rect width="120" height="60" fill="url(#c3)"/><path d="M0 46 26 36 46 46 66 36 88 46 108 38 120 44v16H0z" fill="#0b1510"/></svg></div>
+            <div class="grad"></div>
+            <div class="body"><div><div class="name">Vanilla 1.21.4</div><div class="id">昨天</div></div><span class="badge">VANILLA</span></div>
+          </div>
+          <div class="tile add">
+            <div class="inner">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 5v14M5 12h14"/></svg>
+              <span>新建实例</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+<script>
+const NS = "http://www.w3.org/2000/svg";
+const add = (p, tag, attrs) => {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  p.appendChild(e);
+  return e;
+};
+(function covers() {
+  const palettes = [
+    { sky: ["#1d3f5e", "#0d1c29"], hills: ["#16303f", "#102430", "#0a1720"], moon: "#dbe9f5" },
+    { sky: ["#3a2a4f", "#191227"], hills: ["#2b2040", "#1e1730", "#140f22"], moon: "#e6dcff" },
+    { sky: ["#254436", "#0f1c16"], hills: ["#1b3529", "#152a20", "#0d1a13"], moon: "#d8f0dd" },
+  ];
+  document.querySelectorAll(".tile .cover svg").forEach((svg, idx) => {
+    const p = palettes[idx % palettes.length];
+    svg.setAttribute("viewBox", "0 0 120 64");
+    svg.setAttribute("preserveAspectRatio", "xMidYMid slice");
+    const id = "tg" + idx;
+    const defs = add(svg, "defs", {});
+    defs.innerHTML =
+      `<linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1">` +
+      `<stop offset="0" stop-color="${p.sky[0]}"/><stop offset="1" stop-color="${p.sky[1]}"/></linearGradient>`;
+    add(svg, "rect", { width: 120, height: 64, fill: `url(#${id})` });
+    add(svg, "circle", { cx: 92, cy: 15, r: 1.9, fill: p.moon, opacity: 0.9 });
+    add(svg, "circle", { cx: 92, cy: 15, r: 4.2, fill: p.moon, opacity: 0.07 });
+    for (let layer = 0; layer < 3; layer++) {
+      let d = `M0 ${40 + layer * 6}`;
+      for (let x = 0; x <= 120; x += 6) {
+        const y = 40 + layer * 6 - (Math.sin(x * (0.06 + layer * 0.03) + layer * 2 + idx) * (5 - layer) + 3);
+        d += ` L${x} ${y.toFixed(1)}`;
+      }
+      d += " L120 64 L0 64 Z";
+      add(svg, "path", { d, fill: p.hills[layer] });
+    }
+  });
+})();
+
+(function scene() {
+  const svg = document.getElementById("scene");
+  const W = 160, H = 100;
+  const defs = add(svg, "defs", {});
+  defs.innerHTML =
+    '<linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">' +
+    '<stop offset="0" stop-color="#070d15"/><stop offset="0.34" stop-color="#0c1926"/>' +
+    '<stop offset="0.62" stop-color="#12283a"/><stop offset="0.84" stop-color="#0d1b26"/>' +
+    '<stop offset="1" stop-color="#080f16"/>' +
+    '</linearGradient>' +
+    '<radialGradient id="halo" cx="0.3" cy="0.2" r="0.46">' +
+    '<stop offset="0" stop-color="#9cc6e6" stop-opacity="0.26"/>' +
+    '<stop offset="0.55" stop-color="#6f9fc4" stop-opacity="0.07"/>' +
+    '<stop offset="1" stop-color="#6f9fc4" stop-opacity="0"/>' +
+    '</radialGradient>' +
+    '<radialGradient id="vig" cx="0.5" cy="0.46" r="0.72">' +
+    '<stop offset="0.55" stop-color="#000" stop-opacity="0"/>' +
+    '<stop offset="1" stop-color="#000" stop-opacity="0.55"/>' +
+    '</radialGradient>' +
+    '<linearGradient id="lake" x1="0" y1="0" x2="0" y2="1">' +
+    '<stop offset="0" stop-color="#0d1a25" stop-opacity="0"/>' +
+    '<stop offset="0.35" stop-color="#0c1822" stop-opacity="0.85"/>' +
+    '<stop offset="1" stop-color="#060b11"/>' +
+    '</linearGradient>' +
+    '<linearGradient id="refl" x1="0" y1="0" x2="0" y2="1">' +
+    '<stop offset="0" stop-color="#bcd8ea" stop-opacity="0.5"/>' +
+    '<stop offset="1" stop-color="#bcd8ea" stop-opacity="0"/>' +
+    '</linearGradient>';
+
+  add(svg, "rect", { width: W, height: H, fill: "url(#sky)" });
+  add(svg, "rect", { width: W, height: H, fill: "url(#halo)" });
+
+  // stars
+  for (let i = 0; i < 130; i++) {
+    const x = ((i * 43.7) % W).toFixed(2);
+    const y = ((i * 19.9) % 52).toFixed(2);
+    const o = (0.12 + ((i * 29) % 60) / 100).toFixed(2);
+    add(svg, "circle", { cx: x, cy: y, r: 0.18, fill: "#dfeaf5", opacity: o });
+  }
+
+  // moon
+  add(svg, "circle", { cx: 44, cy: 18, r: 12, fill: "#cfe3f3", opacity: 0.03 });
+  add(svg, "circle", { cx: 44, cy: 18, r: 6.4, fill: "#cfe3f3", opacity: 0.06 });
+  add(svg, "circle", { cx: 44, cy: 18, r: 4.1, fill: "#eef5fb", opacity: 0.95 });
+  add(svg, "circle", { cx: 45.2, cy: 17, r: 1, fill: "#cfd9e2", opacity: 0.5 });
+  add(svg, "circle", { cx: 42.8, cy: 19.4, r: 0.8, fill: "#cfd9e2", opacity: 0.4 });
+
+  // thin clouds
+  for (let i = 0; i < 7; i++) {
+    const y = 26 + i * 5.5;
+    add(svg, "rect", { x: -10, y: y, width: 180, height: 0.7, fill: "#8fb4cf", opacity: 0.035 });
+  }
+
+  // ridge helper
+  const ridge = (base, amp, freq, phase, color, opacity) => {
+    let d = `M0 ${base}`;
+    for (let x = 0; x <= W; x += 4) {
+      const y = base - (Math.sin(x * freq + phase) * amp + Math.sin(x * freq * 2.7 + phase) * amp * 0.35);
+      d += ` L${x} ${y.toFixed(2)}`;
+    }
+    d += ` L${W} 100 L0 100 Z`;
+    add(svg, "path", { d, fill: color, opacity: opacity ?? 1 });
+  };
+
+  ridge(58, 4.2, 0.075, 0.4, "#16293a", 0.85);   // far
+  ridge(64, 5.4, 0.11, 2.1, "#111f2c", 0.95);    // mid
+  ridge(70, 5.0, 0.15, 4.3, "#0c1822", 1);       // near
+
+  // forest band
+  const tree = (x, base, h) => {
+    add(svg, "path", {
+      d: `M${x - h * 0.32} ${base} L${x} ${base - h} L${x + h * 0.32} ${base} Z`,
+      fill: "#08111a"
+    });
+    add(svg, "rect", { x: x - 0.12, y: base - h * 0.18, width: 0.24, height: h * 0.24, fill: "#08111a" });
+  };
+  for (let i = 0; i < 70; i++) {
+    const x = (i * 2.25 + ((i * 13) % 7) * 0.3) % W;
+    tree(x, 78 + Math.sin(i * 1.3) * 0.7, 3.4 + ((i * 17) % 9) * 0.42);
+  }
+  for (let i = 0; i < 40; i++) {
+    const x = (i * 4.1 + 1.7) % W;
+    tree(x, 82.5 + Math.sin(i * 0.9) * 0.5, 5.2 + ((i * 11) % 8) * 0.55);
+  }
+
+  // vignette
+  add(svg, "rect", { width: W, height: H, fill: "url(#vig)" });
+})();
+</script>
+</body>
+</html>
