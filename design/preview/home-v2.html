@@ -1,0 +1,387 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>SealyLauncher · 主页 v2</title>
+<style>
+  :root {
+    --shell: #15181d;
+    --shell-2: #1b1f26;
+    --canvas: #0f1216;
+    --surface: #1b212a;
+    --surface-hi: #242c36;
+    --line: rgba(255, 255, 255, 0.08);
+    --line-soft: rgba(255, 255, 255, 0.05);
+    --text: #edf1f6;
+    --muted: rgba(237, 241, 246, 0.62);
+    --faint: rgba(237, 241, 246, 0.34);
+    --go: #3fb950;
+    --go-hi: #4ed162;
+    --back: #e8a33d;
+    --danger: #c7453e;
+    --info: #2f6fed;
+    --sans: "Inter", "Segoe UI Variable Text", "Segoe UI", "PingFang SC", "Microsoft YaHei UI", system-ui, sans-serif;
+    --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    display: grid; place-items: center;
+    background: #08090b;
+    font-family: var(--sans);
+    color: var(--text);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .win {
+    position: relative;
+    width: 1120px; height: 700px;
+    background: var(--canvas);
+    border-radius: 8px;
+    overflow: hidden;
+    display: flex; flex-direction: column;
+    box-shadow: 0 28px 70px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.04);
+  }
+
+  /* ---------- app bar ---------- */
+  .appbar {
+    height: 44px; flex: none;
+    display: flex; align-items: center; gap: 10px;
+    padding: 0 0 0 14px;
+    background: var(--shell);
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .appbar .mark {
+    width: 20px; height: 20px; border-radius: 4px;
+    background: var(--go); color: #06120a;
+    display: grid; place-items: center;
+    font-size: 11px; font-weight: 800;
+  }
+  .appbar .title { font-size: 12.5px; font-weight: 600; letter-spacing: 0.01em; }
+  .appbar .grow { flex: 1; }
+  .appbar .link {
+    border: 0; background: transparent; color: var(--muted);
+    font-family: inherit; font-size: 12px; cursor: pointer;
+    padding: 6px 8px; border-radius: 4px;
+  }
+  .appbar .link:hover { background: rgba(255, 255, 255, 0.06); color: var(--text); }
+  .appbar .vdiv { width: 1px; height: 16px; background: var(--line); }
+  .wctl { display: flex; height: 44px; margin-left: 6px; }
+  .wctl button {
+    width: 44px; height: 44px; border: 0; background: transparent;
+    color: var(--muted); display: grid; place-items: center; cursor: pointer;
+  }
+  .wctl button:hover { background: rgba(255, 255, 255, 0.07); color: #fff; }
+  .wctl button.close:hover { background: #c42b1c; color: #fff; }
+  .wctl svg { width: 11px; height: 11px; }
+
+  /* ---------- header band ---------- */
+  .band {
+    height: 92px; flex: none;
+    display: flex; align-items: center; gap: 16px;
+    padding: 0 32px;
+    background: linear-gradient(180deg, #20262f 0%, #1a1f26 100%);
+    border-bottom: 1px solid var(--line);
+  }
+  .band .orb {
+    position: relative;
+    width: 48px; height: 48px; border-radius: 50%;
+    background: #eef2f7;
+    flex: none;
+  }
+  .band .orb::after {
+    content: ""; position: absolute; right: -6px; top: -4px;
+    width: 20px; height: 20px; border-radius: 50%;
+    background: #eef2f7;
+  }
+  .band h1 { font-size: 27px; line-height: 1.05; font-weight: 650; letter-spacing: -0.02em; }
+  .band .sub { margin-top: 5px; font-size: 12.5px; color: var(--muted); }
+  .band .right { margin-left: auto; display: flex; align-items: center; gap: 14px; }
+  .stat { display: flex; align-items: center; gap: 7px; font-size: 11.5px; color: var(--muted); }
+  .stat i { width: 6px; height: 6px; border-radius: 50%; background: var(--go); display: block; }
+
+  /* ---------- tile canvas ---------- */
+  .canvas {
+    position: relative; flex: 1; min-height: 0;
+    padding: 30px 32px;
+    overflow: hidden;
+  }
+  .watermark {
+    position: absolute; inset: -40px;
+    opacity: 0.055;
+    pointer-events: none;
+  }
+  .watermark svg { width: 100%; height: 100%; }
+
+  .grid {
+    position: relative;
+    display: grid;
+    grid-template-columns: repeat(10, 84px);
+    grid-auto-rows: 84px;
+    gap: 10px;
+  }
+  .tile {
+    position: relative;
+    background: var(--surface);
+    border: 1px solid var(--line-soft);
+    border-radius: 4px;
+    overflow: hidden;
+    cursor: pointer;
+    transition: background 0.14s var(--ease), border-color 0.14s var(--ease), transform 0.14s var(--ease);
+  }
+  .tile:hover { background: var(--surface-hi); border-color: rgba(255, 255, 255, 0.14); }
+  .tile.sm { display: grid; place-items: center; color: var(--text); }
+  .tile.sm svg { width: 24px; height: 24px; }
+  .tile.sm.cur { background: #22301f; border-color: rgba(63, 185, 80, 0.4); color: var(--go); }
+  .tile.sm.warn svg { color: var(--back); }
+
+  .tile.md { display: flex; flex-direction: column; justify-content: flex-end; gap: 10px; padding: 14px; }
+  .tile.md .ico { color: #8fb4ff; }
+  .tile.md .ico svg { width: 26px; height: 26px; }
+  .tile.md .label { font-size: 13px; font-weight: 600; }
+
+  .tile.wide {
+    grid-column: 1 / 5; grid-row: 3 / 5;
+    display: flex; align-items: center; gap: 16px;
+    padding: 18px 20px;
+    background: linear-gradient(135deg, #1e2a33 0%, #1a212a 100%);
+  }
+  .tile.wide .ico {
+    width: 56px; height: 56px; border-radius: 8px;
+    background: rgba(90, 160, 255, 0.14); color: #8fb4ff;
+    display: grid; place-items: center; flex: none;
+  }
+  .tile.wide .ico svg { width: 26px; height: 26px; }
+  .tile.wide .txt .t { font-size: 15px; font-weight: 650; }
+  .tile.wide .txt .h { margin-top: 5px; font-size: 11.5px; color: var(--muted); }
+  .tile.wide .arrow { margin-left: auto; color: var(--faint); }
+  .tile.wide .arrow svg { width: 16px; height: 16px; }
+
+  .tile.md { grid-column: 3 / 5; grid-row: 1 / 3; }
+  .tile.red { grid-column: 5 / 8; grid-row: 1 / 5; }
+  .tile.blue { grid-column: 8 / 11; grid-row: 1 / 5; }
+
+  .tile.red {
+    padding: 17px 18px;
+    background: linear-gradient(160deg, #d0493f 0%, #b23a33 100%);
+    border-color: rgba(255, 255, 255, 0.14);
+    display: flex; flex-direction: column;
+  }
+  .tile.red .k { font-size: 10.5px; letter-spacing: 0.06em; color: rgba(255, 255, 255, 0.66); text-transform: uppercase; }
+  .tile.red .h { margin-top: 12px; font-size: 18px; line-height: 1.35; font-weight: 650; }
+  .tile.red .ln {
+    margin-top: 14px; padding-top: 10px;
+    border-top: 1px solid rgba(255, 255, 255, 0.18);
+    font-size: 11.5px; color: rgba(255, 255, 255, 0.82);
+  }
+  .tile.red .ln + .ln { border-top: 0; padding-top: 4px; margin-top: 4px; }
+  .tile.red .foot {
+    margin-top: auto; padding-top: 12px;
+    font-size: 11.5px; color: rgba(255, 255, 255, 0.8);
+    display: flex; align-items: center; gap: 5px;
+  }
+  .tile.red .foot svg { width: 12px; height: 12px; }
+
+  .tile.blue {
+    padding: 17px 18px;
+    background: linear-gradient(160deg, #2f6fed 0%, #2358c4 100%);
+    border-color: rgba(255, 255, 255, 0.14);
+    display: flex; flex-direction: column;
+  }
+  .tile.blue .h { font-size: 19px; font-weight: 650; letter-spacing: -0.01em; }
+  .tile.blue .row { display: flex; align-items: center; gap: 10px; margin-top: 14px; }
+  .tile.blue .ico {
+    width: 34px; height: 34px; border-radius: 6px; flex: none;
+    background: rgba(255, 255, 255, 0.16);
+    display: grid; place-items: center;
+  }
+  .tile.blue .ico svg { width: 17px; height: 17px; }
+  .tile.blue .nm { font-size: 13px; font-weight: 600; }
+  .tile.blue .mt { font-size: 10.5px; color: rgba(255, 255, 255, 0.7); margin-top: 2px; }
+  .tile.blue .more {
+    margin-top: auto; font-size: 11.5px; color: rgba(255, 255, 255, 0.78);
+    display: flex; align-items: center; gap: 5px;
+  }
+  .tile.blue .more svg { width: 12px; height: 12px; }
+
+  /* ---------- action bar ---------- */
+  .actionbar {
+    height: 84px; flex: none;
+    display: flex; align-items: center; gap: 16px;
+    padding: 0 24px;
+    background: var(--shell-2);
+    border-top: 1px solid var(--line);
+  }
+  .ava {
+    width: 44px; height: 44px; border-radius: 50%;
+    background: #2b333e; color: #c9d4e2;
+    display: grid; place-items: center;
+    font-size: 15px; font-weight: 700;
+    flex: none;
+  }
+  .hello { font-size: 25px; font-weight: 650; letter-spacing: -0.02em; }
+  .hello span { color: var(--muted); font-weight: 500; }
+  .actionbar .grow { flex: 1; }
+  .round {
+    width: 40px; height: 40px; border-radius: 50%;
+    border: 1px solid var(--line); background: transparent;
+    color: var(--muted); display: grid; place-items: center; cursor: pointer;
+  }
+  .round:hover { background: rgba(255, 255, 255, 0.06); color: #fff; }
+  .round svg { width: 18px; height: 18px; }
+  .play {
+    height: 60px; min-width: 236px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+    border: 0; border-radius: 4px; cursor: pointer;
+    background: var(--go); color: #05140a;
+    font-family: inherit;
+    transition: background 0.14s var(--ease);
+  }
+  .play:hover { background: var(--go-hi); }
+  .play .t { font-size: 23px; font-weight: 700; letter-spacing: 0.01em; line-height: 1; }
+  .play .s { font-size: 11px; font-weight: 500; opacity: 0.72; }
+</style>
+</head>
+<body>
+  <div class="win">
+    <header class="appbar">
+      <span class="mark">S</span>
+      <span class="title">SealyLauncher</span>
+      <div class="grow"></div>
+      <button class="link">反馈问题</button>
+      <i class="vdiv"></i>
+      <button class="link">获取帮助</button>
+      <i class="vdiv"></i>
+      <div class="wctl">
+        <button aria-label="最小化"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M2 6h8"/></svg></button>
+        <button aria-label="最大化"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="2.5" y="2.5" width="7" height="7"/></svg></button>
+        <button class="close" aria-label="关闭"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.2"><path d="m2.5 2.5 7 7M9.5 2.5l-7 7"/></svg></button>
+      </div>
+    </header>
+
+    <div class="band">
+      <div class="orb"></div>
+      <div>
+        <h1>开始</h1>
+        <div class="sub">点击下面的磁贴以使用更多 SealyLauncher 功能</div>
+      </div>
+      <div class="right">
+        <div class="stat"><i></i>BMCLAPI · 12ms</div>
+        <div class="stat">Java 17.0.9</div>
+      </div>
+    </div>
+
+    <main class="canvas">
+      <div class="watermark"><svg id="wm" viewBox="0 0 1120 640" preserveAspectRatio="xMidYMid slice"></svg></div>
+
+      <div class="grid">
+        <div class="tile sm cur" title="主页">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3.5" y="3.5" width="7" height="7" rx="1.2"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.2"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.2"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.2"/></svg>
+        </div>
+        <div class="tile sm" title="下载">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 4v10M8.2 10.4 12 14.2l3.8-3.8"/><path d="M4.5 18.5h15"/></svg>
+        </div>
+        <div class="tile sm" title="账号">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="9" r="3.6"/><path d="M5.5 19.5a6.5 6.5 0 0 1 13 0"/></svg>
+        </div>
+        <div class="tile sm warn" title="更新">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M20 12a8 8 0 1 1-2.4-5.7"/><path d="M20 4v4h-4"/></svg>
+        </div>
+
+        <div class="tile md" title="实例">
+          <div class="ico">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="m12 3 8 4.5-8 4.5-8-4.5z"/><path d="m4 12 8 4.5 8-4.5"/><path d="m4 16.5 8 4.5 8-4.5"/></svg>
+          </div>
+          <div class="label">实例</div>
+        </div>
+
+        <div class="tile wide" title="安装新版本">
+          <div class="ico">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M7 17.5a4 4 0 0 1 .5-8 5.5 5.5 0 0 1 10.4 1.6A3.5 3.5 0 0 1 17.5 17.5"/><path d="M12 11v6.5M9.6 15.2 12 17.6l2.4-2.4"/></svg>
+          </div>
+          <div class="txt">
+            <div class="t">安装新版本</div>
+            <div class="h">官方源 · BMCLAPI · 1.21.11 已就绪</div>
+          </div>
+          <div class="arrow">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+          </div>
+        </div>
+
+        <div class="tile red" title="公告">
+          <div class="k">公告</div>
+          <div class="h">1.21.11 已可安装，Fabric 0.16.5 同步更新</div>
+          <div class="ln">BMCLAPI 线路维护，下载可能变慢</div>
+          <div class="ln">新增 aurora 生存服整合包自动更新</div>
+          <div class="foot">
+            全部公告
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+          </div>
+        </div>
+
+        <div class="tile blue" title="最近世界">
+          <div class="h">最近世界</div>
+          <div class="row">
+            <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="8"/><path d="M4 12h16M12 4c2.6 2.4 2.6 13.6 0 16M12 4c-2.6 2.4-2.6 13.6 0 16"/></svg></div>
+            <div>
+              <div class="nm">Aurora</div>
+              <div class="mt">1.21.11 · 生存 · 2 小时前</div>
+            </div>
+          </div>
+          <div class="row">
+            <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="8"/><path d="M4 12h16M12 4c2.6 2.4 2.6 13.6 0 16M12 4c-2.6 2.4-2.6 13.6 0 16"/></svg></div>
+            <div>
+              <div class="nm">Skyblock</div>
+              <div class="mt">1.20.1 · 创造 · 3 天前</div>
+            </div>
+          </div>
+          <div class="more">
+            查看全部
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <footer class="actionbar">
+      <div class="ava">H</div>
+      <div class="hello">您好！ <span>Haikuorenyuyue</span></div>
+      <div class="grow"></div>
+      <button class="round" aria-label="刷新状态">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M20 12a8 8 0 1 1-2.4-5.7"/><path d="M20 4v4h-4"/></svg>
+      </button>
+      <button class="play">
+        <span class="t">启动游戏</span>
+        <span class="s">Fabric 1.21.11 · Aurora</span>
+      </button>
+    </footer>
+  </div>
+
+<script>
+const NS = "http://www.w3.org/2000/svg";
+const add = (p, tag, a) => {
+  const e = document.createElementNS(NS, tag);
+  for (const k in a) e.setAttribute(k, a[k]);
+  p.appendChild(e);
+  return e;
+};
+(function watermark() {
+  const svg = document.getElementById("wm");
+  const g = add(svg, "g", {
+    stroke: "#ffffff", "stroke-width": 10, fill: "none",
+    "stroke-linecap": "square", "stroke-linejoin": "miter"
+  });
+  // 一组斜切方框 + 轴线，铺满画布右侧与底部
+  add(g, "path", { d: "M600 40 L900 10 L960 430 L650 470 Z" });
+  add(g, "path", { d: "M650 470 L600 40" });
+  add(g, "path", { d: "M960 430 L820 700" });
+  add(g, "path", { d: "M1000 150 L1090 150 L1090 380" });
+  add(g, "path", { d: "M980 520 L1090 520" });
+  add(g, "path", { d: "M380 600 L380 700" });
+  add(g, "path", { d: "M200 560 L200 640 L320 640" });
+  add(g, "path", { d: "M120 90 L120 220 L260 220" });
+  add(g, "path", { d: "M700 560 L860 560 L860 700" });
+})();
+</script>
+</body>
+</html>
