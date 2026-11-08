@@ -34,6 +34,16 @@ macOS/Linux 目前只配置构建与打包任务，测试按约定暂不执行�
 - Linux：Rust stable，以及 GPUI 所需的 X11/Wayland、Vulkan、字体开发库。
 - 精确版本在 `rust-toolchain.toml` 固定，依赖由 `Cargo.lock` 锁定。
 
+## 设计方向验证
+
+```powershell
+cargo run -p sealy-app --bin m3_demo
+```
+
+打开 Material 3 原型窗口：导航栏、Filled/Outlined 按钮、卡片、chips、FAB、线性进度、
+ripple 与 state layer，可用顶部 4 个 seed 实时换色、切换亮/暗主题。
+静态预览在 [design/preview/index.html](design/preview/index.html)。
+
 ## CI / 发布
 
 - [CI](.github/workflows/ci.yml)：Windows 运行 fmt/clippy/test/build；macOS/Linux 目前只构建，测试暂不执行。

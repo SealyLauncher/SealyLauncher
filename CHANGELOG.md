@@ -26,6 +26,7 @@
 - 2026-11-08 — Phase 1：`sealy-core` 新增 portable 路径、设置读写、日志、单实例锁、事件/任务骨架；`sealy-ui` 新增 kit 封装、主题 tokens、动效 tokens、双语文案、ShellState/Route、共享组件、NavRail、Home/实例/下载/账号/设置页面与路由动效；设置页可切换中英文并持久化。
 - 2026-11-08 — 设计探索：新增 `design/preview/index.html`，提供三个 UI 方向的静态预览（深海玻璃 / 流畅霓虹 / 杂志深色）及 headless Edge 生成的 1280×800 截图；待确认方向后再重做 `sealy-ui`。
 - 2026-11-08 — 设计探索：新增两个设计语言预览 —— `04 · Fluent 2`（Mica 底、4/8px 圆角、1px 描边、40 字符 accent 按钮、NavigationView 选中条）与 `05 · Material Design 3`（seed #6750A4 深色基线、tonal surface、胶囊导航指示、FAB、state layer），并核实 GPUI 原生支持 `WindowBackgroundAppearance::MicaBackdrop` / `MicaAltBackdrop` / `Blurred`。
+- 2026-11-08 — 原型验证：新增 `sealy-ui::m3`（`palette` 用 `material-colors 0.5.0` 从 seed 派生 24 个角色色、`widgets` 提供导航栏/按钮/卡片/chip/FAB/线性进度/ripple、`demo` 为可运行窗口）与 `cargo run -p sealy-app --bin m3_demo`；支持 4 个 seed 实时换色与亮/暗切换，截图见 `design/preview/gpui-m3-*.png`。
 
 ### Verified
 
