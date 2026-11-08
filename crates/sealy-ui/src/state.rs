@@ -222,6 +222,23 @@ pub struct ShellState {
     pub account_draft: Option<String>,
     /// Whether the new-instance version picker is open.
     pub new_instance_open: bool,
+    /// Cached authentication tokens.
+    pub tokens: sealy_core::auth::TokenStore,
+    /// Pending Microsoft device-code sign-in.
+    pub microsoft_login: Option<MicrosoftLogin>,
+}
+
+/// Device-code sign-in waiting for the user.
+#[derive(Debug, Clone)]
+pub struct MicrosoftLogin {
+    /// Message row this login reports into.
+    pub message_id: u64,
+    /// Code the user types on microsoft.com/link.
+    pub user_code: String,
+    /// Page to open.
+    pub verification_uri: String,
+    /// Cooperative cancel flag for the polling task.
+    pub cancel: std::sync::Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl ShellState {
@@ -231,6 +248,7 @@ impl ShellState {
         let instances =
             sealy_core::instances::InstanceBook::load(&bootstrap.paths.instances_file());
         let accounts = sealy_core::accounts::AccountBook::load(&bootstrap.paths.accounts_file());
+        let tokens = sealy_core::auth::TokenStore::load(&bootstrap.paths.tokens_file());
         Self {
             route: Route::Home,
             settings: bootstrap.settings,
@@ -248,6 +266,8 @@ impl ShellState {
             accounts,
             account_draft: None,
             new_instance_open: false,
+            tokens,
+            microsoft_login: None,
         }
     }
 
@@ -267,6 +287,13 @@ impl ShellState {
     pub fn save_accounts(&mut self) {
         if let Err(err) = self.accounts.save(&self.paths.accounts_file()) {
             tracing::warn!(error = %err, "failed to save accounts");
+        }
+    }
+
+    /// Persists cached tokens.
+    pub fn save_tokens(&mut self) {
+        if let Err(err) = self.tokens.save(&self.paths.tokens_file()) {
+            tracing::warn!(error = %err, "failed to save tokens");
         }
     }
 

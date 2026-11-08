@@ -42,14 +42,13 @@ pub(crate) fn start(state: &mut ShellState, instance: Instance, cx: &mut Context
     let memory = state.settings.java.memory.max_mb;
     let width = state.settings.launch.width;
     let height = state.settings.launch.height;
-    let (username, uuid) = match state.accounts.current() {
-        Some(account) => (account.name.clone(), account.uuid.clone()),
-        None => {
-            let name = "Player".to_owned();
-            let uuid = sealy_core::accounts::offline_uuid(&name);
-            (name, uuid)
-        }
-    };
+    let account = state
+        .accounts
+        .current()
+        .cloned()
+        .unwrap_or_else(|| sealy_core::accounts::Account::offline("Player"));
+    let client_id = state.settings.auth.microsoft_client_id.clone();
+    let tokens = state.tokens.clone();
     let instance_name = instance.name.clone();
     let version_id = instance.version_id.clone();
 
@@ -63,14 +62,17 @@ pub(crate) fn start(state: &mut ShellState, instance: Instance, cx: &mut Context
                 memory,
                 width,
                 height,
-                username,
-                uuid,
+                account,
+                client_id,
+                tokens,
             )
         });
 
         match outcome.await {
-            Ok(status) => {
+            Ok((status, tokens)) => {
                 let _ = this.update(cx, |shell, cx| {
+                    shell.state.tokens = tokens;
+                    shell.state.save_tokens();
                     shell.state.update_message(message_id, |row| {
                         row.tone = MessageTone::Done;
                         row.progress = None;
@@ -96,7 +98,7 @@ pub(crate) fn start(state: &mut ShellState, instance: Instance, cx: &mut Context
     .detach();
 }
 
-/// Resolves Java, builds the command and waits for the game to exit.
+/// Resolves Java and credentials, builds the command and waits for the game.
 #[allow(clippy::too_many_arguments)]
 fn launch_blocking(
     root: PathBuf,
@@ -106,9 +108,10 @@ fn launch_blocking(
     memory: u32,
     width: u32,
     height: u32,
-    username: String,
-    uuid: String,
-) -> Result<String, String> {
+    account: sealy_core::accounts::Account,
+    client_id: String,
+    mut tokens: sealy_core::auth::TokenStore,
+) -> Result<(String, sealy_core::auth::TokenStore), String> {
     let document = root
         .join("versions")
         .join(&version_id)
@@ -126,13 +129,23 @@ fn launch_blocking(
         .or_else(|| java_list.first())
         .ok_or_else(|| "没有可用的 Java，请先在下载页安装该版本".to_owned())?;
 
+    let access_token = sealy_core::auth::ensure_minecraft_token(&mut tokens, &account, &client_id)
+        .map_err(|err| err.to_string())?;
+    let user_type = if account.kind == sealy_core::accounts::AccountKind::Microsoft {
+        "msa"
+    } else {
+        "legacy"
+    };
+
     let spec = sealy_core::launch::LaunchSpec {
         root: &root,
         game_dir: &instance_dir,
         java: &java.path,
         version_id: &version_id,
-        username: &username,
-        uuid: &uuid,
+        username: &account.name,
+        uuid: &account.uuid,
+        access_token: &access_token,
+        user_type,
         max_memory_mb: memory,
         width,
         height,
@@ -146,10 +159,9 @@ fn launch_blocking(
         sealy_core::launch::spawn(&command, &instance_dir, &log).map_err(|err| err.to_string())?;
     let status = child.wait().map_err(|err| err.to_string())?;
 
-    Ok(format!(
-        "退出码 {} · {}",
-        status.code().unwrap_or(-1),
-        log.display()
+    Ok((
+        format!("退出码 {} · {}", status.code().unwrap_or(-1), log.display()),
+        tokens,
     ))
 }
 

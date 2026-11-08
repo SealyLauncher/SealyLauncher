@@ -70,3 +70,72 @@ pub fn get_bytes(url: &str) -> Result<Vec<u8>, CoreError> {
         .map_err(|err| CoreError::Network(format!("{url}: {err}")))?;
     Ok(bytes)
 }
+
+/// Response of a JSON call that keeps the status code around.
+#[derive(Debug, Clone)]
+pub struct JsonResponse {
+    /// HTTP status.
+    pub status: u16,
+    /// Parsed body, when it was JSON.
+    pub body: serde_json::Value,
+}
+
+impl JsonResponse {
+    /// Whether the request succeeded.
+    pub fn is_ok(&self) -> bool {
+        (200..300).contains(&self.status)
+    }
+}
+
+/// Posts a form body and returns JSON.
+pub fn post_form(url: &str, form: &[(&str, &str)]) -> Result<JsonResponse, CoreError> {
+    let agent = agent()?;
+    let response = agent.post(url).send_form(form);
+
+    read_json(url, response)
+}
+
+/// Posts a JSON body and returns JSON.
+pub fn post_json(url: &str, body: &serde_json::Value) -> Result<JsonResponse, CoreError> {
+    let agent = agent()?;
+    let response = agent
+        .post(url)
+        .set("Content-Type", "application/json")
+        .set("Accept", "application/json")
+        .send_json(body.clone());
+
+    read_json(url, response)
+}
+
+/// Gets JSON, optionally with a bearer token.
+pub fn get_json(url: &str, bearer: Option<&str>) -> Result<JsonResponse, CoreError> {
+    let agent = agent()?;
+    let mut request = agent.get(url).set("Accept", "application/json");
+    if let Some(token) = bearer {
+        request = request.set("Authorization", &format!("Bearer {token}"));
+    }
+
+    read_json(url, request.call())
+}
+
+fn read_json(
+    url: &str,
+    response: Result<ureq::Response, ureq::Error>,
+) -> Result<JsonResponse, CoreError> {
+    let (status, text) = match response {
+        Ok(response) => {
+            let status = response.status();
+            let text = response.into_string().unwrap_or_default();
+            (status, text)
+        }
+        Err(ureq::Error::Status(status, response)) => {
+            let text = response.into_string().unwrap_or_default();
+            (status, text)
+        }
+        Err(err) => return Err(CoreError::Network(format!("{url}: {err}"))),
+    };
+
+    let body = serde_json::from_str(&text).unwrap_or(serde_json::Value::Null);
+
+    Ok(JsonResponse { status, body })
+}

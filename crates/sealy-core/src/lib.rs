@@ -5,6 +5,7 @@
 
 pub mod accounts;
 pub mod assets;
+pub mod auth;
 pub mod config;
 pub mod error;
 pub mod events;
@@ -14,6 +15,7 @@ pub mod java;
 pub mod launch;
 pub mod logging;
 pub mod manifest;
+pub mod microsoft;
 pub mod net;
 pub mod paths;
 pub mod single_instance;

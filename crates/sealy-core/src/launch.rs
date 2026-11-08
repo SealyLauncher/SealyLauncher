@@ -26,6 +26,10 @@ pub struct LaunchSpec<'a> {
     pub username: &'a str,
     /// Player UUID (offline UUID when signed out).
     pub uuid: &'a str,
+    /// Minecraft access token; `0` for offline profiles.
+    pub access_token: &'a str,
+    /// `msa` for Microsoft accounts, `legacy` otherwise.
+    pub user_type: &'a str,
     /// Maximum heap in MB.
     pub max_memory_mb: u32,
     /// Window width.
@@ -63,10 +67,10 @@ pub fn build_command(
             .unwrap_or_else(|| spec.version_id.to_owned()),
     );
     placeholders.insert("auth_uuid", spec.uuid.to_owned());
-    placeholders.insert("auth_access_token", "0".to_owned());
+    placeholders.insert("auth_access_token", spec.access_token.to_owned());
     placeholders.insert("clientid", "0".to_owned());
     placeholders.insert("auth_xuid", "0".to_owned());
-    placeholders.insert("user_type", "legacy".to_owned());
+    placeholders.insert("user_type", spec.user_type.to_owned());
     placeholders.insert("version_type", "release".to_owned());
     placeholders.insert("natives_directory", natives.display().to_string());
     placeholders.insert("launcher_name", "SealyLauncher".to_owned());

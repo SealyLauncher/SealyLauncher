@@ -85,6 +85,11 @@ impl LauncherPaths {
         self.data.join("instances.json")
     }
 
+    /// Cached authentication tokens.
+    pub fn tokens_file(&self) -> PathBuf {
+        self.data.join("tokens.json")
+    }
+
     /// UI/window state file path.
     pub fn state_file(&self) -> PathBuf {
         self.data.join("state.json")

@@ -210,6 +210,29 @@ pub struct Settings {
     pub launch: LaunchSettings,
     /// Motion preference.
     pub motion: MotionSetting,
+    /// Authentication.
+    #[serde(default)]
+    pub auth: AuthSettings,
+}
+
+/// Authentication settings.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AuthSettings {
+    /// Azure application (client) id used for Microsoft sign-in.
+    #[serde(default = "default_client_id")]
+    pub microsoft_client_id: String,
+}
+
+fn default_client_id() -> String {
+    "e95460ea-8dcc-4dbc-bc2c-b823b9035ccb".to_owned()
+}
+
+impl Default for AuthSettings {
+    fn default() -> Self {
+        Self {
+            microsoft_client_id: default_client_id(),
+        }
+    }
 }
 
 impl Default for Settings {
@@ -222,6 +245,7 @@ impl Default for Settings {
             java: JavaSettings::default(),
             launch: LaunchSettings::default(),
             motion: MotionSetting::default(),
+            auth: AuthSettings::default(),
         }
     }
 }
