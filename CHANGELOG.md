@@ -27,6 +27,7 @@
 - 2026-11-08 — 设计探索：新增 `design/preview/index.html`，提供三个 UI 方向的静态预览（深海玻璃 / 流畅霓虹 / 杂志深色）及 headless Edge 生成的 1280×800 截图；待确认方向后再重做 `sealy-ui`。
 - 2026-11-08 — 设计探索：新增两个设计语言预览 —— `04 · Fluent 2`（Mica 底、4/8px 圆角、1px 描边、40 字符 accent 按钮、NavigationView 选中条）与 `05 · Material Design 3`（seed #6750A4 深色基线、tonal surface、胶囊导航指示、FAB、state layer），并核实 GPUI 原生支持 `WindowBackgroundAppearance::MicaBackdrop` / `MicaAltBackdrop` / `Blurred`。
 - 2026-11-08 — 原型验证：新增 `sealy-ui::m3`（`palette` 用 `material-colors 0.5.0` 从 seed 派生 24 个角色色、`widgets` 提供导航栏/按钮/卡片/chip/FAB/线性进度/ripple、`demo` 为可运行窗口）与 `cargo run -p sealy-app --bin m3_demo`；支持 4 个 seed 实时换色与亮/暗切换，截图见 `design/preview/gpui-m3-*.png`。
+- 2026-11-08 — 设计探索：按 GPUI Kit 设计指南（原生、克制、精确）与 LumilioCL 的界面语言新增 `design/preview/direction-6.html` —— 暖白画布 + 单一像素叙事 hero + 抖动接缝 + 橙色强调 + 底部 dock，并附截图 `direction-6.png`。
 
 ### Verified
 
