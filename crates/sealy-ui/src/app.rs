@@ -39,10 +39,26 @@ pub(crate) struct SealyShell {
 
 impl SealyShell {
     fn new(bootstrap: sealy_core::Bootstrap, cx: &mut Context<Self>) -> Self {
-        Self {
+        let shell = Self {
             state: ShellState::from_bootstrap(bootstrap),
             focus: cx.focus_handle(),
-        }
+        };
+
+        // Java probing spawns processes, so it happens after the first frame.
+        let game = shell.state.paths.game.clone();
+        cx.spawn(async move |this, cx| {
+            let found = cx
+                .background_executor()
+                .spawn(async move { sealy_core::java::detect(&game) })
+                .await;
+            let _ = this.update(cx, |shell, cx| {
+                shell.state.java = found;
+                cx.notify();
+            });
+        })
+        .detach();
+
+        shell
     }
 }
 

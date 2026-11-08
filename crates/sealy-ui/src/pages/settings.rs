@@ -23,6 +23,11 @@ pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyEle
     let source = state.settings.download.metadata_source;
     let memory = state.settings.java.memory.max_mb;
     let motion = state.settings.motion;
+    let java_line = state
+        .java
+        .first()
+        .map(|java| format!("Java {} · {}", java.version, java.path.display()))
+        .unwrap_or_else(|| tr(lang, "未检测到", "Not found").to_owned());
 
     div()
         .size_full()
@@ -172,6 +177,7 @@ pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyEle
                                 )),
                             &t,
                         ))
+                        .child(field_row(tr(lang, "Java", "Java"), java_line, &t))
                         .child(field_row(
                             tr(lang, "数据目录", "Data directory"),
                             data_dir,

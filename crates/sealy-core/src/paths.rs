@@ -1,8 +1,9 @@
 //! Portable path discovery.
 //!
-//! All launcher state lives under `<root>/SealyData`. On macOS, `<root>` is the
-//! directory containing the `.app` bundle, not the bundle's internal binary
-//! directory.
+//! All launcher state lives under `<root>/SealyData`; the game files live in the
+//! familiar `<root>/.minecraft` so worlds and mods can be shared with other
+//! launchers. On macOS, `<root>` is the directory containing the `.app` bundle,
+//! not the bundle's internal binary directory.
 
 use std::path::{Path, PathBuf};
 
@@ -15,7 +16,7 @@ pub struct LauncherPaths {
     pub root: PathBuf,
     /// Portable data directory.
     pub data: PathBuf,
-    /// Shared game repository (versions/libraries/assets).
+    /// Game directory: `<root>/.minecraft`.
     pub game: PathBuf,
     /// Per-instance game directories.
     pub instances: PathBuf,
@@ -35,7 +36,7 @@ impl LauncherPaths {
         let root = root.into();
         let data = root.join("SealyData");
         Self {
-            game: data.join("game"),
+            game: root.join(".minecraft"),
             instances: data.join("instances"),
             cache: data.join("cache"),
             logs: data.join("logs"),
@@ -138,7 +139,7 @@ mod tests {
     fn data_layout_is_portable() {
         let paths = LauncherPaths::from_root("C:/Games/SealyLauncher");
         assert_eq!(paths.data, Path::new("C:/Games/SealyLauncher/SealyData"));
-        assert_eq!(paths.game, paths.data.join("game"));
+        assert_eq!(paths.game, Path::new("C:/Games/SealyLauncher/.minecraft"));
         assert_eq!(paths.lock_file(), paths.data.join(".lock"));
     }
 }

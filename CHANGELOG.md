@@ -42,6 +42,7 @@
 - 2026-11-08 — Phase 2 起步：新增 `sealy-core::manifest`（`version_manifest_v2.json` 的类型、`VersionKind` 过滤、BMCLAPI→官方回退），下载页改为真实数据 —— 后台线程拉取、加载/失败/重试三种状态、按 全部/正式版/快照 过滤、列表可滚动；共 922 个版本。`ureq` 采用 `native-tls`（SChannel），因为本机没有 C 编译器和 nasm，rustls/ring 构建失败。
 - 2026-11-08 — Phase 2 下载器：新增 `net`（ureq 封装）、`version`（版本文档、规则过滤、classpath/plan）、`install`（拉文档 → 落盘 `<id>.json` → 下载 client jar 与全部 libraries → SHA-1 校验、相同哈希跳过、进度回传）；下载页「安装」调用真安装，动作带显示进度条与 `done/total · 文件名`，完成弹「已安装 …（76 个文件）」。实测安装 `26.4-snapshot-7`：客户端 jar 42 MB + 75 个库 84.6 MB，全部通过校验。
 - 2026-11-08 — 消息中心 + 多线程下载 + 返回按钮：新增全局 `panel.rs`（标题栏铃铛 + 右侧滑出面板，列出运行中/已完成/失败任务，带进度条与取消）；安装状态从下载页动作带迁到消息中心（`Message` / `MessageTone` / `InstallTask`）；`install::run_tasks` 改为线程池并发（线程数取 `settings.download.concurrency`），支持 `CancelFlag` 协作取消；所有子页面标题带加「←」返回主页。
+- 2026-11-08 — 游戏目录与 Java：`LauncherPaths.game` 改为 `<root>/.minecraft`（versions/libraries/assets/runtime 全落这里）；新增 `sealy-core::java` —— `probe`/`detect`（runtime 目录、JAVA_HOME、PATH、常见安装目录，解析 `java -version`）、`fetch_runtimes`（Mojang `products/java-runtime` 索引）、`pick_runtime`（按版本的 `javaVersion.component` + `majorVersion` 匹配）、`install_runtime`（按文件清单下载并校验）、`ensure`（先探测再按需下载）。安装流程改为两段：版本文件 → `准备 Java N`（实测该快照要求 Java 25，自动下载 `java-runtime-epsilon` 411 个文件 100 MB，`java -version` 输出 25.0.1）。设置页新增 Java 行显示本机已探测到的版本与路径。
 
 ### Verified
 

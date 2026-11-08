@@ -7,6 +7,7 @@ pub mod config;
 pub mod error;
 pub mod events;
 pub mod install;
+pub mod java;
 pub mod logging;
 pub mod manifest;
 pub mod net;

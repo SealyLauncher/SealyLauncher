@@ -210,6 +210,8 @@ pub struct ShellState {
     pub message_open: bool,
     /// Monotonic id for messages.
     pub next_message_id: u64,
+    /// Java installations found on this machine.
+    pub java: Vec<sealy_core::java::JavaInstall>,
 }
 
 impl ShellState {
@@ -227,6 +229,7 @@ impl ShellState {
             messages: Vec::new(),
             message_open: false,
             next_message_id: 1,
+            java: Vec::new(),
         }
     }
 

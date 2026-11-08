@@ -45,6 +45,8 @@ pub struct Installed {
     pub files: usize,
     /// Bytes fetched.
     pub bytes: u64,
+    /// Java component and required major version, when declared.
+    pub java: Option<(String, u32)>,
 }
 
 /// Installs `id` under `root`, fetching metadata first.
@@ -102,6 +104,11 @@ fn install_inner(
             state.done
         },
         bytes,
+        java: doc
+            .java_version
+            .as_ref()
+            .filter(|java| java.major_version > 0)
+            .map(|java| (java.component.clone(), java.major_version)),
     })
 }
 
