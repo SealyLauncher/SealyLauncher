@@ -180,10 +180,43 @@ fn row(
         )
         .child(
             div()
-                .text_size(px(11.0))
-                .line_height(relative(1.5))
-                .text_color(rgb(t.muted))
-                .child(message.detail.clone()),
+                .flex()
+                .items_center()
+                .gap(px(8.0))
+                .child(
+                    div()
+                        .flex_1()
+                        .text_size(px(11.0))
+                        .line_height(relative(1.5))
+                        .text_color(rgb(t.muted))
+                        .child(message.detail.clone()),
+                )
+                .when(
+                    message.tone == MessageTone::Failed && message.retry.is_some(),
+                    |this| {
+                        let id = message.retry.clone().unwrap_or_default();
+                        this.child(
+                            div()
+                                .id(("retry", message_id as usize))
+                                .role(Role::Button)
+                                .aria_label(format!("retry {message_id}"))
+                                .px(px(8.0))
+                                .h(px(22.0))
+                                .flex()
+                                .items_center()
+                                .rounded(px(theme::RADIUS_TILE))
+                                .border_1()
+                                .border_color(rgb(t.line))
+                                .cursor_pointer()
+                                .text_size(px(10.0))
+                                .text_color(rgb(t.text))
+                                .child("重试")
+                                .on_click(cx.listener(move |shell, _, _, cx| {
+                                    crate::install_flow::start(&mut shell.state, id.clone(), cx);
+                                })),
+                        )
+                    },
+                ),
         );
 
     if let Some(progress) = message.progress {

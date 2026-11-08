@@ -22,6 +22,10 @@ pub struct Progress {
     pub done: usize,
     /// File currently being fetched.
     pub current: String,
+    /// Bytes of the current file already written.
+    pub current_bytes: u64,
+    /// Expected size of the current file, zero when unknown.
+    pub current_size: u64,
     /// Bytes written so far.
     pub bytes: u64,
     /// Set once the worker stops, successfully or not.
@@ -209,10 +213,16 @@ fn fetch_one(
     {
         let mut state = progress.lock().unwrap_or_else(|err| err.into_inner());
         state.current = task.path.clone();
+        state.current_bytes = 0;
+        state.current_size = task.size;
     }
 
     let mut file = fs::File::create(&destination)?;
-    let written = match net::download_to(agent, &task.url, &mut file) {
+    let written = match net::download_to(agent, &task.url, &mut file, &mut |written| {
+        if let Ok(mut state) = progress.lock() {
+            state.current_bytes = written;
+        }
+    }) {
         Ok(bytes) => bytes,
         Err(err) => {
             drop(file);

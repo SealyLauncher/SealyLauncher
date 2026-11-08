@@ -99,6 +99,8 @@ pub struct Message {
     pub progress: Option<f32>,
     /// Tone.
     pub tone: MessageTone,
+    /// Version id a failed install can retry.
+    pub retry: Option<String>,
 }
 
 /// Handle to a running install so the UI can poll and cancel it.
@@ -222,10 +224,21 @@ pub struct ShellState {
     pub account_draft: Option<String>,
     /// Whether the new-instance version picker is open.
     pub new_instance_open: bool,
+    /// Inline instance rename buffer.
+    pub rename_draft: Option<RenameDraft>,
     /// Cached authentication tokens.
     pub tokens: sealy_core::auth::TokenStore,
     /// Pending Microsoft device-code sign-in.
     pub microsoft_login: Option<MicrosoftLogin>,
+}
+
+/// Inline rename of one instance.
+#[derive(Debug, Clone)]
+pub struct RenameDraft {
+    /// Current name on disk.
+    pub old: String,
+    /// Buffer being edited.
+    pub buffer: String,
 }
 
 /// Device-code sign-in waiting for the user.
@@ -266,6 +279,7 @@ impl ShellState {
             accounts,
             account_draft: None,
             new_instance_open: false,
+            rename_draft: None,
             tokens,
             microsoft_login: None,
         }
@@ -376,6 +390,87 @@ impl ShellState {
         self.save_instances();
     }
 
+    /// Opens the rename editor for the current instance.
+    pub fn begin_rename(&mut self) {
+        if let Some(instance) = self.instances.current() {
+            self.rename_draft = Some(RenameDraft {
+                old: instance.name.clone(),
+                buffer: instance.name.clone(),
+            });
+        }
+    }
+
+    /// Feeds one character into the rename buffer.
+    pub fn push_rename_char(&mut self, ch: char) {
+        if let Some(draft) = &mut self.rename_draft
+            && draft.buffer.chars().count() < 48
+        {
+            draft.buffer.push(ch);
+        }
+    }
+
+    /// Removes the last rename character.
+    pub fn pop_rename_char(&mut self) {
+        if let Some(draft) = &mut self.rename_draft {
+            draft.buffer.pop();
+        }
+    }
+
+    /// Commits the rename, moving the instance directory too.
+    pub fn commit_rename(&mut self) {
+        let Some(draft) = self.rename_draft.take() else {
+            return;
+        };
+        let new_name = draft.buffer.trim().to_owned();
+        if new_name.is_empty() || new_name == draft.old {
+            return;
+        }
+        if !self.instances.rename(&draft.old, &new_name) {
+            return;
+        }
+
+        let root = self.paths.game.clone();
+        let from = sealy_core::instances::directory(&root, &draft.old);
+        let to = sealy_core::instances::directory(&root, &new_name);
+        if from.is_dir() && !to.exists() {
+            let _ = std::fs::rename(&from, &to);
+        }
+        self.save_instances();
+    }
+
+    /// Discards the rename buffer.
+    pub fn cancel_rename(&mut self) {
+        self.rename_draft = None;
+    }
+
+    /// Duplicates the current instance and copies its game directory.
+    pub fn duplicate_instance(&mut self) {
+        let Some(current) = self.instances.current().map(|i| i.name.clone()) else {
+            return;
+        };
+        let Some(copy) = self.instances.duplicate(&current) else {
+            return;
+        };
+
+        let root = self.paths.game.clone();
+        let from = sealy_core::instances::directory(&root, &current);
+        let to = sealy_core::instances::directory(&root, &copy.name);
+        if from.is_dir() && !to.exists() {
+            let _ = copy_directory(&from, &to);
+        }
+        self.save_instances();
+    }
+
+    /// Reveals the current instance's game directory in the file manager.
+    pub fn open_instance_folder(&mut self) {
+        let Some(current) = self.instances.current().map(|i| i.name.clone()) else {
+            return;
+        };
+        let dir = sealy_core::instances::directory(&self.paths.game, &current);
+        let _ = std::fs::create_dir_all(&dir);
+        reveal(&dir);
+    }
+
     /// Adds a message and returns its id.
     pub fn push_message(&mut self, title: String, detail: String, tone: MessageTone) -> u64 {
         let id = self.next_message_id;
@@ -388,6 +483,7 @@ impl ShellState {
                 detail,
                 progress: None,
                 tone,
+                retry: None,
             },
         );
         self.messages.truncate(40);
@@ -513,4 +609,29 @@ impl ShellState {
     pub fn notify(&mut self, message: impl Into<String>) {
         self.notice = Some(message.into());
     }
+}
+
+/// Copies a directory tree, ignoring failures on individual entries.
+fn copy_directory(from: &std::path::Path, to: &std::path::Path) -> std::io::Result<()> {
+    std::fs::create_dir_all(to)?;
+    for entry in std::fs::read_dir(from)? {
+        let entry = entry?;
+        let target = to.join(entry.file_name());
+        if entry.file_type()?.is_dir() {
+            let _ = copy_directory(&entry.path(), &target);
+        } else {
+            let _ = std::fs::copy(entry.path(), &target);
+        }
+    }
+    Ok(())
+}
+
+/// Opens a directory in the platform file manager.
+fn reveal(path: &std::path::Path) {
+    #[cfg(target_os = "windows")]
+    let _ = std::process::Command::new("explorer").arg(path).spawn();
+    #[cfg(target_os = "macos")]
+    let _ = std::process::Command::new("open").arg(path).spawn();
+    #[cfg(all(unix, not(target_os = "macos")))]
+    let _ = std::process::Command::new("xdg-open").arg(path).spawn();
 }

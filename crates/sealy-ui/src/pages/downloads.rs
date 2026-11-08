@@ -7,7 +7,7 @@ use crate::app::SealyShell;
 use crate::components::{action_bar, head_band_back, mono, quiet_button};
 use crate::i18n::tr;
 use crate::kit::*;
-use crate::state::{InstallTask, MessageTone, ShellState, VersionFilter};
+use crate::state::{ShellState, VersionFilter};
 use crate::theme::{self, ThemeTokens};
 
 /// Rows rendered per screen batch; the manifest holds hundreds of versions.
@@ -34,7 +34,7 @@ pub(crate) fn render(state: &mut ShellState, cx: &mut Context<SealyShell>) -> An
             .filter(|version| matches(filter, version.kind))
             .take(MAX_ROWS)
             .enumerate()
-            .map(|(index, version)| row(index, version, lang, &t, cx))
+            .map(|(index, version)| row(&*state, index, version, lang, &t, cx))
             .collect::<Vec<_>>();
         list = list.children(rows);
     }
@@ -248,12 +248,15 @@ fn matches(filter: VersionFilter, kind: VersionKind) -> bool {
 }
 
 fn row(
+    state: &ShellState,
     index: usize,
     version: &VersionSummary,
     lang: Language,
     t: &ThemeTokens,
     cx: &mut Context<SealyShell>,
 ) -> AnyElement {
+    let installed = state.installed.iter().any(|entry| entry.id == version.id);
+
     div()
         .h(px(60.0))
         .flex()
@@ -285,355 +288,36 @@ fn row(
         .child(mono(VersionManifest::date_of(version), t))
         .child(mono(format!("#{:03}", index + 1), t))
         .child(
-            quiet_button(tr(lang, "安装", "Install"), t)
-                .id(("install", index))
-                .role(Role::Button)
-                .aria_label(format!("install {}", version.id))
-                .on_click(cx.listener({
-                    let id = version.id.clone();
-                    move |shell, _, _, cx| {
-                        start_install(&mut shell.state, id.clone(), cx);
-                    }
-                })),
+            div()
+                .when(installed, |this| {
+                    this.child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap(px(4.0))
+                            .child(
+                                Icon::new(IconName::Check)
+                                    .w(px(12.0))
+                                    .h(px(12.0))
+                                    .text_color(rgb(t.muted)),
+                            )
+                            .child(mono(tr(lang, "已安装", "installed"), t)),
+                    )
+                })
+                .when(!installed, |this| {
+                    this.child(
+                        quiet_button(tr(lang, "安装", "Install"), t)
+                            .id(("install", index))
+                            .role(Role::Button)
+                            .aria_label(format!("install {}", version.id))
+                            .on_click(cx.listener({
+                                let id = version.id.clone();
+                                move |shell, _, _, cx| {
+                                    crate::install_flow::start(&mut shell.state, id.clone(), cx);
+                                }
+                            })),
+                    )
+                }),
         )
         .into_any_element()
-}
-
-/// Kicks off a background install and reports into the message center.
-///
-/// Phase one fetches the version files; phase two makes sure a matching Java
-/// runtime exists, downloading Mojang's runtime when none is installed.
-fn start_install(state: &mut ShellState, id: String, cx: &mut Context<SealyShell>) {
-    if state.install.is_some() {
-        return;
-    }
-
-    let game = state.paths.game.clone();
-    let game_for_files = game.clone();
-    let policy = state.settings.download.metadata_source;
-    let concurrency = usize::from(state.settings.download.concurrency).max(1);
-    let auto_java = state.settings.java.auto_download;
-    let lang = state.language();
-
-    let message_id = state.push_message(
-        format!("安装 {id}"),
-        tr(lang, "正在获取版本文件…", "Fetching version files…").to_owned(),
-        MessageTone::Running,
-    );
-    state.message_open = true;
-
-    let handle = std::sync::Arc::new(std::sync::Mutex::new(
-        sealy_core::install::Progress::default(),
-    ));
-    let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-    state.install = Some(InstallTask {
-        message_id,
-        progress: handle.clone(),
-        cancel: cancel.clone(),
-    });
-
-    let worker = handle.clone();
-    let worker_cancel = cancel.clone();
-    let task_id = id.clone();
-    let java_dir = game.clone();
-
-    cx.spawn(async move |this, cx| {
-        let task = cx.background_executor().spawn(async move {
-            sealy_core::install::install(
-                &game_for_files,
-                &task_id,
-                policy,
-                concurrency,
-                worker,
-                worker_cancel,
-            )
-        });
-
-        loop {
-            cx.background_executor()
-                .timer(std::time::Duration::from_millis(200))
-                .await;
-
-            let snapshot = handle
-                .lock()
-                .map(|progress| progress.clone())
-                .unwrap_or_default();
-            let finished = snapshot.finished;
-
-            let _ = this.update(cx, |shell, cx| {
-                let filler = if snapshot.total == 0 {
-                    tr(
-                        shell.state.language(),
-                        "正在获取版本文件…",
-                        "Fetching version files…",
-                    )
-                    .to_owned()
-                } else {
-                    format!(
-                        "{} / {} · {}",
-                        snapshot.done,
-                        snapshot.total,
-                        snapshot
-                            .current
-                            .rsplit('/')
-                            .next()
-                            .unwrap_or(&snapshot.current)
-                    )
-                };
-                let ratio = if snapshot.total == 0 {
-                    0.0
-                } else {
-                    (snapshot.done as f32 / snapshot.total as f32).clamp(0.0, 1.0)
-                };
-
-                shell.state.update_message(message_id, |row| {
-                    row.progress = Some(ratio);
-                    row.detail = filler;
-                });
-                cx.notify();
-            });
-
-            if finished {
-                break;
-            }
-        }
-
-        let installed = match task.await {
-            Ok(installed) => installed,
-            Err(err) => {
-                let _ = this.update(cx, |shell, cx| {
-                    shell.state.install = None;
-                    shell.state.update_message(message_id, |row| {
-                        row.tone = MessageTone::Failed;
-                        row.progress = None;
-                        row.detail = err.to_string();
-                    });
-                    cx.notify();
-                });
-                return;
-            }
-        };
-
-        let summary = if installed.bytes == 0 {
-            format!("{} 个文件 · 已是最新", installed.files)
-        } else {
-            format!(
-                "{} 个文件 · {} MB",
-                installed.files,
-                installed.bytes / 1_048_576
-            )
-        };
-        let _ = this.update(cx, |shell, cx| {
-            shell.state.update_message(message_id, |row| {
-                row.tone = MessageTone::Done;
-                row.progress = Some(1.0);
-                row.detail = summary.clone();
-            });
-            cx.notify();
-        });
-
-        let Some((component, major)) = installed.java.filter(|_| auto_java) else {
-            let _ = this.update(cx, |shell, cx| {
-                shell.state.install = None;
-                cx.notify();
-            });
-            return;
-        };
-
-        // Phase two: a matching Java runtime.
-        let java_message = {
-            let mut created = 0;
-            let _ = this.update(cx, |shell, cx| {
-                created = shell.state.push_message(
-                    format!("准备 Java {major}"),
-                    tr(
-                        shell.state.language(),
-                        "正在检测本机 Java…",
-                        "Looking for a local Java…",
-                    )
-                    .to_owned(),
-                    MessageTone::Running,
-                );
-                shell.state.message_open = true;
-                cx.notify();
-            });
-            created
-        };
-
-        let java_progress = std::sync::Arc::new(std::sync::Mutex::new(
-            sealy_core::install::Progress::default(),
-        ));
-        let java_cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-        let java_worker = java_progress.clone();
-        let java_flag = java_cancel.clone();
-
-        let java_task = cx.background_executor().spawn(async move {
-            sealy_core::java::ensure(&java_dir, &component, major, &java_worker, &java_flag)
-        });
-
-        loop {
-            cx.background_executor()
-                .timer(std::time::Duration::from_millis(200))
-                .await;
-
-            let snapshot = java_progress
-                .lock()
-                .map(|progress| progress.clone())
-                .unwrap_or_default();
-            let finished = snapshot.finished;
-            let ratio = if snapshot.total == 0 {
-                0.0
-            } else {
-                (snapshot.done as f32 / snapshot.total as f32).clamp(0.0, 1.0)
-            };
-            let detail = if snapshot.total == 0 {
-                tr(lang, "正在检测本机 Java…", "Looking for a local Java…").to_owned()
-            } else {
-                format!(
-                    "{} / {} · {}",
-                    snapshot.done,
-                    snapshot.total,
-                    snapshot
-                        .current
-                        .rsplit('/')
-                        .next()
-                        .unwrap_or(&snapshot.current)
-                )
-            };
-
-            let _ = this.update(cx, |shell, cx| {
-                shell.state.update_message(java_message, |row| {
-                    row.progress = Some(ratio);
-                    row.detail = detail.clone();
-                });
-                cx.notify();
-            });
-
-            if finished {
-                break;
-            }
-        }
-
-        // Phase three: asset objects, when the version declares an index.
-        if let Some((index_id, index_url)) = installed.assets.clone() {
-            let assets_message = {
-                let mut created = 0;
-                let _ = this.update(cx, |shell, cx| {
-                    created = shell.state.push_message(
-                        format!("下载资源 {index_id}"),
-                        tr(
-                            shell.state.language(),
-                            "正在读取资源索引…",
-                            "Reading the asset index…",
-                        )
-                        .to_owned(),
-                        MessageTone::Running,
-                    );
-                    cx.notify();
-                });
-                created
-            };
-
-            let assets_progress = std::sync::Arc::new(std::sync::Mutex::new(
-                sealy_core::install::Progress::default(),
-            ));
-            let assets_cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-            let assets_worker = assets_progress.clone();
-            let assets_flag = assets_cancel.clone();
-            let assets_dir = game.clone();
-            let assets_id = index_id.clone();
-
-            let assets_task = cx.background_executor().spawn(async move {
-                sealy_core::assets::install(
-                    &assets_dir,
-                    &index_url,
-                    &assets_id,
-                    &assets_worker,
-                    &assets_flag,
-                )
-            });
-
-            loop {
-                cx.background_executor()
-                    .timer(std::time::Duration::from_millis(250))
-                    .await;
-
-                let snapshot = assets_progress
-                    .lock()
-                    .map(|progress| progress.clone())
-                    .unwrap_or_default();
-                let finished = snapshot.finished;
-                let ratio = if snapshot.total == 0 {
-                    0.0
-                } else {
-                    (snapshot.done as f32 / snapshot.total as f32).clamp(0.0, 1.0)
-                };
-                let detail = format!("{} / {} objects", snapshot.done, snapshot.total);
-
-                let _ = this.update(cx, |shell, cx| {
-                    shell.state.update_message(assets_message, |row| {
-                        row.progress = Some(ratio);
-                        row.detail = detail.clone();
-                    });
-                    cx.notify();
-                });
-
-                if finished {
-                    break;
-                }
-                if snapshot.total == 0 && snapshot.done == 0 && !snapshot.finished {
-                    // Index fetch still in flight; keep waiting.
-                }
-            }
-
-            match assets_task.await {
-                Ok(count) => {
-                    let _ = this.update(cx, |shell, cx| {
-                        shell.state.update_message(assets_message, |row| {
-                            row.tone = MessageTone::Done;
-                            row.progress = Some(1.0);
-                            row.detail = format!("{count} 个资源对象");
-                        });
-                        cx.notify();
-                    });
-                }
-                Err(err) => {
-                    let _ = this.update(cx, |shell, cx| {
-                        shell.state.update_message(assets_message, |row| {
-                            row.tone = MessageTone::Failed;
-                            row.progress = None;
-                            row.detail = err.to_string();
-                        });
-                        cx.notify();
-                    });
-                }
-            }
-        }
-        match java_task.await {
-            Ok(java) => {
-                let _ = this.update(cx, |shell, cx| {
-                    shell.state.install = None;
-                    shell.state.java.push(java.clone());
-                    shell.state.update_message(java_message, |row| {
-                        row.tone = MessageTone::Done;
-                        row.progress = Some(1.0);
-                        row.detail = format!("Java {} · {}", java.version, java.path.display());
-                    });
-                    cx.notify();
-                });
-            }
-            Err(err) => {
-                let _ = this.update(cx, |shell, cx| {
-                    shell.state.install = None;
-                    shell.state.update_message(java_message, |row| {
-                        row.tone = MessageTone::Failed;
-                        row.progress = None;
-                        row.detail = err.to_string();
-                    });
-                    cx.notify();
-                });
-            }
-        }
-    })
-    .detach();
 }

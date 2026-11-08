@@ -10,7 +10,7 @@ use crate::theme;
 /// Starts the GPUI application and opens the shell window.
 pub fn run(bootstrap: sealy_core::Bootstrap) {
     gpui_kit::application()
-        .with_assets(gpui_kit::assets::AllAssets)
+        .with_assets(crate::assets::SealyAssets)
         .run(|cx| {
             gpui_kit::init(cx);
 
@@ -168,15 +168,38 @@ impl SealyShell {
     /// Window-wide shortcuts: Enter runs the primary action, Escape steps back,
     /// digits jump between pages.
     fn handle_key(&mut self, keystroke: &Keystroke, cx: &mut Context<Self>) {
-        // The offline account editor captures typing while it is open.
-        if self.state.account_draft.is_some() {
+        // Inline name editors capture typing while they are open.
+        if self.state.account_draft.is_some() || self.state.rename_draft.is_some() {
+            let renaming = self.state.rename_draft.is_some();
             match keystroke.key.as_str() {
-                "enter" => self.state.commit_account(),
-                "escape" => self.state.cancel_account(),
-                "backspace" => self.state.pop_account_char(),
+                "enter" => {
+                    if renaming {
+                        self.state.commit_rename();
+                    } else {
+                        self.state.commit_account();
+                    }
+                }
+                "escape" => {
+                    if renaming {
+                        self.state.cancel_rename();
+                    } else {
+                        self.state.cancel_account();
+                    }
+                }
+                "backspace" => {
+                    if renaming {
+                        self.state.pop_rename_char();
+                    } else {
+                        self.state.pop_account_char();
+                    }
+                }
                 key if key.chars().count() == 1 => {
                     if let Some(ch) = key.chars().next() {
-                        self.state.push_account_char(ch);
+                        if renaming {
+                            self.state.push_rename_char(ch);
+                        } else {
+                            self.state.push_account_char(ch);
+                        }
                     }
                 }
                 _ => {}
@@ -232,8 +255,15 @@ fn brand(tokens: &theme::ThemeTokens) -> AnyElement {
     div()
         .flex()
         .items_center()
-        .gap(px(10.0))
+        .gap(px(8.0))
         .px(px(14.0))
+        .child(
+            img(crate::assets::ICON_PATH)
+                .w(px(18.0))
+                .h(px(18.0))
+                .rounded(px(4.0))
+                .object_fit(ObjectFit::Contain),
+        )
         .child(
             div()
                 .text_size(px(10.5))

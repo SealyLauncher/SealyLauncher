@@ -47,6 +47,7 @@
 - 2026-11-08 — 实例管理：新增 `sealy-core::instances`（`InstanceBook` 存 `SealyData/instances.json`，含选择、自动重名、删除后改选、`last_played` 时间戳）与 `launch_flow`（主页与实例页共用启动流程）；`LaunchSpec` 拆成 `root`（共享 `.minecraft`：versions/libraries/assets）与 `game_dir`（实例目录），每个实例在 `<game>/.minecraft/instances/<name>` 下拥有独立存档与设置。实例页改为真实列表：新建 / 选择 / 删除 / 启动；主页读取当前选中实例。修复 `--assetsDir` 仍指向实例目录导致客户端找不到资源索引的问题。移除 `bakaxl-flow-ui` skill，README 与 PLAN 改指向 `docs/PLAN.md §9`。
 - 2026-11-08 — 账号与选版本：新增 `sealy-core::accounts`（`AccountBook` 存 `SealyData/accounts.json`，`Account::offline` 用 MD5 生成与官方一致的离线 UUID，测试对齐 `OfflinePlayer:Notch` 已知值）；账号页支持内联输入用户名创建离线账号（回车确认 / Esc 取消，长度 16、仅字母数字下划线）、选择、删除；启动流程改用当前账号的 `name` + `uuid`，主页问候语显示账号名。实例页「新建实例」改为版本选择器（列出已安装版本，点选后创建）。
 - 2026-11-08 — Microsoft 登录：新增 `net` 的 JSON/表单辅助、`microsoft`（设备码申请与轮询、MSA 刷新、XBL → XSTS → `login_with_xbox` → `profile`，含 XErr 错误码翻译与 403「未通过 MCE 审核」专用提示）、`auth`（`TokenStore` 存 `SealyData/tokens.json`，`ensure_minecraft_token` 命中缓存或自动刷新）；设置新增 `auth.microsoft_client_id`（默认已填 `e95460ea-…`）；账号页新增「Microsoft 登录」按钮与设备码卡片（显示 `microsoft.com/link` + 8 位代码 + 取消），登录成功后写入账号与令牌。启动链路按账号类型传 `--accessToken`/`--userType msa`。设备码流程实测可拿到真实 `user_code`（如 `EFSWYN3U`），取消与失败状态均落到消息中心。
+- 2026-11-08 — 实例操作、下载细化与图标：实例页新增重命名（内联输入，回车确认 / Esc 取消，同时移动实例目录）、复制（`<名字> 副本`，复制整个游戏目录）、打开文件夹；列表行加 12px 内边距修掉图标贴边。下载页对已安装版本显示「✓ 已安装」；安装进度新增单文件字节进度（`current_bytes` / `current_size`，`net::download_to` 增加回调）；失败任务在消息中心带「重试」。新增 `SealyAssets` 资产源嵌入启动器图标，标题栏左上角显示应用图标。
 
 ### Verified
 

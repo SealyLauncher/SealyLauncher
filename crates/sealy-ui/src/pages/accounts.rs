@@ -515,6 +515,7 @@ fn row(
         .role(Role::Button)
         .aria_label(account.name.clone())
         .h(px(72.0))
+        .px(px(12.0))
         .flex()
         .items_center()
         .gap(px(14.0))

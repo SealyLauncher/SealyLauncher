@@ -70,6 +70,51 @@ impl InstanceBook {
         }
     }
 
+    /// Renames an instance, keeping its position and selection.
+    pub fn rename(&mut self, from: &str, to: &str) -> bool {
+        let target = to.trim();
+        if target.is_empty() || target == from {
+            return false;
+        }
+        if self
+            .instances
+            .iter()
+            .any(|instance| instance.name == target)
+        {
+            return false;
+        }
+        let Some(instance) = self
+            .instances
+            .iter_mut()
+            .find(|instance| instance.name == from)
+        else {
+            return false;
+        };
+        instance.name = target.to_owned();
+        if self.selected.as_deref() == Some(from) {
+            self.selected = Some(target.to_owned());
+        }
+        true
+    }
+
+    /// Copies an instance under a fresh name and selects the copy.
+    pub fn duplicate(&mut self, name: &str) -> Option<Instance> {
+        let source = self
+            .instances
+            .iter()
+            .find(|instance| instance.name == name)?
+            .clone();
+        let copy_name = self.next_copy_name(&source.name);
+        let copy = Instance {
+            name: copy_name.clone(),
+            version_id: source.version_id,
+            last_played: None,
+        };
+        self.instances.push(copy.clone());
+        self.selected = Some(copy_name);
+        Some(copy)
+    }
+
     /// Selects an instance by name.
     pub fn select(&mut self, name: &str) {
         if self.instances.iter().any(|instance| instance.name == name) {
@@ -105,6 +150,25 @@ impl InstanceBook {
         let mut index = 2;
         loop {
             let candidate = format!("{base} ({index})");
+            if !self
+                .instances
+                .iter()
+                .any(|instance| instance.name == candidate)
+            {
+                return candidate;
+            }
+            index += 1;
+        }
+    }
+    /// `<name> 副本`, then `副本 2`, … for duplicates.
+    fn next_copy_name(&self, name: &str) -> String {
+        let base = format!("{name} 副本");
+        if !self.instances.iter().any(|instance| instance.name == base) {
+            return base;
+        }
+        let mut index = 2;
+        loop {
+            let candidate = format!("{base} {index}");
             if !self
                 .instances
                 .iter()

@@ -8,6 +8,6 @@ pub use gpui_kit::component::Icon;
 pub use gpui_kit::prelude::*;
 pub use gpui_kit::{
     Animation, AnimationExt, AnyElement, Bounds, Context, Div, ElementId, FocusHandle, FontWeight,
-    IntoElement, KeyDownEvent, Keystroke, Render, Rgba, Role, SharedString, Window, WindowBounds,
-    WindowOptions, div, px, relative, rgb, rgba, size,
+    IntoElement, KeyDownEvent, Keystroke, ObjectFit, Render, Rgba, Role, SharedString, Window,
+    WindowBounds, WindowOptions, div, img, px, relative, rgb, rgba, size,
 };

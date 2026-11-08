@@ -1,8 +1,10 @@
 //! GPUI presentation layer for SealyLauncher.
 
 pub mod app;
+pub mod assets;
 pub mod components;
 pub mod i18n;
+pub mod install_flow;
 pub mod kit;
 pub mod launch_flow;
 pub mod motion;

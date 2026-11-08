@@ -3,7 +3,9 @@
 use sealy_core::instances::Instance;
 
 use crate::app::SealyShell;
-use crate::components::{action_bar, head_band_back, mono, primary_button, quiet_button};
+use crate::components::{
+    action_bar, head_band_back, icon_button, mono, primary_button, quiet_button,
+};
 use crate::i18n::tr;
 use crate::kit::*;
 use crate::launch_flow;
@@ -21,7 +23,9 @@ pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyEle
         .map(|instance| row(instance, state, &t, cx))
         .collect::<Vec<_>>();
 
-    let body = if state.new_instance_open {
+    let body = if state.rename_draft.is_some() {
+        rename_card(state, &t, lang, cx)
+    } else if state.new_instance_open {
         picker(state, &t, lang, cx)
     } else if rows.is_empty() {
         empty(&t, lang)
@@ -77,6 +81,36 @@ pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyEle
                 .child(mono(count_label, &t))
                 .child(div().flex_1())
                 .child(
+                    icon_button(IconName::Pencil, &t)
+                        .id("instance-rename")
+                        .role(Role::Button)
+                        .aria_label("rename-instance")
+                        .on_click(cx.listener(|shell, _, _, cx| {
+                            shell.state.begin_rename();
+                            cx.notify();
+                        })),
+                )
+                .child(
+                    icon_button(IconName::Copy, &t)
+                        .id("instance-copy")
+                        .role(Role::Button)
+                        .aria_label("copy-instance")
+                        .on_click(cx.listener(|shell, _, _, cx| {
+                            shell.state.duplicate_instance();
+                            cx.notify();
+                        })),
+                )
+                .child(
+                    icon_button(IconName::FolderOpen, &t)
+                        .id("instance-folder")
+                        .role(Role::Button)
+                        .aria_label("open-instance-folder")
+                        .on_click(cx.listener(|shell, _, _, cx| {
+                            shell.state.open_instance_folder();
+                            cx.notify();
+                        })),
+                )
+                .child(
                     quiet_button(tr(lang, "删除", "Delete"), &t)
                         .id("instance-delete")
                         .role(Role::Button)
@@ -115,6 +149,80 @@ pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyEle
                         .when(!has_selection, |this| this.opacity(0.4))
                         .on_click(cx.listener(|shell, _, _, cx| {
                             launch_flow::start_selected(&mut shell.state, cx);
+                        })),
+                ),
+        )
+        .into_any_element()
+}
+
+/// Inline editor for renaming the selected instance.
+fn rename_card(
+    state: &ShellState,
+    t: &ThemeTokens,
+    lang: sealy_core::config::Language,
+    cx: &mut Context<SealyShell>,
+) -> AnyElement {
+    let buffer = state
+        .rename_draft
+        .as_ref()
+        .map(|draft| draft.buffer.clone())
+        .unwrap_or_default();
+
+    div()
+        .flex_1()
+        .flex()
+        .flex_col()
+        .items_center()
+        .justify_center()
+        .gap(px(14.0))
+        .child(
+            div()
+                .w(px(420.0))
+                .h(px(56.0))
+                .px(px(16.0))
+                .flex()
+                .items_center()
+                .rounded(px(theme::RADIUS_TILE))
+                .border_1()
+                .border_color(rgb(t.text))
+                .bg(rgb(t.surface))
+                .child(
+                    div()
+                        .text_size(px(18.0))
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(rgb(t.text))
+                        .child(buffer),
+                )
+                .child(div().w(px(2.0)).h(px(20.0)).bg(rgb(t.text))),
+        )
+        .child(
+            div()
+                .flex()
+                .items_center()
+                .gap(px(10.0))
+                .child(div().text_size(px(11.0)).text_color(rgb(t.muted)).child(tr(
+                    lang,
+                    "回车确认 · Esc 取消",
+                    "Enter to confirm · Esc to cancel",
+                )))
+                .child(
+                    quiet_button(tr(lang, "取消", "Cancel"), t)
+                        .id("rename-cancel")
+                        .role(Role::Button)
+                        .aria_label("rename-cancel")
+                        .on_click(cx.listener(|shell, _, _, cx| {
+                            shell.state.cancel_rename();
+                            cx.notify();
+                        })),
+                )
+                .child(
+                    quiet_button(tr(lang, "确认", "Confirm"), t)
+                        .id("rename-confirm")
+                        .role(Role::Button)
+                        .aria_label("rename-confirm")
+                        .on_click(cx.listener(|shell, _, _, cx| {
+                            shell.state.commit_rename();
+                            cx.notify();
                         })),
                 ),
         )
@@ -232,6 +340,7 @@ fn row(
         .role(Role::Button)
         .aria_label(instance.name.clone())
         .h(px(72.0))
+        .px(px(12.0))
         .flex()
         .items_center()
         .gap(px(14.0))

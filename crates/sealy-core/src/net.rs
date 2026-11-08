@@ -33,6 +33,7 @@ pub fn download_to<W: std::io::Write>(
     agent: &ureq::Agent,
     url: &str,
     sink: &mut W,
+    on_progress: &mut dyn FnMut(u64),
 ) -> Result<u64, CoreError> {
     let response = agent
         .get(url)
@@ -51,6 +52,7 @@ pub fn download_to<W: std::io::Write>(
         }
         sink.write_all(&buffer[..read])?;
         total += read as u64;
+        on_progress(total);
     }
 
     Ok(total)
