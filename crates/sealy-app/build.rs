@@ -22,6 +22,9 @@ fn main() {
     }
 
     let Some(rc) = find_rc() else {
+        if std::env::var("SEALY_REQUIRE_ICON").is_ok() {
+            panic!("rc.exe not found but SEALY_REQUIRE_ICON is set");
+        }
         println!("cargo:warning=rc.exe not found, skipping executable icon");
         return;
     };

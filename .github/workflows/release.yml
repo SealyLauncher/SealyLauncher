@@ -90,6 +90,8 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Build
+        env:
+          SEALY_REQUIRE_ICON: "1"
         run: cargo build --release --locked -p sealy-app
 
       - name: Package portable zip
