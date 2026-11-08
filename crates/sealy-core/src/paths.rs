@@ -80,6 +80,11 @@ impl LauncherPaths {
         self.data.join("accounts.json")
     }
 
+    /// Instance book path.
+    pub fn instances_file(&self) -> PathBuf {
+        self.data.join("instances.json")
+    }
+
     /// UI/window state file path.
     pub fn state_file(&self) -> PathBuf {
         self.data.join("state.json")

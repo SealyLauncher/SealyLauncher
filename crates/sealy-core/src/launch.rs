@@ -14,7 +14,9 @@ use crate::version::{self, Library, OsRule, RuleAction, VersionDocument};
 /// Everything the command needs that is not in the version document.
 #[derive(Debug, Clone)]
 pub struct LaunchSpec<'a> {
-    /// Game directory (`.minecraft`).
+    /// Shared repository (`.minecraft`): versions, libraries, assets.
+    pub root: &'a Path,
+    /// Instance game directory that receives saves and options.
     pub game_dir: &'a Path,
     /// Java executable.
     pub java: &'a Path,
@@ -42,7 +44,7 @@ pub fn build_command(
         .join("versions")
         .join(spec.version_id)
         .join("natives");
-    let classpath = classpath(spec.game_dir, doc, spec.version_id);
+    let classpath = classpath(spec.root, doc, spec.version_id);
     let cp_separator = if cfg!(windows) { ";" } else { ":" };
 
     let mut placeholders: BTreeMap<&str, String> = BTreeMap::new();
@@ -51,7 +53,7 @@ pub fn build_command(
     placeholders.insert("game_directory", spec.game_dir.display().to_string());
     placeholders.insert(
         "assets_root",
-        spec.game_dir.join("assets").display().to_string(),
+        spec.root.join("assets").display().to_string(),
     );
     placeholders.insert(
         "assets_index_name",
@@ -73,7 +75,7 @@ pub fn build_command(
     placeholders.insert("classpath_separator", cp_separator.to_owned());
     placeholders.insert(
         "library_directory",
-        spec.game_dir.join("libraries").display().to_string(),
+        spec.root.join("libraries").display().to_string(),
     );
     placeholders.insert("resolution_width", spec.width.to_string());
     placeholders.insert("resolution_height", spec.height.to_string());

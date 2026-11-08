@@ -1,60 +1,46 @@
-//! Instances: a scannable list with a persistent launch action.
+//! Instances: the launchable profiles and their own game directories.
+
+use sealy_core::instances::Instance;
 
 use crate::app::SealyShell;
 use crate::components::{action_bar, head_band_back, mono, primary_button, quiet_button};
 use crate::i18n::tr;
 use crate::kit::*;
+use crate::launch_flow;
 use crate::state::ShellState;
 use crate::theme::{self, ThemeTokens};
-
-struct Instance {
-    name: &'static str,
-    version: &'static str,
-    loader: &'static str,
-    played: &'static str,
-    size: &'static str,
-}
-
-const INSTANCES: [Instance; 4] = [
-    Instance {
-        name: "Fabric 1.21.11",
-        version: "1.21.11",
-        loader: "Fabric 0.16.5",
-        played: "2H",
-        size: "812 MB",
-    },
-    Instance {
-        name: "Aurora",
-        version: "1.20.1",
-        loader: "128 mods",
-        played: "3D",
-        size: "3.4 GB",
-    },
-    Instance {
-        name: "Vanilla 1.21.4",
-        version: "1.21.4",
-        loader: "Vanilla",
-        played: "1W",
-        size: "498 MB",
-    },
-    Instance {
-        name: "Skyblock",
-        version: "1.20.1",
-        loader: "Fabric 0.15.9",
-        played: "2W",
-        size: "1.2 GB",
-    },
-];
 
 pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyElement {
     let t = state.theme();
     let lang = state.language();
 
-    let rows = INSTANCES
+    let rows = state
+        .instances
+        .instances
         .iter()
-        .enumerate()
-        .map(|(index, instance)| row(instance, index == 0, &t))
+        .map(|instance| row(instance, state, &t, cx))
         .collect::<Vec<_>>();
+
+    let body = if rows.is_empty() {
+        empty(&t, lang)
+    } else {
+        div()
+            .id("instance-list")
+            .flex_1()
+            .min_h(px(0.0))
+            .overflow_y_scroll()
+            .flex()
+            .flex_col()
+            .children(rows)
+            .into_any_element()
+    };
+
+    let has_selection = state.instances.current().is_some();
+    let count_label = format!(
+        "{} {}",
+        state.instances.instances.len(),
+        tr(lang, "个实例", "instances")
+    );
 
     div()
         .size_full()
@@ -64,6 +50,7 @@ pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyEle
         .child(
             div()
                 .flex_1()
+                .min_h(px(0.0))
                 .p(px(theme::PAGE_PADDING))
                 .flex()
                 .flex_col()
@@ -75,27 +62,47 @@ pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyEle
                         .justify_between()
                         .child(div().text_size(px(12.0)).text_color(rgb(t.muted)).child(tr(
                             lang,
-                            "全部 · 按最近使用排序",
-                            "All · most recent first",
+                            "每个实例拥有独立的存档与设置",
+                            "Each instance keeps its own saves and options",
                         )))
-                        .child(mono(format!("{:02}", INSTANCES.len()), &t)),
+                        .child(mono(format!("{:02}", state.instances.instances.len()), &t)),
                 )
                 .child(div().w_full().h(px(1.0)).bg(rgb(t.line)))
-                .children(rows),
+                .child(body),
         )
         .child(
             action_bar(&t)
-                .child(mono(tr(lang, "4 个实例", "4 instances"), &t))
+                .child(mono(count_label, &t))
                 .child(div().flex_1())
                 .child(
-                    quiet_button(tr(lang, "编辑", "Edit"), &t)
-                        .id("instance-edit")
+                    quiet_button(tr(lang, "删除", "Delete"), &t)
+                        .id("instance-delete")
+                        .role(Role::Button)
+                        .aria_label("delete-instance")
                         .on_click(cx.listener(|shell, _, _, cx| {
-                            shell.state.notify(tr(
-                                shell.state.language(),
-                                "编辑实例将在 Phase 2 接入",
-                                "Editing arrives in Phase 2",
-                            ));
+                            if let Some(instance) = shell.state.instances.current().cloned() {
+                                shell.state.remove_instance(&instance.name);
+                            }
+                            cx.notify();
+                        })),
+                )
+                .child(
+                    quiet_button(tr(lang, "新建实例", "New instance"), &t)
+                        .id("instance-new")
+                        .role(Role::Button)
+                        .aria_label("new-instance")
+                        .on_click(cx.listener(|shell, _, _, cx| {
+                            let lang = shell.state.language();
+                            match shell.state.installed.first().map(|v| v.id.clone()) {
+                                Some(version_id) => {
+                                    shell.state.create_instance(&version_id);
+                                }
+                                None => shell.state.notify(tr(
+                                    lang,
+                                    "请先在下载页安装一个版本",
+                                    "Install a version from Downloads first",
+                                )),
+                            }
                             cx.notify();
                         })),
                 )
@@ -104,28 +111,72 @@ pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyEle
                         .id("instance-launch")
                         .role(Role::Button)
                         .aria_label(tr(lang, "启动", "Launch"))
+                        .when(!has_selection, |this| this.opacity(0.4))
                         .on_click(cx.listener(|shell, _, _, cx| {
-                            shell.state.notify(tr(
-                                shell.state.language(),
-                                "启动流程将在 Phase 2 接入",
-                                "Launching arrives in Phase 2",
-                            ));
-                            cx.notify();
+                            launch_flow::start_selected(&mut shell.state, cx);
                         })),
                 ),
         )
         .into_any_element()
 }
 
-fn row(instance: &Instance, selected: bool, t: &ThemeTokens) -> AnyElement {
+fn empty(t: &ThemeTokens, lang: sealy_core::config::Language) -> AnyElement {
     div()
+        .flex_1()
+        .flex()
+        .flex_col()
+        .items_center()
+        .justify_center()
+        .gap(px(10.0))
+        .child(
+            Icon::new(IconName::Layers)
+                .w(px(28.0))
+                .h(px(28.0))
+                .text_color(rgb(t.faint)),
+        )
+        .child(
+            div()
+                .text_size(px(14.0))
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(rgb(t.text))
+                .child(tr(lang, "还没有实例", "No instances yet")),
+        )
+        .child(div().text_size(px(12.0)).text_color(rgb(t.muted)).child(tr(
+            lang,
+            "安装版本后点「新建实例」即可创建",
+            "Install a version, then press “New instance”",
+        )))
+        .into_any_element()
+}
+
+fn row(
+    instance: &Instance,
+    state: &ShellState,
+    t: &ThemeTokens,
+    cx: &mut Context<SealyShell>,
+) -> AnyElement {
+    let selected = state.instances.selected.as_deref() == Some(instance.name.as_str());
+    let name = instance.name.clone();
+    let shown_name = instance.name.clone();
+    let meta = instance.version_id.clone();
+    let played = instance
+        .last_played
+        .map(age_label)
+        .unwrap_or_else(|| "—".to_owned());
+
+    div()
+        .id(("instance", instance.name.len()))
+        .role(Role::Button)
+        .aria_label(instance.name.clone())
         .h(px(72.0))
         .flex()
         .items_center()
         .gap(px(14.0))
         .border_b_1()
         .border_color(rgb(t.line_soft))
+        .cursor_pointer()
         .when(selected, |this| this.bg(rgb(t.surface)))
+        .hover(move |this| this.bg(rgb(t.surface)))
         .child(
             div()
                 .w(px(40.0))
@@ -155,23 +206,40 @@ fn row(instance: &Instance, selected: bool, t: &ThemeTokens) -> AnyElement {
                         .text_size(px(15.0))
                         .font_weight(FontWeight::SEMIBOLD)
                         .text_color(rgb(t.text))
-                        .child(instance.name),
+                        .child(shown_name),
                 )
                 .child(
                     div()
                         .text_size(px(11.0))
                         .text_color(rgb(t.muted))
-                        .child(format!("{} · {}", instance.version, instance.loader)),
+                        .child(meta),
                 ),
         )
-        .child(mono(instance.size, t))
-        .child(div().w(px(28.0)))
-        .child(mono(instance.played, t))
+        .child(mono(played, t))
         .child(
             Icon::new(IconName::ChevronRight)
                 .w(px(14.0))
                 .h(px(14.0))
                 .text_color(rgb(t.faint)),
         )
+        .on_click(cx.listener(move |shell, _, _, cx| {
+            shell.state.select_instance(&name);
+            cx.notify();
+        }))
         .into_any_element()
+}
+
+/// `2H · 3D · 1W` style label for the last launch.
+fn age_label(stamp: u64) -> String {
+    let now = launch_flow::now_epoch();
+    let delta = now.saturating_sub(stamp);
+    if delta < 60 {
+        "1M".to_owned()
+    } else if delta < 3_600 {
+        format!("{}M", delta / 60)
+    } else if delta < 86_400 {
+        format!("{}H", delta / 3_600)
+    } else {
+        format!("{}D", delta / 86_400)
+    }
 }

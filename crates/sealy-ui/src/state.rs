@@ -214,12 +214,16 @@ pub struct ShellState {
     pub java: Vec<sealy_core::java::JavaInstall>,
     /// Versions installed under `<game>/versions`.
     pub installed: Vec<sealy_core::version::InstalledVersion>,
+    /// Known instances and the current selection.
+    pub instances: sealy_core::instances::InstanceBook,
 }
 
 impl ShellState {
     /// Builds shell state from core bootstrap data.
     pub fn from_bootstrap(bootstrap: Bootstrap) -> Self {
         let first_run = !bootstrap.paths.settings_file().exists();
+        let instances =
+            sealy_core::instances::InstanceBook::load(&bootstrap.paths.instances_file());
         Self {
             route: Route::Home,
             settings: bootstrap.settings,
@@ -233,12 +237,41 @@ impl ShellState {
             next_message_id: 1,
             java: Vec::new(),
             installed: Vec::new(),
+            instances,
         }
     }
 
     /// Whether the first-run wizard is showing.
     pub fn in_oobe(&self) -> bool {
         self.oobe_step.is_some()
+    }
+
+    /// Persists the instance book.
+    pub fn save_instances(&mut self) {
+        if let Err(err) = self.instances.save(&self.paths.instances_file()) {
+            tracing::warn!(error = %err, "failed to save instances");
+        }
+    }
+
+    /// Creates an instance for `version_id` and selects it.
+    pub fn create_instance(&mut self, version_id: &str) -> String {
+        let instance = self.instances.create(version_id);
+        let dir = sealy_core::instances::directory(&self.paths.game, &instance.name);
+        let _ = std::fs::create_dir_all(&dir);
+        self.save_instances();
+        instance.name
+    }
+
+    /// Removes the named instance.
+    pub fn remove_instance(&mut self, name: &str) {
+        self.instances.remove(name);
+        self.save_instances();
+    }
+
+    /// Selects the named instance.
+    pub fn select_instance(&mut self, name: &str) {
+        self.instances.select(name);
+        self.save_instances();
     }
 
     /// Adds a message and returns its id.

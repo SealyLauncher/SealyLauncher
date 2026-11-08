@@ -8,6 +8,7 @@ pub mod config;
 pub mod error;
 pub mod events;
 pub mod install;
+pub mod instances;
 pub mod java;
 pub mod launch;
 pub mod logging;

@@ -10,7 +10,7 @@ use crate::components::{
 };
 use crate::i18n::tr;
 use crate::kit::*;
-use crate::state::{MessageTone, Route, ShellState};
+use crate::state::{Route, ShellState};
 use crate::theme::{self, ThemeTokens};
 
 /// Instance shown until Phase 2 supplies real instance data.
@@ -23,10 +23,14 @@ const PLACEHOLDER_USER: &str = "Haikuorenyuyue";
 pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyElement {
     let t = state.theme();
     let lang = state.language();
-    let (instance_name, instance_meta) = match state.installed.first() {
-        Some(version) => (
-            version.id.clone(),
-            tr(lang, "已安装", "Installed").to_owned(),
+    let (instance_name, instance_meta) = match state.instances.current() {
+        Some(instance) => (
+            instance.name.clone(),
+            if instance.name == instance.version_id {
+                tr(lang, "独立存档", "Separate saves").to_owned()
+            } else {
+                instance.version_id.clone()
+            },
         ),
         None => (PLACEHOLDER_INSTANCE.to_owned(), PLACEHOLDER_META.to_owned()),
     };
@@ -313,143 +317,10 @@ fn action_bar_content(
                 .role(Role::Button)
                 .aria_label(launch)
                 .on_click(cx.listener(move |shell, _, _, cx| {
-                    start_launch(&mut shell.state, cx);
+                    crate::launch_flow::start_selected(&mut shell.state, cx);
                 })),
         )
         .into_any_element()
-}
-
-/// Launches the newest installed version, reporting into the message center.
-fn start_launch(state: &mut ShellState, cx: &mut Context<SealyShell>) {
-    let lang = state.language();
-
-    let Some(version) = state.installed.first().cloned() else {
-        state.notify(tr(
-            lang,
-            "还没有安装任何版本，先去下载页安装一个",
-            "No version installed yet — install one from Downloads",
-        ));
-        return;
-    };
-
-    let message_id = state.push_message(
-        format!("启动 {}", version.id),
-        tr(lang, "正在准备启动…", "Preparing to launch…").to_owned(),
-        MessageTone::Running,
-    );
-    state.message_open = true;
-
-    let game = state.paths.game.clone();
-    let java_list = state.java.clone();
-    let memory = state.settings.java.memory.max_mb;
-    let width = state.settings.launch.width;
-    let height = state.settings.launch.height;
-    let username = PLACEHOLDER_USER.to_owned();
-
-    cx.spawn(async move |this, cx| {
-        let outcome = cx
-            .background_executor()
-            .spawn(async move {
-                launch_blocking(game, version, java_list, memory, width, height, username)
-            })
-            .await;
-
-        match outcome {
-            Ok((log, status)) => {
-                let _ = this.update(cx, |shell, cx| {
-                    shell.state.update_message(message_id, |row| {
-                        row.tone = MessageTone::Done;
-                        row.progress = None;
-                        row.detail = status;
-                    });
-                    let _ = log;
-                    cx.notify();
-                });
-            }
-            Err(err) => {
-                let _ = this.update(cx, |shell, cx| {
-                    shell.state.update_message(message_id, |row| {
-                        row.tone = MessageTone::Failed;
-                        row.progress = None;
-                        row.detail = err;
-                    });
-                    cx.notify();
-                });
-            }
-        }
-    })
-    .detach();
-}
-
-/// Blocking half of the launch: resolve Java, build the command, run and wait.
-fn launch_blocking(
-    game: std::path::PathBuf,
-    version: sealy_core::version::InstalledVersion,
-    java_list: Vec<sealy_core::java::JavaInstall>,
-    memory: u32,
-    width: u32,
-    height: u32,
-    username: String,
-) -> Result<(String, String), String> {
-    let doc = sealy_core::version::load(&version.document).map_err(|err| err.to_string())?;
-
-    let required = doc
-        .java_version
-        .as_ref()
-        .map(|java| java.major_version)
-        .unwrap_or(0);
-    let java = java_list
-        .iter()
-        .find(|install| install.satisfies(required))
-        .or_else(|| java_list.first())
-        .ok_or_else(|| "没有可用的 Java，请先在下载页安装该版本".to_owned())?;
-
-    let uuid = offline_uuid(&username);
-    let spec = sealy_core::launch::LaunchSpec {
-        game_dir: &game,
-        java: &java.path,
-        version_id: &version.id,
-        username: &username,
-        uuid: &uuid,
-        max_memory_mb: memory,
-        width,
-        height,
-    };
-
-    let command = sealy_core::launch::build_command(&doc, &spec).map_err(|err| err.to_string())?;
-    sealy_core::launch::extract_natives(&game, &doc, &version.id).map_err(|err| err.to_string())?;
-
-    let log = sealy_core::launch::log_path(&game, &version.id);
-    let mut child =
-        sealy_core::launch::spawn(&command, &game, &log).map_err(|err| err.to_string())?;
-    let status = child.wait().map_err(|err| err.to_string())?;
-
-    let detail = format!("退出码 {} · {}", status.code().unwrap_or(-1), log.display());
-    Ok((log.display().to_string(), detail))
-}
-
-/// Deterministic offline UUID so worlds keep the same player identity.
-fn offline_uuid(name: &str) -> String {
-    use sha1::{Digest, Sha1};
-
-    let mut hasher = Sha1::new();
-    hasher.update(format!("OfflinePlayer:{name}").as_bytes());
-    let digest = hasher.finalize();
-
-    let mut bytes = [0_u8; 16];
-    bytes.copy_from_slice(&digest[..16]);
-    bytes[6] = (bytes[6] & 0x0f) | 0x30;
-    bytes[8] = (bytes[8] & 0x3f) | 0x80;
-
-    let hex: String = bytes.iter().map(|byte| format!("{byte:02x}")).collect();
-    format!(
-        "{}-{}-{}-{}-{}",
-        &hex[0..8],
-        &hex[8..12],
-        &hex[12..16],
-        &hex[16..20],
-        &hex[20..32]
-    )
 }
 
 /// Head band whose title crossfades between the launcher name and the signed-in
