@@ -1,11 +1,12 @@
 //! Home: tile dashboard with a persistent launch action.
 
 use sealy_core::config::Language;
+use std::time::Duration;
 
 use crate::app::SealyShell;
 use crate::components::{
-    action_bar, avatar, block_tile, head_band, icon_button, list_tile, medium_tile, mono,
-    primary_button, small_tile, wide_tile,
+    action_bar, block_tile, icon_button, index_badge, list_tile, medium_tile, mono, primary_button,
+    small_tile, wide_tile,
 };
 use crate::i18n::tr;
 use crate::kit::*;
@@ -14,6 +15,10 @@ use crate::theme::{self, ThemeTokens};
 
 /// Instance shown until Phase 2 supplies real instance data.
 const PLACEHOLDER_INSTANCE: &str = "Fabric 1.21.11";
+/// Instance metadata line under the name.
+const PLACEHOLDER_META: &str = "1.21.11 · Fabric 0.16.5";
+/// Account name placeholder until Phase 3.
+const PLACEHOLDER_USER: &str = "Haikuorenyuyue";
 
 pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyElement {
     let t = state.theme();
@@ -78,7 +83,7 @@ pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyEle
         .size_full()
         .flex()
         .flex_col()
-        .child(head_band("01", PLACEHOLDER_INSTANCE, &t))
+        .child(head_band_carousel(&t, lang))
         .child(
             div()
                 .flex_1()
@@ -264,7 +269,6 @@ fn world_row(name: &str, when: &str, t: &ThemeTokens) -> Div {
 }
 
 fn action_bar_content(t: &ThemeTokens, lang: Language, cx: &mut Context<SealyShell>) -> AnyElement {
-    let greet = tr(lang, "您好！", "Hi!");
     let launch = tr(lang, "启动游戏", "Launch");
 
     div()
@@ -272,26 +276,7 @@ fn action_bar_content(t: &ThemeTokens, lang: Language, cx: &mut Context<SealyShe
         .flex()
         .items_center()
         .gap(px(16.0))
-        .child(avatar("H", t))
-        .child(
-            div()
-                .flex()
-                .items_center()
-                .gap(px(8.0))
-                .child(
-                    div()
-                        .text_size(px(24.0))
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(rgb(t.text))
-                        .child(greet),
-                )
-                .child(
-                    div()
-                        .text_size(px(24.0))
-                        .text_color(rgb(t.muted))
-                        .child("Haikuorenyuyue"),
-                ),
-        )
+        .child(instance_block(t))
         .child(div().flex_1())
         .child(
             icon_button(IconName::FileText, t)
@@ -318,4 +303,117 @@ fn action_bar_content(t: &ThemeTokens, lang: Language, cx: &mut Context<SealyShe
                 })),
         )
         .into_any_element()
+}
+
+/// Head band whose title crossfades between the launcher name and the signed-in
+/// greeting on an eight-second loop.
+fn head_band_carousel(t: &ThemeTokens, lang: Language) -> Div {
+    let clock = Animation::new(Duration::from_secs(8)).repeat_synced();
+    let greeting = format!("Hi，{PLACEHOLDER_USER}");
+    let _ = lang;
+
+    div()
+        .h(px(theme::HEAD_HEIGHT))
+        .flex_shrink_0()
+        .flex()
+        .items_center()
+        .gap(px(14.0))
+        .px(px(theme::PAGE_PADDING))
+        .bg(rgb(t.surface))
+        .border_b_1()
+        .border_color(rgb(t.line))
+        .child(index_badge("01", t))
+        .child(
+            div()
+                .relative()
+                .flex_1()
+                .h(px(56.0))
+                .child(title_slide(
+                    "SealyLauncher".to_owned(),
+                    true,
+                    clock.clone(),
+                    t,
+                ))
+                .child(title_slide(greeting, false, clock, t)),
+        )
+}
+
+fn title_slide(text: String, first: bool, clock: Animation, t: &ThemeTokens) -> impl IntoElement {
+    let id = if first { "head-brand" } else { "head-greeting" };
+    div()
+        .absolute()
+        .inset_0()
+        .flex()
+        .items_center()
+        .child(
+            div()
+                .text_size(px(42.0))
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(rgb(t.text))
+                .child(text),
+        )
+        .with_animation(id, clock, move |el, delta| {
+            let seen = slide_opacity(delta, first);
+            el.opacity(seen).mt(px((1.0 - seen) * 6.0))
+        })
+}
+
+/// The instance the play button will launch.
+fn instance_block(t: &ThemeTokens) -> Div {
+    div()
+        .flex()
+        .items_center()
+        .gap(px(12.0))
+        .child(
+            div()
+                .w(px(42.0))
+                .h(px(42.0))
+                .flex_shrink_0()
+                .flex()
+                .items_center()
+                .justify_center()
+                .rounded(px(theme::RADIUS_TILE))
+                .border_1()
+                .border_color(rgb(t.line))
+                .child(
+                    Icon::new(IconName::Layers)
+                        .w(px(20.0))
+                        .h(px(20.0))
+                        .text_color(rgb(t.text)),
+                ),
+        )
+        .child(
+            div()
+                .flex()
+                .flex_col()
+                .gap(px(2.0))
+                .child(
+                    div()
+                        .text_size(px(20.0))
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_color(rgb(t.text))
+                        .child(PLACEHOLDER_INSTANCE),
+                )
+                .child(
+                    div()
+                        .text_size(px(11.0))
+                        .text_color(rgb(t.muted))
+                        .child(PLACEHOLDER_META),
+                ),
+        )
+}
+
+/// Opacity of one slide during the shared eight-second loop.
+///
+/// The eight-second cycle splits into two four-second halves; each half fades
+/// in, holds, then fades out, so two titles are never visible at once.
+fn slide_opacity(delta: f32, first: bool) -> f32 {
+    const FADE: f32 = 0.06;
+    let (start, end) = if first { (0.0, 0.5) } else { (0.5, 1.0) };
+    if !(start..end).contains(&delta) {
+        return 0.0;
+    }
+    let rise = ((delta - start) / FADE).clamp(0.0, 1.0);
+    let fall = ((end - delta) / FADE).clamp(0.0, 1.0);
+    rise.min(fall)
 }

@@ -174,6 +174,25 @@ impl ShellState {
         self.persist();
     }
 
+    /// Toggles background music and persists settings.
+    pub fn set_audio(&mut self, enabled: bool) {
+        self.settings.appearance.background_music = enabled;
+        self.persist();
+    }
+
+    /// Changes the download source policy and persists settings.
+    pub fn set_source(&mut self, policy: sealy_core::config::SourcePolicy) {
+        self.settings.download.metadata_source = policy;
+        self.settings.download.file_source = policy;
+        self.persist();
+    }
+
+    /// Changes the maximum heap and persists settings.
+    pub fn set_max_memory(&mut self, mb: u32) {
+        self.settings.java.memory.max_mb = mb;
+        self.persist();
+    }
+
     fn persist(&mut self) {
         // Inside the wizard nothing is written until the user finishes, so an
         // interrupted first run still shows the wizard next time.

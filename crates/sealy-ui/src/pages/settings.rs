@@ -1,6 +1,6 @@
-//! Settings: theme presets, language and facts about the portable root.
+//! Settings: theme, language, audio, download source, memory.
 
-use sealy_core::config::{Language, ThemeName};
+use sealy_core::config::{Language, SourcePolicy, ThemeName};
 
 use crate::app::SealyShell;
 use crate::components::{action_bar, choice_button, field_row, head_band, quiet_button};
@@ -19,12 +19,15 @@ pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyEle
         .collect::<Vec<_>>();
 
     let data_dir = state.paths.root.display().to_string();
+    let music = state.settings.appearance.background_music;
+    let source = state.settings.download.metadata_source;
+    let memory = state.settings.java.memory.max_mb;
 
     div()
         .size_full()
         .flex()
         .flex_col()
-        .child(head_band("05", "设置", &t))
+        .child(head_band("05", tr(lang, "设置", "Settings"), &t))
         .child(
             div()
                 .flex_1()
@@ -45,48 +48,99 @@ pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyEle
                         )
                         .child(div().flex().gap(px(10.0)).children(swatches)),
                 )
-                .child(div().h(px(28.0)))
+                .child(div().h(px(26.0)))
                 .child(
                     div()
-                        .w(px(720.0))
+                        .w(px(760.0))
                         .flex()
                         .flex_col()
-                        .child(
+                        .child(row(
+                            tr(lang, "语言", "Language"),
                             div()
-                                .h(px(56.0))
                                 .flex()
-                                .items_center()
-                                .justify_between()
-                                .border_b_1()
-                                .border_color(rgb(t.line_soft))
+                                .gap(px(8.0))
                                 .child(
-                                    div()
-                                        .text_size(px(13.0))
-                                        .text_color(rgb(t.text))
-                                        .child(tr(lang, "语言", "Language")),
+                                    choice_button("简体中文", lang == Language::ZhCn, &t)
+                                        .id("lang-zh")
+                                        .on_click(cx.listener(|shell, _, _, cx| {
+                                            shell.state.set_language(Language::ZhCn);
+                                            cx.notify();
+                                        })),
                                 )
                                 .child(
-                                    div()
-                                        .flex()
-                                        .gap(px(8.0))
-                                        .child(
-                                            choice_button("简体中文", lang == Language::ZhCn, &t)
-                                                .id("lang-zh")
-                                                .on_click(cx.listener(|shell, _, _, cx| {
-                                                    shell.state.set_language(Language::ZhCn);
-                                                    cx.notify();
-                                                })),
-                                        )
-                                        .child(
-                                            choice_button("English", lang == Language::EnUs, &t)
-                                                .id("lang-en")
-                                                .on_click(cx.listener(|shell, _, _, cx| {
-                                                    shell.state.set_language(Language::EnUs);
-                                                    cx.notify();
-                                                })),
-                                        ),
+                                    choice_button("English", lang == Language::EnUs, &t)
+                                        .id("lang-en")
+                                        .on_click(cx.listener(|shell, _, _, cx| {
+                                            shell.state.set_language(Language::EnUs);
+                                            cx.notify();
+                                        })),
                                 ),
-                        )
+                            &t,
+                        ))
+                        .child(row(
+                            tr(lang, "背景音乐", "Background music"),
+                            div()
+                                .flex()
+                                .gap(px(8.0))
+                                .child(
+                                    choice_button(tr(lang, "关", "Off"), !music, &t)
+                                        .id("audio-off")
+                                        .on_click(cx.listener(|shell, _, _, cx| {
+                                            shell.state.set_audio(false);
+                                            cx.notify();
+                                        })),
+                                )
+                                .child(
+                                    choice_button(tr(lang, "开", "On"), music, &t)
+                                        .id("audio-on")
+                                        .on_click(cx.listener(|shell, _, _, cx| {
+                                            shell.state.set_audio(true);
+                                            cx.notify();
+                                        })),
+                                ),
+                            &t,
+                        ))
+                        .child(row(
+                            tr(lang, "下载源", "Download source"),
+                            div()
+                                .flex()
+                                .gap(px(8.0))
+                                .child(source_button(
+                                    tr(lang, "自动", "Auto"),
+                                    SourcePolicy::Auto,
+                                    source,
+                                    lang,
+                                    &t,
+                                    cx,
+                                ))
+                                .child(source_button(
+                                    tr(lang, "官方", "Official"),
+                                    SourcePolicy::Official,
+                                    source,
+                                    lang,
+                                    &t,
+                                    cx,
+                                ))
+                                .child(source_button(
+                                    "BMCLAPI",
+                                    SourcePolicy::Bmclapi,
+                                    source,
+                                    lang,
+                                    &t,
+                                    cx,
+                                )),
+                            &t,
+                        ))
+                        .child(row(
+                            tr(lang, "内存上限", "Memory limit"),
+                            div()
+                                .flex()
+                                .gap(px(8.0))
+                                .child(memory_button(2048, memory, lang, &t, cx))
+                                .child(memory_button(4096, memory, lang, &t, cx))
+                                .child(memory_button(8192, memory, lang, &t, cx)),
+                            &t,
+                        ))
                         .child(field_row(
                             tr(lang, "数据目录", "Data directory"),
                             data_dir,
@@ -97,28 +151,16 @@ pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyEle
                             format!("{} · portable", sealy_core::version()),
                             &t,
                         ))
-                        .child(
-                            div()
-                                .h(px(56.0))
-                                .flex()
-                                .items_center()
-                                .justify_between()
-                                .border_b_1()
-                                .border_color(rgb(t.line_soft))
-                                .child(div().text_size(px(13.0)).text_color(rgb(t.text)).child(tr(
-                                    lang,
-                                    "设置向导",
-                                    "Setup wizard",
-                                )))
-                                .child(
-                                    quiet_button(tr(lang, "重新运行", "Run again"), &t)
-                                        .id("restart-oobe")
-                                        .on_click(cx.listener(|shell, _, _, cx| {
-                                            shell.state.start_oobe();
-                                            cx.notify();
-                                        })),
-                                ),
-                        ),
+                        .child(row(
+                            tr(lang, "设置向导", "Setup wizard"),
+                            quiet_button(tr(lang, "重新运行", "Run again"), &t)
+                                .id("restart-oobe")
+                                .on_click(cx.listener(|shell, _, _, cx| {
+                                    shell.state.start_oobe();
+                                    cx.notify();
+                                })),
+                            &t,
+                        )),
                 ),
         )
         .child(
@@ -126,11 +168,72 @@ pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyEle
                 quiet_button(tr(lang, "打开数据目录", "Open data folder"), &t)
                     .id("open-data")
                     .on_click(cx.listener(|shell, _, _, cx| {
-                        shell.state.notify("打开目录将在 Phase 2 接入");
+                        shell.state.notify(tr(
+                            shell.state.language(),
+                            "打开目录将在 Phase 2 接入",
+                            "Opening the folder arrives in Phase 2",
+                        ));
                         cx.notify();
                     })),
             ),
         )
+        .into_any_element()
+}
+
+fn row(label: &'static str, control: impl IntoElement, t: &ThemeTokens) -> Div {
+    div()
+        .h(px(56.0))
+        .flex()
+        .items_center()
+        .justify_between()
+        .border_b_1()
+        .border_color(rgb(t.line_soft))
+        .child(
+            div()
+                .text_size(px(13.0))
+                .text_color(rgb(t.text))
+                .child(label),
+        )
+        .child(control)
+}
+
+fn source_button(
+    label: &'static str,
+    value: SourcePolicy,
+    current: SourcePolicy,
+    lang: Language,
+    t: &ThemeTokens,
+    cx: &mut Context<SealyShell>,
+) -> AnyElement {
+    let _ = lang;
+    choice_button(label, value == current, t)
+        .id(match value {
+            SourcePolicy::Auto => "source-auto",
+            SourcePolicy::Official => "source-official",
+            SourcePolicy::Bmclapi => "source-bmclapi",
+        })
+        .on_click(cx.listener(move |shell, _, _, cx| {
+            shell.state.set_source(value);
+            cx.notify();
+        }))
+        .into_any_element()
+}
+
+fn memory_button(
+    mb: u32,
+    current: u32,
+    lang: Language,
+    t: &ThemeTokens,
+    cx: &mut Context<SealyShell>,
+) -> AnyElement {
+    let _ = lang;
+    let label: SharedString = format!("{mb} MB").into();
+    choice_button(label, mb == current, t)
+        .id(("memory", mb as usize))
+        .on_click(cx.listener(move |shell, _, _, cx| {
+            shell.state.set_max_memory(mb);
+            cx.notify();
+        }))
         .into_any_element()
 }
 
