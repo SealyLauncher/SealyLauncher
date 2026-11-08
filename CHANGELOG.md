@@ -31,6 +31,7 @@
 - 2026-11-08 — 设计探索：新增 `design/preview/direction-7.html`，把像素叙事与杂志式排版合并：分栏 hero（左排版 / 右像素画）、等宽字体小标签、发丝分隔线、列表化“最近启动”、黑色“游戏记录”卡 + 像素点阵数字；截图 `direction-7.png`。
 - 2026-11-08 — 调研：实际运行 BakaXL 3.5.1，记录其 OOBE 结构与视觉语言（三区布局、面包屑标题、底部操作带、选项卡预览、拖动/长按确认），截图存于 `design/preview/bakaxl-oobe-*.png`；首页被强制更新弹窗阻断，未能截取，改以内容结构参考。
 - 2026-11-08 — 设计探索：推翻此前方向，新增首页草稿 `design/preview/home-v1.html`：左侧信息面板（实例 / 参数 / 世界 / 启动 / 账号）+ 右侧全幅夜景（程序生成）+ 公告浮层 + 最近启动磁贴；截图 `home-v1.png`。
+- 2026-11-08 — 规范：新增项目级 skill `.agents/skills/bakaxl-flow-ui/`（SKILL.md + `references/tokens.md` / `patterns.md` / `checklist.md`），把 BakaXL 式三区布局、动作带、大色块、水印线稿、一屏一个决定固化为可执行规则；`docs/PLAN.md` §9 与 Phase 1/3/4 同步改写。
 
 ### Verified
 

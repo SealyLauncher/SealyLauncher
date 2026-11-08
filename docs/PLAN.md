@@ -436,52 +436,59 @@ struct AccountRecord {
 
 ### 9.1 设计原则（可验收）
 
-1. 一个页面最多一个大标题（Home 实例名）；设置/下载/账号页没有页面标题。
-2. 设计系统**不提供** `SectionTitle`/`Subtitle`/装饰性 Description；分组用留白、hairline、表面、图标。
-3. 只有危险/不可逆操作保留一行说明；其它靠 label/placeholder/tooltip。
-4. 图标按钮必须有可访问名称 + tooltip；文字按钮用动词。
-5. 空状态 = 图标 + 一个主操作；不写解释段落。
-6. 错误 = 一句可行动文案 + 详情入口。
-7. 不用 overline/all-caps 小标题；不用营销/冗余文案。
-8. 法律/许可证放 About/第三方声明，不做视觉装饰。
-9. 所有用户可见字符串进 i18n；中英文不得溢出。
-10. v1 深色主题，token 预留浅色。
+风格基线：**BakaXL 式桌面流程界面**（2026-11-08 实机调研），规范见
+`.agents/skills/bakaxl-flow-ui/SKILL.md`。后续所有界面按该 skill 执行。
+
+1. **一屏一个决定**：主操作用一句动词说清；不在一屏塞两个并列主按钮。
+2. **三区固定**：`AppBar`（36px）/ 内容 / `ActionBar`（64px）；有主操作的页面动作带常驻，位置永不变。
+3. **颜色即功能**：绿=继续/开始，琥珀=返回，蓝=外壳与选中；强调色可被 OEM 覆盖，语义不变。
+4. **平面优先**：大色块 + 1px 发丝线；禁用渐变、玻璃、霓虹、投影堆叠。
+5. **水印代替插图**：品牌线稿以 8–12% 不透明度铺满背景，不引入图片素材。
+6. **面包屑当标题**：`父级 \ 当前步`，不再叠加小标题/副标题。
+7. **展示优于描述**：选项用预览缩略图（如“标准/传统”），不用两段文字解释。
+8. **不可逆/授权步骤加摩擦**：拖动、长按或按住空格确认，不用复选框。
+9. **按钮成对且贴边**：动作带右侧按钮占满带高，绿在右、琥珀在左，宽度按文案 160–220px。
+10. 所有用户可见字符串进 i18n；中英文不得溢出；默认深色，浅色 token 同名。
 
 ### 9.2 视觉系统
 
-- 基底 `#0B0D12`；表面 `rgba(18,21,28,0.72)`；细线 `rgba(255,255,255,0.08)`。
-- 强调色从实例图标/背景提取，保证对比度；兜底品牌青 `#4CC2FF`。
-- 圆角：卡片 16–20、按钮 12、弹层 20、输入 10。
-- 字体 Inter + Noto Sans SC（OFL）；Phase 0 测体积，必要时 Linux 内置、Win/mac 系统 CJK 回退。
-- 层级：背景 + scrim → 玻璃面板（半透明，不做运行时 backdrop blur）→ 内容 → 弹层/Toast。
-- 背景预生成模糊/暗化缓存；默认原创抽象深海/极光图，不含官方素材。
-- 不内置 Minecraft logo/官方壁纸/HMCL 素材；About 声明非官方。
+- 外壳蓝 `#1E6FD9`；动作带深蓝 `#1763C0`；内容区蓝灰 `#7FA6CE`（OOBE）或中性深灰（主界面）。
+- 继续 **`#5BC236`**，返回 **`#F5A623`**，危险 `#D64545`；强调色可被 `OEM.conf` 覆盖。
+- 文字：白 `#FFFFFF`、次白 `rgba(255,255,255,0.72)`、深底用 `#0B1220` 反白。
+- 圆角：窗口 8、卡片 6、按钮 4、头像 6；不做 16+ 的大圆角。
+- 字体：系统 UI 字体（Windows Segoe UI Variable / macOS SF / Linux Noto Sans CJK）；不额外打包正文字体。
+- 字号阶梯：步骤标题 24/600、区块标题 15/600、正文 13、元数据 11、动作按钮 24/600。
+- 间距阶梯：4 / 8 / 12 / 16 / 24 / 32；内边距优先 16/24。
+- 图标：单一图标族（Lucide），线性 1.6–1.8px，20px 基准。
 
 ### 9.3 布局与页面
 
-默认 1280×800，最小 960×640；自定义标题栏（Windows/Linux 自绘；macOS 透明标题栏 + traffic lights）。
+默认 1120×700，最小 960×640；自绘 36px 标题栏（左：品牌标 + 标题；右：反馈 / 帮助 / 窗口控件）。
 
-**左侧 72px 图标轨**：Home、实例、下载、账号、设置；底部当前账号头像；无文字标签，hover tooltip；选中 pill 弹簧；OEM 小品牌标/锁，不做横幅。
+**主导航**：顶部标签（主页 / 实例 / 下载 / 账号 / 设置），选中项绿色下划线；不设左侧图标轨。
 
-**Home**：全屏背景 slideshow + 暗角/主色光晕；左上实例 chip；右上窗口控件/网络/OEM 指示；中左大号实例名 + 版本/loader 胶囊；左下账号 chip；右下大 Play；底部任务条；OEM 资讯卡仅在有数据时出现。
+**首页**（内容顺序固定）：
+1. 启动区：当前实例名 + 版本/loader 元数据 + 绿色「开始游戏」（主按钮唯一）；
+2. 最近实例：横向卡片，封面为主，右下角时间；
+3. 公告：三行以内，日期 + 一句话；
+4. 底部状态带：Java / 内存 / 下载源 / 网络延迟。
 
-**实例页**：卡片网格/列表、封面、版本胶囊、hover 抬升、选中滑动指示；底部开始/编辑/复制/删除；编辑右侧 Sheet（概览/Java/内存/游戏/文件夹），无分组标题。
-
-**下载页**：搜索 + 分段筛选（正式/快照/全部）+ 虚拟列表；hover 安装；底部进度；源选择小 segmented control；无“版本列表”标题。
-
-**账号页**：横向账号卡 + 添加卡；添加 Sheet 三个大选项（Microsoft/authlib/离线）；Microsoft 浏览器状态 + 设备码兜底；authlib 提供商/URL/用户名密码/角色选择；离线名称；无“登录方式”标题。
-
-**设置页**：左侧图标列表（通用/外观/下载/Java/网络/OEM/关于）；右侧表单行；无分组标题；危险操作在“高级”；OEM 锁定项显示锁 + tooltip；提供打开数据/日志目录。
-
-**首次运行**：无实例/无账号时 Home 两个大动作：“登录账号”“安装游戏”；不写欢迎段落；Play 禁用并提示下一步。
-
-**运行中/退出**：游戏运行状态 + 停止按钮 + 日志抽屉；默认不退出启动器；非零退出显示一句错误 + 日志入口。
+**实例页**：卡片网格；选中卡片显示 2px 强调描边；底部动作带「启动 / 编辑」。
+**下载页**：搜索 + 分段筛选 + 虚拟列表；行内「安装」；进度进动作带。
+**账号页**：横向账号卡 + 添加卡；添加走 `ActionBar` 三步（选择方式 → 凭据 → 角色）。
+**设置页**：左侧列表 + 右侧表单；即时生效项用 Switch；危险项放最末分组。
+**首次运行（OOBE）**：欢迎 → 语言 → 外观/音频 → 账户 → 完成；每步一屏、共用动作带。
 
 ### 9.4 组件
 
-`SealyButton`、`IconButton`、`SealyCard`、`Segmented`、`Switch`、`Slider`、`TextField`、`PasswordField`、`Select`、`Combobox`、`Tooltip`、`Badge`、`Pill`、`TitleBar`、`NavRail`、`BackgroundStage`、`Scrim`、`GlassPanel`、虚拟列表包装、`InstanceCard`、`AccountCard`、`SkinHead`、`ProgressDock`、`ProgressRing`、`Sheet`、`Dialog`、`ToastHost`、`EmptyState`、`ErrorState`、`Skeleton`、`Spinner`、`MarkdownView`、`ThemeProvider`、`MotionProvider`、`LocaleProvider`。
+`AppBar`、`Breadcrumb`、`ActionBar`、`ActionButton`（green/amber/neutral）、`Watermark`、
+`StepBody`、`OptionCard`（预览图 + 单选）、`AccountCard`、`SkinHead`、`InstanceTile`、
+`NoticeRow`、`StatusBand`、`Segmented`、`Switch`、`Slider`、`TextField`、`Select`、
+`Tooltip`、`Badge`、`Pill`、`Sheet`、`Dialog`、`ToastHost`、`EmptyState`、`ErrorState`、
+`ProgressBar`、`Skeleton`、`ThemeProvider`、`MotionProvider`、`LocaleProvider`。
 
 页面不直接用 `gpui_kit::component::Button` 默认样式，统一走 `kit` 封装。
+
 
 ### 9.5 无障碍与本地化
 
@@ -780,10 +787,10 @@ pub trait SkinProvider: Send + Sync;
 | --- | --- | --- | --- |
 | **Step 0 仓库初始化** | 今天，批准后立即 | docs/PLAN.md、README、CHANGELOG、.gitignore/.gitattributes、git init/首次提交；**不装工具链、不写代码** | 文件存在；git 状态清晰；提交完成或等待你给 git 身份；暂停 |
 | **Phase 0 工具链/可行性** | 2–3 天 | Rust/MSVC；workspace；hello window；标题栏；背景+页面切换动效；CI 骨架；Azure 说明 | Windows 60fps；CI 三平台编译；无阻断；否则回退决策 |
-| **Phase 1 壳层/设计系统** | 5–7 天 | paths/config/logging/events/task；单实例；kit 封装；theme/fonts/background；NavRail；页面骨架；组件；i18n/无障碍 | 可点击壳层；动效；reduce_motion；960×640；无 SectionTitle |
+| **Phase 1 壳层/设计系统** | 5–7 天 | paths/config/logging/events/task；单实例；kit 封装；主题 token（`bakaxl-flow-ui`）；AppBar/ActionBar/Breadcrumb/Watermark/OptionCard；页面骨架；组件；i18n/无障碍 | 可点击壳层；动效；reduce_motion；960×640；无 SectionTitle |
 | **Phase 2 启动核心** | 8–12 天 | 版本/继承/下载/vanilla/assets/libraries/natives/Java/args/进程/日志/CLI/Fabric/Quilt/导入 | Windows 启动多版本；取消/续传/校验；CLI 黄金参数；导入 Forge |
-| **Phase 3 认证** | 6–8 天 | 离线/MS/authlib/账号 UI/头像 | 三种登录端到端；真实服；token 无泄漏；注入参数正确 |
-| **Phase 4 UI 产品化** | 6–9 天 | 全页面/状态/OEM 本地/动效/键盘/缩放/双语 | 设计评审；无冗余标题；性能；无障碍 |
+| **Phase 3 认证** | 6–8 天 | 离线/MS/authlib/账号 UI（账户流三屏）/头像 | 三种登录端到端；真实服；token 无泄漏；注入参数正确 |
+| **Phase 4 UI 产品化** | 6–9 天 | 首页/实例/下载/设置 + OOBE 五步；全状态；OEM 本地；键盘/缩放/双语 | 按 `references/checklist.md` 评审；无冗余标题；性能；无障碍 |
 | **Phase 5 打包发布** | 4–6 天 | xtask/三平台包/资源/checksums/CI release/文档/诊断/许可证 | 干净 Windows；mac/Linux smoke；便携/只读/多副本；OEM |
 | **v1.0** | — | 全部 | 验收标准 |
 | **Phase 6 OEM 远程 + Node Web** | 后续 2–4 周 | 签名清单/同步/背景/资讯/状态/authlib/整合包更新/管理端 | 签名/反回滚/路径安全；端到端；回滚 |
