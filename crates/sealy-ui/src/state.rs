@@ -193,6 +193,12 @@ impl ShellState {
         self.persist();
     }
 
+    /// Changes the motion preference and persists settings.
+    pub fn set_motion(&mut self, motion: sealy_core::config::MotionSetting) {
+        self.settings.motion = motion;
+        self.persist();
+    }
+
     fn persist(&mut self) {
         // Inside the wizard nothing is written until the user finishes, so an
         // interrupted first run still shows the wizard next time.

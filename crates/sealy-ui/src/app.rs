@@ -4,7 +4,7 @@ use gpui_kit::component::TitleBar;
 
 use crate::kit::*;
 use crate::pages;
-use crate::state::ShellState;
+use crate::state::{Route, ShellState};
 use crate::theme;
 
 /// Starts the GPUI application and opens the shell window.
@@ -26,7 +26,7 @@ pub fn run(bootstrap: sealy_core::Bootstrap) {
             };
 
             gpui_kit::open_window(options, cx, move |_, cx| {
-                cx.new(|_| SealyShell::new(bootstrap))
+                cx.new(|cx| SealyShell::new(bootstrap, cx))
             })
             .expect("failed to open the SealyLauncher window");
         });
@@ -34,18 +34,24 @@ pub fn run(bootstrap: sealy_core::Bootstrap) {
 
 pub(crate) struct SealyShell {
     pub(crate) state: ShellState,
+    focus: FocusHandle,
 }
 
 impl SealyShell {
-    fn new(bootstrap: sealy_core::Bootstrap) -> Self {
+    fn new(bootstrap: sealy_core::Bootstrap, cx: &mut Context<Self>) -> Self {
         Self {
             state: ShellState::from_bootstrap(bootstrap),
+            focus: cx.focus_handle(),
         }
     }
 }
 
 impl Render for SealyShell {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        if window.focused(cx).is_none() {
+            window.focus(&self.focus, cx);
+        }
+
         let tokens = self.state.theme();
         let page = pages::render(&self.state, cx);
         let notice = self
@@ -58,6 +64,7 @@ impl Render for SealyShell {
             .id("shell")
             .role(Role::Application)
             .aria_label("SealyLauncher")
+            .track_focus(&self.focus)
             .size_full()
             .flex()
             .flex_col()
@@ -71,6 +78,56 @@ impl Render for SealyShell {
             )
             .child(div().flex_1().overflow_hidden().child(page))
             .children(notice)
+            .on_key_down(cx.listener(|shell, event: &KeyDownEvent, _, cx| {
+                shell.handle_key(&event.keystroke, cx);
+            }))
+    }
+}
+
+impl SealyShell {
+    /// Window-wide shortcuts: Enter runs the primary action, Escape steps back,
+    /// digits jump between pages.
+    fn handle_key(&mut self, keystroke: &Keystroke, cx: &mut Context<Self>) {
+        let modifiers = &keystroke.modifiers;
+        if modifiers.control || modifiers.alt || modifiers.platform || modifiers.shift {
+            return;
+        }
+
+        match keystroke.key.as_str() {
+            "enter" | "space" => {
+                if self.state.oobe_step.is_some() {
+                    self.state.oobe_next();
+                } else if self.state.route == Route::Home {
+                    self.state.notify("启动流程将在 Phase 2 接入");
+                } else {
+                    return;
+                }
+                cx.notify();
+            }
+            "escape" if self.state.oobe_step.is_some() => {
+                self.state.oobe_back();
+                cx.notify();
+            }
+            key => {
+                if self.state.oobe_step.is_none()
+                    && let Some(route) = digit_route(key)
+                {
+                    self.state.route = route;
+                    cx.notify();
+                }
+            }
+        }
+    }
+}
+
+fn digit_route(key: &str) -> Option<Route> {
+    match key {
+        "1" => Some(Route::Home),
+        "2" => Some(Route::Instances),
+        "3" => Some(Route::Downloads),
+        "4" => Some(Route::Accounts),
+        "5" => Some(Route::Settings),
+        _ => None,
     }
 }
 

@@ -1,6 +1,6 @@
 //! Settings: theme, language, audio, download source, memory.
 
-use sealy_core::config::{Language, SourcePolicy, ThemeName};
+use sealy_core::config::{Language, MotionSetting, SourcePolicy, ThemeName};
 
 use crate::app::SealyShell;
 use crate::components::{action_bar, choice_button, field_row, head_band, quiet_button};
@@ -22,6 +22,7 @@ pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyEle
     let music = state.settings.appearance.background_music;
     let source = state.settings.download.metadata_source;
     let memory = state.settings.java.memory.max_mb;
+    let motion = state.settings.motion;
 
     div()
         .size_full()
@@ -31,6 +32,8 @@ pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyEle
         .child(
             div()
                 .flex_1()
+                .id("settings-body")
+                .overflow_y_scroll()
                 .p(px(theme::PAGE_PADDING))
                 .flex()
                 .flex_col()
@@ -48,7 +51,7 @@ pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyEle
                         )
                         .child(div().flex().gap(px(10.0)).children(swatches)),
                 )
-                .child(div().h(px(26.0)))
+                .child(div().h(px(18.0)))
                 .child(
                     div()
                         .w(px(760.0))
@@ -141,6 +144,34 @@ pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyEle
                                 .child(memory_button(8192, memory, lang, &t, cx)),
                             &t,
                         ))
+                        .child(row(
+                            tr(lang, "动态效果", "Motion"),
+                            div()
+                                .flex()
+                                .gap(px(8.0))
+                                .child(motion_button(
+                                    tr(lang, "系统", "System"),
+                                    MotionSetting::System,
+                                    motion,
+                                    &t,
+                                    cx,
+                                ))
+                                .child(motion_button(
+                                    tr(lang, "始终", "Always"),
+                                    MotionSetting::Always,
+                                    motion,
+                                    &t,
+                                    cx,
+                                ))
+                                .child(motion_button(
+                                    tr(lang, "从不", "Never"),
+                                    MotionSetting::Never,
+                                    motion,
+                                    &t,
+                                    cx,
+                                )),
+                            &t,
+                        ))
                         .child(field_row(
                             tr(lang, "数据目录", "Data directory"),
                             data_dir,
@@ -182,7 +213,7 @@ pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyEle
 
 fn row(label: &'static str, control: impl IntoElement, t: &ThemeTokens) -> Div {
     div()
-        .h(px(56.0))
+        .h(px(52.0))
         .flex()
         .items_center()
         .justify_between()
@@ -232,6 +263,26 @@ fn memory_button(
         .id(("memory", mb as usize))
         .on_click(cx.listener(move |shell, _, _, cx| {
             shell.state.set_max_memory(mb);
+            cx.notify();
+        }))
+        .into_any_element()
+}
+
+fn motion_button(
+    label: &'static str,
+    value: MotionSetting,
+    current: MotionSetting,
+    t: &ThemeTokens,
+    cx: &mut Context<SealyShell>,
+) -> AnyElement {
+    choice_button(label, value == current, t)
+        .id(match value {
+            MotionSetting::System => "motion-system",
+            MotionSetting::Always => "motion-always",
+            MotionSetting::Never => "motion-never",
+        })
+        .on_click(cx.listener(move |shell, _, _, cx| {
+            shell.state.set_motion(value);
             cx.notify();
         }))
         .into_any_element()

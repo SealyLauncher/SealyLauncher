@@ -1,6 +1,6 @@
 //! Home: tile dashboard with a persistent launch action.
 
-use sealy_core::config::Language;
+use sealy_core::config::{Language, MotionSetting};
 use std::time::Duration;
 
 use crate::app::SealyShell;
@@ -83,7 +83,7 @@ pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyEle
         .size_full()
         .flex()
         .flex_col()
-        .child(head_band_carousel(&t, lang))
+        .child(head_band_carousel(&t, lang, state.settings.motion))
         .child(
             div()
                 .flex_1()
@@ -306,13 +306,12 @@ fn action_bar_content(t: &ThemeTokens, lang: Language, cx: &mut Context<SealyShe
 }
 
 /// Head band whose title crossfades between the launcher name and the signed-in
-/// greeting on an eight-second loop.
-fn head_band_carousel(t: &ThemeTokens, lang: Language) -> Div {
-    let clock = Animation::new(Duration::from_secs(8)).repeat_synced();
-    let greeting = format!("Hi，{PLACEHOLDER_USER}");
+/// greeting on an eight-second loop. When motion is disabled the launcher name
+/// stays put.
+fn head_band_carousel(t: &ThemeTokens, lang: Language, motion: MotionSetting) -> Div {
     let _ = lang;
 
-    div()
+    let mut band = div()
         .h(px(theme::HEAD_HEIGHT))
         .flex_shrink_0()
         .flex()
@@ -322,20 +321,35 @@ fn head_band_carousel(t: &ThemeTokens, lang: Language) -> Div {
         .bg(rgb(t.surface))
         .border_b_1()
         .border_color(rgb(t.line))
-        .child(index_badge("01", t))
-        .child(
+        .child(index_badge("01", t));
+
+    if motion == MotionSetting::Never {
+        return band.child(
             div()
-                .relative()
-                .flex_1()
-                .h(px(56.0))
-                .child(title_slide(
-                    "SealyLauncher".to_owned(),
-                    true,
-                    clock.clone(),
-                    t,
-                ))
-                .child(title_slide(greeting, false, clock, t)),
-        )
+                .text_size(px(42.0))
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(rgb(t.text))
+                .child("SealyLauncher"),
+        );
+    }
+
+    let clock = Animation::new(Duration::from_secs(8)).repeat_synced();
+    let greeting = format!("Hi，{PLACEHOLDER_USER}");
+
+    band = band.child(
+        div()
+            .relative()
+            .flex_1()
+            .h(px(56.0))
+            .child(title_slide(
+                "SealyLauncher".to_owned(),
+                true,
+                clock.clone(),
+                t,
+            ))
+            .child(title_slide(greeting, false, clock, t)),
+    );
+    band
 }
 
 fn title_slide(text: String, first: bool, clock: Animation, t: &ThemeTokens) -> impl IntoElement {
