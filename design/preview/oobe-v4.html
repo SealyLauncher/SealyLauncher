@@ -1,0 +1,330 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="paper">
+<head>
+<meta charset="utf-8">
+<title>SealyLauncher · 设置向导</title>
+<style>
+  /* 主题接口与主页共用同一套变量名 */
+  :root {
+    --font: system-ui, -apple-system, "Segoe UI", "Segoe UI Variable Text",
+            "PingFang SC", "Microsoft YaHei UI", "Noto Sans CJK SC", sans-serif;
+    --mono: ui-monospace, "Consolas", "Cascadia Mono", "SF Mono", "Menlo", monospace;
+    --r-win: 6px;
+    --r-tile: 2px;
+    --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  [data-theme="paper"] {
+    --c-bg: #f4f2ee;
+    --c-surface: #ffffff;
+    --c-line: #dcd8cf;
+    --c-line-soft: #e8e4db;
+    --c-text: #101010;
+    --c-muted: #6f6a61;
+    --c-faint: #a8a29a;
+    --c-block: #0d0d0d;
+    --c-block-text: #f4f2ee;
+    --c-accent: #0d0d0d;
+    --c-accent-text: #f4f2ee;
+  }
+  [data-theme="ink"] {
+    --c-bg: #14161a;
+    --c-surface: #1b1f26;
+    --c-line: #2a3038;
+    --c-line-soft: #232830;
+    --c-text: #edf1f6;
+    --c-muted: #8b94a3;
+    --c-faint: #5c6472;
+    --c-block: #f2f4f7;
+    --c-block-text: #101318;
+    --c-accent: #f2f4f7;
+    --c-accent-text: #101318;
+  }
+  [data-theme="clay"] {
+    --c-bg: #f3ece3;
+    --c-surface: #fffdf9;
+    --c-line: #e0d4c4;
+    --c-line-soft: #ece2d5;
+    --c-text: #1b1512;
+    --c-muted: #766a5e;
+    --c-faint: #ab9d8e;
+    --c-block: #2b1c14;
+    --c-block-text: #f7f0e7;
+    --c-accent: #b4552a;
+    --c-accent-text: #fff8f2;
+  }
+  [data-theme="celadon"] {
+    --c-bg: #eef2ef;
+    --c-surface: #ffffff;
+    --c-line: #d3dcd6;
+    --c-line-soft: #e3eae5;
+    --c-text: #10201b;
+    --c-muted: #5f6f68;
+    --c-faint: #9aaaa2;
+    --c-block: #0f3d33;
+    --c-block-text: #eef5f1;
+    --c-accent: #0f766e;
+    --c-accent-text: #f2fbf8;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    display: grid; place-items: center; gap: 18px;
+    background: #cfcbc3;
+    font-family: var(--font);
+    color: var(--c-text);
+    -webkit-font-smoothing: antialiased;
+  }
+  .mono { font-family: var(--mono); font-size: 10px; font-weight: 500; letter-spacing: 0.1em; text-transform: uppercase; }
+
+  .switcher { display: flex; gap: 8px; }
+  .switcher button {
+    font-family: var(--font); font-size: 12px; font-weight: 500;
+    padding: 6px 14px; border-radius: 999px;
+    border: 1px solid #b9b4aa; background: #e9e5dd; color: #47433c; cursor: pointer;
+  }
+  .switcher button.on { background: #16171a; border-color: #16171a; color: #fff; }
+
+  .win {
+    width: 1120px; height: 700px;
+    background: var(--c-bg);
+    border-radius: var(--r-win);
+    overflow: hidden;
+    display: flex; flex-direction: column;
+    box-shadow: 0 24px 60px rgba(20, 18, 14, 0.26), 0 0 0 1px rgba(0, 0, 0, 0.08);
+  }
+
+  .appbar {
+    height: 40px; flex: none;
+    display: flex; align-items: center;
+    padding: 0 0 0 16px;
+    background: var(--c-surface);
+    border-bottom: 1px solid var(--c-line);
+  }
+  .appbar .word { font-family: var(--mono); font-size: 10.5px; font-weight: 700; letter-spacing: 0.16em; }
+  .appbar .word span { color: var(--c-faint); font-weight: 500; }
+  .appbar .grow { flex: 1; }
+  .wctl { display: flex; height: 40px; border-left: 1px solid var(--c-line); }
+  .wctl button {
+    width: 42px; height: 40px; border: 0; background: transparent;
+    color: var(--c-muted); display: grid; place-items: center; cursor: pointer;
+  }
+  .wctl button:hover { background: var(--c-bg); color: var(--c-text); }
+  .wctl button.close:hover { background: #c42b1c; color: #fff; }
+  .wctl svg { width: 10px; height: 10px; }
+
+  /* ---------- step ---------- */
+  .step { position: relative; flex: 1; min-height: 0; }
+
+  .crumb {
+    position: absolute; left: 48px; top: 36px;
+    display: flex; align-items: baseline; gap: 12px;
+    font-size: 30px; font-weight: 620; letter-spacing: -0.025em;
+  }
+  .crumb span { color: var(--c-muted); font-weight: 400; font-size: 26px; }
+
+  .center {
+    position: absolute; inset: 64px 0 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 22px;
+    padding-bottom: 24px;
+  }
+  .glyph {
+    width: 84px; height: 84px;
+    display: grid; place-items: center;
+    color: var(--c-text);
+  }
+  .glyph svg { width: 66px; height: 66px; stroke-width: 1.3; }
+  .say { font-size: 22px; font-weight: 600; letter-spacing: -0.01em; }
+
+  .select {
+    width: 420px; height: 52px;
+    display: flex; align-items: center; gap: 12px;
+    padding: 0 18px;
+    background: var(--c-surface);
+    border: 1px solid var(--c-line);
+    border-radius: var(--r-tile);
+    cursor: pointer;
+    font-size: 15px;
+  }
+  .select:hover { border-color: var(--c-text); }
+  .select .caret { margin-left: auto; color: var(--c-faint); }
+  .select .caret svg { width: 14px; height: 14px; }
+
+  /* audio options */
+  .opts { display: flex; gap: 16px; }
+  .opt {
+    width: 300px; padding: 20px 22px;
+    background: var(--c-surface);
+    border: 1px solid var(--c-line);
+    border-radius: var(--r-tile);
+    cursor: pointer;
+    display: flex; flex-direction: column; gap: 8px;
+    transition: border-color 0.14s var(--ease);
+  }
+  .opt:hover { border-color: var(--c-muted); }
+  .opt .top { display: flex; align-items: center; gap: 10px; }
+  .dot {
+    width: 16px; height: 16px; border-radius: 50%;
+    border: 1px solid var(--c-faint); flex: none;
+    display: grid; place-items: center;
+  }
+  .dot i { width: 8px; height: 8px; border-radius: 50%; background: transparent; }
+  .opt .name { font-size: 16px; font-weight: 620; }
+  .opt .desc { font-size: 12px; color: var(--c-muted); line-height: 1.5; }
+  .opt.on { border-color: var(--c-text); }
+  .opt.on .dot { border-color: var(--c-text); }
+  .opt.on .dot i { background: var(--c-text); }
+
+  /* done */
+  .done { align-items: flex-start; text-align: left; width: 720px; }
+  .done h2 { font-size: 34px; font-weight: 650; letter-spacing: -0.03em; }
+  .done p { margin-top: 14px; font-size: 14px; line-height: 1.7; color: var(--c-muted); max-width: 560px; }
+  .done a {
+    margin-top: 18px; display: inline-flex; align-items: center; gap: 8px;
+    font-size: 14px; font-weight: 600; color: var(--c-text);
+    text-decoration: none; border-bottom: 1px solid var(--c-text); padding-bottom: 2px;
+  }
+  .done a svg { width: 14px; height: 14px; }
+
+  /* ---------- action bar ---------- */
+  .actionbar {
+    height: 72px; flex: none;
+    display: flex; align-items: center;
+    background: var(--c-surface);
+    border-top: 1px solid var(--c-line);
+  }
+  .msg { flex: 1; padding-left: 48px; font-size: 13px; color: var(--c-muted); }
+  .abtn {
+    height: 72px; min-width: 178px; padding: 0 26px;
+    border: 0; border-left: 1px solid var(--c-line);
+    font-family: var(--font); font-size: 22px; font-weight: 600;
+    cursor: pointer;
+    display: grid; place-items: center;
+    transition: filter 0.14s var(--ease), background 0.14s var(--ease);
+  }
+  .abtn.back { background: var(--c-surface); color: var(--c-text); }
+  .abtn.back:hover { background: var(--c-bg); }
+  .abtn.next { background: var(--c-accent); color: var(--c-accent-text); border-left-color: var(--c-accent); }
+  .abtn.next:hover { filter: brightness(1.12); }
+  .abtn[hidden] { display: none; }
+</style>
+</head>
+<body>
+  <div class="switcher" role="group" aria-label="预览步骤">
+    <button data-step="1" class="on">语言</button>
+    <button data-step="2">音频</button>
+    <button data-step="3">完成</button>
+  </div>
+
+  <div class="win">
+    <header class="appbar">
+      <span class="word">SEALY <span>LAUNCHER</span></span>
+      <div class="grow"></div>
+      <div class="wctl">
+        <button aria-label="最小化"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M2 6h8"/></svg></button>
+        <button aria-label="最大化"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="2.5" y="2.5" width="7" height="7"/></svg></button>
+        <button class="close" aria-label="关闭"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.2"><path d="m2.5 2.5 7 7M9.5 2.5l-7 7"/></svg></button>
+      </div>
+    </header>
+
+    <main class="step">
+      <!-- step 1 -->
+      <section data-panel="1">
+        <div class="crumb">语言 <span>\ 显示语言</span></div>
+        <div class="center">
+          <div class="glyph">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.8 2.6 2.8 15.4 0 18M12 3c-2.8 2.6-2.8 15.4 0 18"/></svg>
+          </div>
+          <div class="say">您好</div>
+          <div class="select" role="button" tabindex="0">
+            简体中文（中国）
+            <span class="caret"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m7 10 5 5 5-5"/></svg></span>
+          </div>
+        </div>
+      </section>
+
+      <!-- step 2 -->
+      <section data-panel="2" hidden>
+        <div class="crumb">个性化 <span>\ 音乐与音效</span></div>
+        <div class="center">
+          <div class="glyph">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 9.5v5h3.5L12 19V5L7.5 9.5z"/><path d="M16 8.5a5 5 0 0 1 0 7"/><path d="M18.6 6a8.5 8.5 0 0 1 0 12"/></svg>
+          </div>
+          <div class="say">是否播放背景音乐</div>
+          <div class="opts">
+            <div class="opt" data-opt="off" role="radio" aria-checked="false" tabindex="0">
+              <div class="top"><span class="dot"><i></i></span><span class="name">关</span></div>
+              <div class="desc">不播放任何声音与音效</div>
+            </div>
+            <div class="opt on" data-opt="on" role="radio" aria-checked="true" tabindex="0">
+              <div class="top"><span class="dot"><i></i></span><span class="name">开</span></div>
+              <div class="desc">根据当前主题播放背景音乐与音效</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- step 3 -->
+      <section data-panel="3" hidden>
+        <div class="crumb">设置向导 <span>\ 已完成</span></div>
+        <div class="center done">
+          <h2>可以开始了。</h2>
+          <p>左上角的菜单按钮或键盘上的 HOME 键可以随时回到主界面。</p>
+          <a href="#">
+            需要继续安装 Minecraft 核心吗？点击此处安装
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+          </a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="actionbar">
+      <div class="msg" id="msg">选择您阅读界面时使用的语言</div>
+      <button class="abtn back" id="back" hidden>上一步</button>
+      <button class="abtn next" id="next">下一步</button>
+    </footer>
+  </div>
+
+<script>
+  const msgs = {
+    1: '选择您阅读界面时使用的语言',
+    2: '随时可以在设置中修改音频选项',
+    3: '',
+  };
+  const say = { 1: '下一步', 2: '下一步', 3: '' };
+
+  const panels = document.querySelectorAll('[data-panel]');
+  const tabs = document.querySelectorAll('.switcher button');
+  const back = document.getElementById('back');
+  const next = document.getElementById('next');
+  const msg = document.getElementById('msg');
+  let current = 1;
+
+  function show(n) {
+    current = n;
+    panels.forEach((p) => { p.hidden = Number(p.dataset.panel) !== n; });
+    tabs.forEach((t) => t.classList.toggle('on', Number(t.dataset.step) === n));
+    msg.textContent = msgs[n];
+    back.hidden = n === 1;
+    next.hidden = n === 3;
+    next.textContent = say[n];
+  }
+  tabs.forEach((t) => t.addEventListener('click', () => show(Number(t.dataset.step))));
+  back.addEventListener('click', () => show(Math.max(1, current - 1)));
+  next.addEventListener('click', () => show(Math.min(3, current + 1)));
+
+  document.querySelectorAll('.opt').forEach((o) => {
+    o.addEventListener('click', () => {
+      document.querySelectorAll('.opt').forEach((x) => {
+        x.classList.remove('on');
+        x.setAttribute('aria-checked', 'false');
+      });
+      o.classList.add('on');
+      o.setAttribute('aria-checked', 'true');
+    });
+  });
+</script>
+</body>
+</html>

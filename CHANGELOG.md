@@ -33,6 +33,7 @@
 - 2026-11-08 — 设计探索：推翻此前方向，新增首页草稿 `design/preview/home-v1.html`：左侧信息面板（实例 / 参数 / 世界 / 启动 / 账号）+ 右侧全幅夜景（程序生成）+ 公告浮层 + 最近启动磁贴；截图 `home-v1.png`。
 - 2026-11-08 — 规范：新增项目级 skill `.agents/skills/bakaxl-flow-ui/`（SKILL.md + `references/tokens.md` / `patterns.md` / `checklist.md`），把 BakaXL 式三区布局、动作带、大色块、水印线稿、一屏一个决定固化为可执行规则；`docs/PLAN.md` §9 与 Phase 1/3/4 同步改写。
 - 2026-11-08 — 设计探索：新增 `design/preview/home-v2.html`（BakaXL 磁贴式主页，中性深色外壳 + 绿色启动）与 `design/preview/home-v3.html`（同一布局的杂志排版版：纸白、发丝线、等宽小标签、纯黑区块），用于同构对比两套视觉语言。
+- 2026-11-08 — 定稿方向：以 `home-v3` 的杂志排版为视觉基线，新增 `design/preview/home-v4.html` 与 `oobe-v4.html` —— 全部改用系统自带字体、颜色收敛到 `[data-theme]` 的 4 套 token（paper/ink/clay/celadon）、去掉网络延迟/Java 版本/上次游玩等装饰性小字；`docs/PLAN.md` §9.1/§9.2 与 skill 的 tokens/patterns/checklist 同步更新。
 
 ### Verified
 

@@ -1,0 +1,402 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="paper">
+<head>
+<meta charset="utf-8">
+<title>SealyLauncher · 主页</title>
+<style>
+  /* ===========================================================
+     主题接口：所有颜色只在这里定义，组件一律引用变量。
+     新增主题 = 复制一组变量；OEM 覆盖 = 只改 --c-accent。
+     =========================================================== */
+  :root {
+    --font: system-ui, -apple-system, "Segoe UI", "Segoe UI Variable Text",
+            "PingFang SC", "Microsoft YaHei UI", "Noto Sans CJK SC", sans-serif;
+    --mono: ui-monospace, "Consolas", "Cascadia Mono", "SF Mono", "Menlo", monospace;
+
+    --r-win: 6px;
+    --r-tile: 2px;
+    --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  [data-theme="paper"] {
+    --c-bg: #f4f2ee;
+    --c-surface: #ffffff;
+    --c-line: #dcd8cf;
+    --c-line-soft: #e8e4db;
+    --c-text: #101010;
+    --c-muted: #6f6a61;
+    --c-faint: #a8a29a;
+    --c-block: #0d0d0d;
+    --c-block-text: #f4f2ee;
+    --c-accent: #0d0d0d;
+    --c-accent-text: #f4f2ee;
+  }
+  [data-theme="ink"] {
+    --c-bg: #14161a;
+    --c-surface: #1b1f26;
+    --c-line: #2a3038;
+    --c-line-soft: #232830;
+    --c-text: #edf1f6;
+    --c-muted: #8b94a3;
+    --c-faint: #5c6472;
+    --c-block: #f2f4f7;
+    --c-block-text: #101318;
+    --c-accent: #f2f4f7;
+    --c-accent-text: #101318;
+  }
+  [data-theme="clay"] {
+    --c-bg: #f3ece3;
+    --c-surface: #fffdf9;
+    --c-line: #e0d4c4;
+    --c-line-soft: #ece2d5;
+    --c-text: #1b1512;
+    --c-muted: #766a5e;
+    --c-faint: #ab9d8e;
+    --c-block: #2b1c14;
+    --c-block-text: #f7f0e7;
+    --c-accent: #b4552a;
+    --c-accent-text: #fff8f2;
+  }
+  [data-theme="celadon"] {
+    --c-bg: #eef2ef;
+    --c-surface: #ffffff;
+    --c-line: #d3dcd6;
+    --c-line-soft: #e3eae5;
+    --c-text: #10201b;
+    --c-muted: #5f6f68;
+    --c-faint: #9aaaa2;
+    --c-block: #0f3d33;
+    --c-block-text: #eef5f1;
+    --c-accent: #0f766e;
+    --c-accent-text: #f2fbf8;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    display: grid; place-items: center; gap: 18px;
+    background: #cfcbc3;
+    font-family: var(--font);
+    color: var(--c-text);
+    -webkit-font-smoothing: antialiased;
+  }
+  .mono { font-family: var(--mono); font-size: 10px; font-weight: 500; letter-spacing: 0.1em; text-transform: uppercase; }
+
+  /* 主题切换器（仅预览用，不属于界面） */
+  .switcher { display: flex; gap: 8px; }
+  .switcher button {
+    font-family: var(--font); font-size: 12px; font-weight: 500;
+    padding: 6px 14px; border-radius: 999px;
+    border: 1px solid #b9b4aa; background: #e9e5dd; color: #47433c; cursor: pointer;
+  }
+  .switcher button.on { background: #16171a; border-color: #16171a; color: #fff; }
+
+  .win {
+    width: 1120px; height: 700px;
+    background: var(--c-bg);
+    border-radius: var(--r-win);
+    overflow: hidden;
+    display: flex; flex-direction: column;
+    box-shadow: 0 24px 60px rgba(20, 18, 14, 0.26), 0 0 0 1px rgba(0, 0, 0, 0.08);
+    transition: background 0.2s var(--ease);
+  }
+
+  /* ---------- app bar ---------- */
+  .appbar {
+    height: 40px; flex: none;
+    display: flex; align-items: center;
+    padding: 0 0 0 16px;
+    background: var(--c-surface);
+    border-bottom: 1px solid var(--c-line);
+  }
+  .appbar .word { font-family: var(--mono); font-size: 10.5px; font-weight: 700; letter-spacing: 0.16em; }
+  .appbar .word span { color: var(--c-faint); font-weight: 500; }
+  .appbar .grow { flex: 1; }
+  .wctl { display: flex; height: 40px; border-left: 1px solid var(--c-line); }
+  .wctl button {
+    width: 42px; height: 40px; border: 0; background: transparent;
+    color: var(--c-muted); display: grid; place-items: center; cursor: pointer;
+  }
+  .wctl button:hover { background: var(--c-bg); color: var(--c-text); }
+  .wctl button.close:hover { background: #c42b1c; color: #fff; }
+  .wctl svg { width: 10px; height: 10px; }
+
+  /* ---------- header ---------- */
+  .head {
+    flex: none;
+    padding: 26px 32px 20px;
+    border-bottom: 1px solid var(--c-line);
+    display: flex; align-items: flex-start; gap: 14px;
+  }
+  .head .idx {
+    display: inline-grid; place-items: center;
+    width: 26px; height: 18px; margin-top: 11px;
+    background: var(--c-block); color: var(--c-block-text);
+    font-family: var(--mono); font-size: 10px; letter-spacing: 0.02em;
+    border-radius: 2px;
+  }
+  .head h1 {
+    font-size: 42px; line-height: 1;
+    font-weight: 620; letter-spacing: -0.035em;
+  }
+
+  /* ---------- tiles ---------- */
+  .canvas { position: relative; flex: 1; min-height: 0; padding: 24px 32px; }
+  .canvas::before {
+    content: ""; position: absolute; inset: 0;
+    background-image:
+      linear-gradient(to right, var(--c-line-soft) 1px, transparent 1px),
+      linear-gradient(to bottom, var(--c-line-soft) 1px, transparent 1px);
+    background-size: 84px 84px;
+    background-position: 32px 24px;
+    opacity: 0.34; pointer-events: none;
+  }
+  .grid {
+    position: relative;
+    display: grid;
+    grid-template-columns: repeat(10, 84px);
+    grid-auto-rows: 84px;
+    gap: 10px;
+  }
+  .tile {
+    position: relative;
+    background: var(--c-surface);
+    border: 1px solid var(--c-line);
+    border-radius: var(--r-tile);
+    cursor: pointer;
+    overflow: hidden;
+    transition: border-color 0.14s var(--ease), background 0.14s var(--ease);
+  }
+  .tile:hover { border-color: var(--c-text); }
+
+  .tile.sm { display: grid; place-items: center; color: var(--c-text); }
+  .tile.sm svg { width: 22px; height: 22px; }
+  .tile.sm.cur { background: var(--c-block); color: var(--c-block-text); border-color: var(--c-block); }
+
+  .tile.md {
+    grid-column: 3 / 5; grid-row: 1 / 3;
+    display: flex; flex-direction: column; justify-content: flex-end; gap: 10px;
+    padding: 14px;
+  }
+  .tile.md svg { width: 24px; height: 24px; color: var(--c-text); }
+  .tile.md .label { font-size: 13px; font-weight: 620; }
+
+  .tile.wide {
+    grid-column: 1 / 5; grid-row: 3 / 5;
+    display: flex; align-items: center; gap: 16px; padding: 18px 20px;
+  }
+  .tile.wide .ico {
+    width: 54px; height: 54px; border: 1px solid var(--c-line); border-radius: var(--r-tile);
+    display: grid; place-items: center; flex: none; color: var(--c-text);
+  }
+  .tile.wide .ico svg { width: 26px; height: 26px; }
+  .tile.wide .t { font-size: 17px; font-weight: 620; }
+  .tile.wide .arrow { margin-left: auto; color: var(--c-faint); }
+  .tile.wide .arrow svg { width: 15px; height: 15px; }
+  .tile.wide:hover .arrow { color: var(--c-text); }
+
+  .tile.dark {
+    grid-column: 5 / 8; grid-row: 1 / 5;
+    background: var(--c-block); border-color: var(--c-block);
+    color: var(--c-block-text);
+    padding: 18px 18px 16px;
+    display: flex; flex-direction: column;
+  }
+  .tile.dark .t { font-size: 13px; font-weight: 620; }
+  .tile.dark .h {
+    margin-top: 16px; font-size: 19px; line-height: 1.32;
+    font-weight: 600; letter-spacing: -0.015em;
+  }
+  .tile.dark .ln {
+    display: flex; align-items: baseline; gap: 10px;
+    margin-top: 14px; padding-top: 12px;
+    border-top: 1px solid color-mix(in srgb, var(--c-block-text) 16%, transparent);
+    font-size: 11.5px; color: color-mix(in srgb, var(--c-block-text) 82%, transparent);
+  }
+  .tile.dark .ln em {
+    font-style: normal; font-family: var(--mono); font-size: 9.5px;
+    letter-spacing: 0.06em; color: color-mix(in srgb, var(--c-block-text) 46%, transparent);
+    flex: none;
+  }
+  .tile.dark .foot {
+    margin-top: auto; padding-top: 12px;
+    display: flex; align-items: center; gap: 6px;
+    font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase;
+    color: color-mix(in srgb, var(--c-block-text) 66%, transparent);
+  }
+  .tile.dark .foot svg { width: 11px; height: 11px; }
+
+  .tile.list {
+    grid-column: 8 / 11; grid-row: 1 / 5;
+    padding: 16px 18px 14px;
+    display: flex; flex-direction: column;
+  }
+  .tile.list .t { display: flex; justify-content: space-between; align-items: baseline; font-size: 12.5px; font-weight: 620; }
+  .tile.list .t .n { font-family: var(--mono); font-size: 9.5px; color: var(--c-faint); letter-spacing: 0.08em; }
+  .tile.list .row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 13px 0;
+    border-bottom: 1px solid var(--c-line-soft);
+  }
+  .tile.list .row:last-of-type { border-bottom: 0; }
+  .tile.list .row .nm { font-size: 13px; font-weight: 600; }
+  .tile.list .row .tm { margin-left: auto; font-family: var(--mono); font-size: 9.5px; color: var(--c-faint); }
+  .tile.list .more {
+    margin-top: auto; padding-top: 10px;
+    border-top: 1px solid var(--c-line);
+    font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--c-text);
+    display: flex; align-items: center; gap: 6px;
+  }
+  .tile.list .more svg { width: 11px; height: 11px; }
+
+  /* ---------- action bar ---------- */
+  .actionbar {
+    height: 84px; flex: none;
+    display: flex; align-items: center; gap: 16px;
+    padding: 0 24px;
+    background: var(--c-surface);
+    border-top: 1px solid var(--c-line);
+  }
+  .ava {
+    width: 42px; height: 42px; border-radius: var(--r-tile);
+    background: var(--c-block); color: var(--c-block-text);
+    display: grid; place-items: center;
+    font-size: 14px; font-weight: 700; flex: none;
+  }
+  .hello { font-size: 24px; font-weight: 620; letter-spacing: -0.025em; }
+  .hello span { color: var(--c-muted); font-weight: 400; }
+  .actionbar .grow { flex: 1; }
+  .play {
+    height: 58px; min-width: 208px;
+    display: flex; align-items: center; justify-content: center; gap: 12px;
+    padding: 0 24px;
+    border: 0; border-radius: var(--r-tile); cursor: pointer;
+    background: var(--c-accent); color: var(--c-accent-text);
+    font-family: var(--font); font-size: 20px; font-weight: 650; letter-spacing: -0.01em;
+    transition: filter 0.14s var(--ease);
+  }
+  .play:hover { filter: brightness(1.12); }
+  .play svg { width: 15px; height: 15px; }
+
+  /* 图标按钮（账户/设置入口，图标代替文字） */
+  .iconbtn {
+    width: 38px; height: 38px; border-radius: var(--r-tile);
+    border: 1px solid var(--c-line); background: transparent;
+    color: var(--c-muted); display: grid; place-items: center; cursor: pointer;
+  }
+  .iconbtn:hover { color: var(--c-text); border-color: var(--c-text); }
+  .iconbtn svg { width: 17px; height: 17px; }
+</style>
+</head>
+<body>
+  <div class="switcher" role="group" aria-label="预览主题">
+    <button data-set="paper" class="on">纸张</button>
+    <button data-set="ink">墨色</button>
+    <button data-set="clay">陶土</button>
+    <button data-set="celadon">青瓷</button>
+  </div>
+
+  <div class="win">
+    <header class="appbar">
+      <span class="word">SEALY <span>LAUNCHER</span></span>
+      <div class="grow"></div>
+      <div class="wctl">
+        <button aria-label="最小化"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M2 6h8"/></svg></button>
+        <button aria-label="最大化"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="2.5" y="2.5" width="7" height="7"/></svg></button>
+        <button class="close" aria-label="关闭"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.2"><path d="m2.5 2.5 7 7M9.5 2.5l-7 7"/></svg></button>
+      </div>
+    </header>
+
+    <div class="head">
+      <span class="idx">01</span>
+      <h1>Fabric 1.21.11</h1>
+    </div>
+
+    <main class="canvas">
+      <div class="grid">
+        <div class="tile sm cur" title="主页" aria-label="主页">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3.5" y="3.5" width="7" height="7"/><rect x="13.5" y="3.5" width="7" height="7"/><rect x="3.5" y="13.5" width="7" height="7"/><rect x="13.5" y="13.5" width="7" height="7"/></svg>
+        </div>
+        <div class="tile sm" title="下载" aria-label="下载">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 4v10M8.2 10.4 12 14.2l3.8-3.8"/><path d="M4.5 18.5h15"/></svg>
+        </div>
+        <div class="tile sm" title="账号" aria-label="账号">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="9" r="3.6"/><path d="M5.5 19.5a6.5 6.5 0 0 1 13 0"/></svg>
+        </div>
+        <div class="tile sm" title="设置" aria-label="设置">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="3"/><path d="M12 3.5v2.2M12 18.3v2.2M3.5 12h2.2M18.3 12h2.2M5.9 5.9l1.6 1.6M16.5 16.5l1.6 1.6M18.1 5.9l-1.6 1.6M7.5 16.5l-1.6 1.6"/></svg>
+        </div>
+
+        <div class="tile md" title="实例" aria-label="实例">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="m12 3 8 4.5-8 4.5-8-4.5z"/><path d="m4 12 8 4.5 8-4.5"/><path d="m4 16.5 8 4.5 8-4.5"/></svg>
+          <div class="label">实例</div>
+        </div>
+
+        <div class="tile wide" title="安装新版本" aria-label="安装新版本">
+          <div class="ico">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M7 17.5a4 4 0 0 1 .5-8 5.5 5.5 0 0 1 10.4 1.6A3.5 3.5 0 0 1 17.5 17.5"/><path d="M12 11v6.5M9.6 15.2 12 17.6l2.4-2.4"/></svg>
+          </div>
+          <div class="t">安装新版本</div>
+          <div class="arrow">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+          </div>
+        </div>
+
+        <div class="tile dark" title="公告" aria-label="公告">
+          <div class="t">公告</div>
+          <div class="h">1.21.11 已可安装，<br>Fabric 0.16.5 同步更新</div>
+          <div class="ln"><em>11-08</em><span>BMCLAPI 线路维护</span></div>
+          <div class="ln"><em>11-06</em><span>aurora 整合包自动更新</span></div>
+          <div class="foot">
+            全部公告
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+          </div>
+        </div>
+
+        <div class="tile list" title="最近世界" aria-label="最近世界">
+          <div class="t"><span>最近世界</span><span class="n">02</span></div>
+          <div class="row">
+            <div class="nm">Aurora</div>
+            <div class="tm">2H</div>
+          </div>
+          <div class="row">
+            <div class="nm">Skyblock</div>
+            <div class="tm">3D</div>
+          </div>
+          <div class="row">
+            <div class="nm">Test World</div>
+            <div class="tm">1W</div>
+          </div>
+          <div class="more">
+            查看全部
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <footer class="actionbar">
+      <div class="ava">H</div>
+      <div class="hello">您好！ <span>Haikuorenyuyue</span></div>
+      <div class="grow"></div>
+      <button class="iconbtn" aria-label="打开日志">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M5 4.5h9l5 5v10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-14a1 1 0 0 1 1-1z"/><path d="M14 4.5v5h5"/></svg>
+      </button>
+      <button class="play">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.2v13.6L19 12z"/></svg>
+        启动游戏
+      </button>
+    </footer>
+  </div>
+
+<script>
+  const btns = document.querySelectorAll('.switcher button');
+  btns.forEach((b) => {
+    b.addEventListener('click', () => {
+      document.documentElement.dataset.theme = b.dataset.set;
+      btns.forEach((x) => x.classList.toggle('on', x === b));
+    });
+  });
+</script>
+</body>
+</html>
