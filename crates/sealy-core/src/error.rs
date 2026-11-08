@@ -21,6 +21,10 @@ pub enum CoreError {
     #[error("日志初始化失败: {0}")]
     Logging(String),
 
+    /// Network request failed.
+    #[error("网络请求失败: {0}")]
+    Network(String),
+
     /// Portable root could not be determined.
     #[error("无法确定启动器目录: {0}")]
     RootUnavailable(String),

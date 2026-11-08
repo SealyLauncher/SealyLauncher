@@ -7,6 +7,7 @@ pub mod config;
 pub mod error;
 pub mod events;
 pub mod logging;
+pub mod manifest;
 pub mod paths;
 pub mod single_instance;
 

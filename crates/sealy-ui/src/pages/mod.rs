@@ -12,7 +12,7 @@ use crate::kit::{AnyElement, Context};
 use crate::state::{Route, ShellState};
 
 /// Renders the active page below the window chrome.
-pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyElement {
+pub(crate) fn render(state: &mut ShellState, cx: &mut Context<SealyShell>) -> AnyElement {
     if let Some(step) = state.oobe_step {
         return oobe::render(state, step, cx);
     }

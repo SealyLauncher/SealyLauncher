@@ -1,67 +1,43 @@
-//! Downloads: version list with a source filter and a progress action bar.
+//! Downloads: live version list from the manifest, grouped by channel.
+
+use sealy_core::config::Language;
+use sealy_core::manifest::{VersionKind, VersionManifest, VersionSummary};
 
 use crate::app::SealyShell;
 use crate::components::{action_bar, head_band, mono, quiet_button};
 use crate::i18n::tr;
 use crate::kit::*;
-use crate::state::ShellState;
+use crate::state::{ShellState, VersionFilter};
 use crate::theme::{self, ThemeTokens};
 
-struct Version {
-    id: &'static str,
-    kind: &'static str,
-    released: &'static str,
-    size: &'static str,
-}
+/// Rows rendered per screen batch; the manifest holds hundreds of versions.
+const MAX_ROWS: usize = 60;
 
-const VERSIONS: [Version; 6] = [
-    Version {
-        id: "1.21.11",
-        kind: "正式版",
-        released: "11-08",
-        size: "632 MB",
-    },
-    Version {
-        id: "1.21.10",
-        kind: "正式版",
-        released: "10-24",
-        size: "631 MB",
-    },
-    Version {
-        id: "1.21.9",
-        kind: "正式版",
-        released: "10-10",
-        size: "628 MB",
-    },
-    Version {
-        id: "1.21.4",
-        kind: "正式版",
-        released: "2024-12-03",
-        size: "596 MB",
-    },
-    Version {
-        id: "1.20.1",
-        kind: "正式版",
-        released: "2023-06-12",
-        size: "514 MB",
-    },
-    Version {
-        id: "24w14a",
-        kind: "快照",
-        released: "2024-04-04",
-        size: "588 MB",
-    },
-];
+pub(crate) fn render(state: &mut ShellState, cx: &mut Context<SealyShell>) -> AnyElement {
+    ensure_loaded(state, cx);
 
-pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyElement {
     let t = state.theme();
     let lang = state.language();
+    let filter = state.downloads.filter;
 
-    let rows = VERSIONS
-        .iter()
-        .enumerate()
-        .map(|(index, version)| row(index, version, lang, &t, cx))
-        .collect::<Vec<_>>();
+    let mut list = div()
+        .id("version-list")
+        .flex_1()
+        .min_h(px(0.0))
+        .overflow_y_scroll()
+        .flex()
+        .flex_col();
+    if let Some(manifest) = state.downloads.manifest.clone() {
+        let rows = manifest
+            .versions
+            .iter()
+            .filter(|version| matches(filter, version.kind))
+            .take(MAX_ROWS)
+            .enumerate()
+            .map(|(index, version)| row(index, version, lang, &t, cx))
+            .collect::<Vec<_>>();
+        list = list.children(rows);
+    }
 
     div()
         .size_full()
@@ -71,6 +47,7 @@ pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyEle
         .child(
             div()
                 .flex_1()
+                .min_h(px(0.0))
                 .p(px(theme::PAGE_PADDING))
                 .flex()
                 .flex_col()
@@ -106,44 +83,42 @@ pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyEle
                                 ),
                         )
                         .child(div().flex_1())
-                        .child(mono(tr(lang, "全部", "All"), &t)),
+                        .child(
+                            div()
+                                .id("filter")
+                                .role(Role::Button)
+                                .aria_label("filter")
+                                .cursor_pointer()
+                                .on_click(cx.listener(|shell, _, _, cx| {
+                                    shell.state.downloads.filter =
+                                        shell.state.downloads.filter.next();
+                                    cx.notify();
+                                }))
+                                .child(mono(
+                                    match filter {
+                                        VersionFilter::All => tr(lang, "全部", "All"),
+                                        VersionFilter::Release => tr(lang, "正式版", "Releases"),
+                                        VersionFilter::Snapshot => tr(lang, "快照", "Snapshots"),
+                                    },
+                                    &t,
+                                )),
+                        ),
                 )
                 .child(div().w_full().h(px(1.0)).bg(rgb(t.line)))
-                .children(rows),
+                .child(status(state, &t, lang, cx))
+                .child(list),
         )
         .child(
             action_bar(&t)
-                .child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap(px(12.0))
-                        .child(
-                            div()
-                                .w(px(160.0))
-                                .h(px(4.0))
-                                .rounded(px(2.0))
-                                .bg(rgb(t.line_soft))
-                                .child(
-                                    div()
-                                        .w(relative(0.38))
-                                        .h_full()
-                                        .rounded(px(2.0))
-                                        .bg(rgb(t.text)),
-                                ),
-                        )
-                        .child(mono(tr(lang, "38%", "38%"), &t)),
-                )
+                .child(mono(count_label(state, lang), &t))
                 .child(div().flex_1())
                 .child(
-                    quiet_button(tr(lang, "取消", "Cancel"), &t)
-                        .id("download-cancel")
+                    quiet_button(tr(lang, "刷新", "Refresh"), &t)
+                        .id("manifest-refresh")
                         .on_click(cx.listener(|shell, _, _, cx| {
-                            shell.state.notify(tr(
-                                shell.state.language(),
-                                "下载将在 Phase 2 接入",
-                                "Downloads arrive in Phase 2",
-                            ));
+                            shell.state.downloads.loading = false;
+                            shell.state.downloads.manifest = None;
+                            shell.state.downloads.error = None;
                             cx.notify();
                         })),
                 ),
@@ -151,10 +126,131 @@ pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyEle
         .into_any_element()
 }
 
+fn count_label(state: &ShellState, lang: Language) -> String {
+    match &state.downloads.manifest {
+        Some(manifest) => format!(
+            "{} {}",
+            manifest.versions.len(),
+            tr(lang, "个版本", "versions")
+        ),
+        None => tr(lang, "尚无数据", "no data").to_owned(),
+    }
+}
+
+fn status(
+    state: &ShellState,
+    t: &ThemeTokens,
+    lang: Language,
+    cx: &mut Context<SealyShell>,
+) -> AnyElement {
+    if state.downloads.loading {
+        return div()
+            .h(px(72.0))
+            .flex()
+            .items_center()
+            .gap(px(10.0))
+            .child(div().w(px(12.0)).h(px(12.0)).rounded_full().bg(rgb(t.text)))
+            .child(div().text_size(px(12.0)).text_color(rgb(t.muted)).child(tr(
+                lang,
+                "正在获取版本清单…",
+                "Fetching the version list…",
+            )))
+            .into_any_element();
+    }
+
+    if let Some(error) = &state.downloads.error {
+        return div()
+            .h(px(96.0))
+            .flex()
+            .items_center()
+            .justify_between()
+            .border_b_1()
+            .border_color(rgb(t.line_soft))
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap(px(6.0))
+                    .child(
+                        div()
+                            .text_size(px(13.0))
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_color(rgb(t.text))
+                            .child(tr(
+                                lang,
+                                "无法获取版本清单",
+                                "Could not fetch the version list",
+                            )),
+                    )
+                    .child(
+                        div()
+                            .max_w(px(640.0))
+                            .text_size(px(11.0))
+                            .text_color(rgb(t.muted))
+                            .child(error.clone()),
+                    ),
+            )
+            .child(
+                quiet_button(tr(lang, "重试", "Retry"), t)
+                    .id("manifest-retry")
+                    .on_click(cx.listener(|shell, _, _, cx| {
+                        shell.state.downloads.loading = false;
+                        shell.state.downloads.error = None;
+                        cx.notify();
+                    })),
+            )
+            .into_any_element();
+    }
+
+    if state.downloads.manifest.is_some() {
+        return div().h(px(8.0)).into_any_element();
+    }
+
+    div().h(px(8.0)).into_any_element()
+}
+
+fn ensure_loaded(state: &mut ShellState, cx: &mut Context<SealyShell>) {
+    if state.downloads.loading
+        || state.downloads.manifest.is_some()
+        || state.downloads.error.is_some()
+    {
+        return;
+    }
+
+    state.downloads.loading = true;
+    let policy = state.settings.download.metadata_source;
+
+    cx.spawn(async move |this, cx| {
+        let result = cx
+            .background_executor()
+            .spawn(async move { sealy_core::manifest::fetch_manifest(policy) })
+            .await;
+
+        this.update(cx, |shell, cx| {
+            shell.state.downloads.loading = false;
+            match result {
+                Ok(manifest) => shell.state.downloads.manifest = Some(manifest),
+                Err(err) => shell.state.downloads.error = Some(err.to_string()),
+            }
+            cx.notify();
+        })
+        .ok();
+    })
+    .detach();
+}
+
+fn matches(filter: VersionFilter, kind: VersionKind) -> bool {
+    match filter {
+        VersionFilter::All => true,
+        VersionFilter::Release => kind == VersionKind::Release,
+        VersionFilter::Snapshot => kind.is_snapshot(),
+    }
+}
+
 fn row(
     index: usize,
-    version: &Version,
-    lang: sealy_core::config::Language,
+    version: &VersionSummary,
+    lang: Language,
     t: &ThemeTokens,
     cx: &mut Context<SealyShell>,
 ) -> AnyElement {
@@ -167,38 +263,35 @@ fn row(
         .border_color(rgb(t.line_soft))
         .child(
             div()
-                .w(px(120.0))
+                .w(px(150.0))
                 .text_size(px(14.0))
                 .font_weight(FontWeight::MEDIUM)
                 .text_color(rgb(t.text))
-                .child(version.id),
+                .child(version.id.clone()),
         )
         .child(
             div()
                 .w(px(72.0))
                 .text_size(px(11.0))
                 .text_color(rgb(t.muted))
-                .child(tr(
-                    lang,
-                    version.kind,
-                    if version.kind == "快照" {
-                        "Snapshot"
-                    } else {
-                        "Release"
-                    },
-                )),
+                .child(match version.kind {
+                    VersionKind::Release => tr(lang, "正式版", "Release"),
+                    VersionKind::Snapshot => tr(lang, "快照", "Snapshot"),
+                    VersionKind::OldAlpha => tr(lang, "远古 Alpha", "Old alpha"),
+                    VersionKind::OldBeta => tr(lang, "远古 Beta", "Old beta"),
+                }),
         )
         .child(div().flex_1())
-        .child(mono(version.released, t))
-        .child(mono(version.size, t))
+        .child(mono(VersionManifest::date_of(version), t))
+        .child(mono(format!("#{:03}", index + 1), t))
         .child(
             quiet_button(tr(lang, "安装", "Install"), t)
                 .id(("install", index))
                 .on_click(cx.listener(|shell, _, _, cx| {
                     shell.state.notify(tr(
                         shell.state.language(),
-                        "下载将在 Phase 2 接入",
-                        "Downloads arrive in Phase 2",
+                        "下载器将在 Phase 2 下一步接入",
+                        "The downloader arrives next in Phase 2",
                     ));
                     cx.notify();
                 })),

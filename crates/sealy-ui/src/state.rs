@@ -11,6 +11,42 @@ use crate::theme::ThemeTokens;
 /// Number of first-run wizard steps.
 pub const OOBE_STEPS: usize = 3;
 
+/// Which versions the downloads page lists.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum VersionFilter {
+    /// Release and snapshot builds.
+    #[default]
+    All,
+    /// Stable releases only.
+    Release,
+    /// Snapshots and older experimental builds.
+    Snapshot,
+}
+
+impl VersionFilter {
+    /// Next filter in the toggle order.
+    pub fn next(self) -> Self {
+        match self {
+            Self::All => Self::Release,
+            Self::Release => Self::Snapshot,
+            Self::Snapshot => Self::All,
+        }
+    }
+}
+
+/// Remote data shown on the downloads page.
+#[derive(Debug, Clone, Default)]
+pub struct DownloadsState {
+    /// Fetched manifest, once available.
+    pub manifest: Option<sealy_core::manifest::VersionManifest>,
+    /// Last fetch failure, shown instead of the list.
+    pub error: Option<String>,
+    /// Whether a fetch is in flight.
+    pub loading: bool,
+    /// Active kind filter.
+    pub filter: VersionFilter,
+}
+
 /// Top-level pages.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Route {
@@ -99,6 +135,8 @@ pub struct ShellState {
     pub notice: Option<String>,
     /// Active first-run wizard step; `None` once the wizard is done.
     pub oobe_step: Option<usize>,
+    /// Downloads page data.
+    pub downloads: DownloadsState,
 }
 
 impl ShellState {
@@ -111,6 +149,7 @@ impl ShellState {
             paths: bootstrap.paths,
             notice: None,
             oobe_step: first_run.then_some(0),
+            downloads: DownloadsState::default(),
         }
     }
 

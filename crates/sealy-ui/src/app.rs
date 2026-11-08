@@ -53,7 +53,7 @@ impl Render for SealyShell {
         }
 
         let tokens = self.state.theme();
-        let page = pages::render(&self.state, cx);
+        let page = pages::render(&mut self.state, cx);
         let notice = self
             .state
             .notice
