@@ -168,6 +168,23 @@ impl SealyShell {
     /// Window-wide shortcuts: Enter runs the primary action, Escape steps back,
     /// digits jump between pages.
     fn handle_key(&mut self, keystroke: &Keystroke, cx: &mut Context<Self>) {
+        // The offline account editor captures typing while it is open.
+        if self.state.account_draft.is_some() {
+            match keystroke.key.as_str() {
+                "enter" => self.state.commit_account(),
+                "escape" => self.state.cancel_account(),
+                "backspace" => self.state.pop_account_char(),
+                key if key.chars().count() == 1 => {
+                    if let Some(ch) = key.chars().next() {
+                        self.state.push_account_char(ch);
+                    }
+                }
+                _ => {}
+            }
+            cx.notify();
+            return;
+        }
+
         let modifiers = &keystroke.modifiers;
         if modifiers.control || modifiers.alt || modifiers.platform || modifiers.shift {
             return;

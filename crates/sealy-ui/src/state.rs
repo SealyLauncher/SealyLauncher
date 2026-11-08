@@ -216,6 +216,12 @@ pub struct ShellState {
     pub installed: Vec<sealy_core::version::InstalledVersion>,
     /// Known instances and the current selection.
     pub instances: sealy_core::instances::InstanceBook,
+    /// Known accounts and the current selection.
+    pub accounts: sealy_core::accounts::AccountBook,
+    /// Inline account name buffer while adding an offline account.
+    pub account_draft: Option<String>,
+    /// Whether the new-instance version picker is open.
+    pub new_instance_open: bool,
 }
 
 impl ShellState {
@@ -224,6 +230,7 @@ impl ShellState {
         let first_run = !bootstrap.paths.settings_file().exists();
         let instances =
             sealy_core::instances::InstanceBook::load(&bootstrap.paths.instances_file());
+        let accounts = sealy_core::accounts::AccountBook::load(&bootstrap.paths.accounts_file());
         Self {
             route: Route::Home,
             settings: bootstrap.settings,
@@ -238,6 +245,9 @@ impl ShellState {
             java: Vec::new(),
             installed: Vec::new(),
             instances,
+            accounts,
+            account_draft: None,
+            new_instance_open: false,
         }
     }
 
@@ -251,6 +261,71 @@ impl ShellState {
         if let Err(err) = self.instances.save(&self.paths.instances_file()) {
             tracing::warn!(error = %err, "failed to save instances");
         }
+    }
+
+    /// Persists the account book.
+    pub fn save_accounts(&mut self) {
+        if let Err(err) = self.accounts.save(&self.paths.accounts_file()) {
+            tracing::warn!(error = %err, "failed to save accounts");
+        }
+    }
+
+    /// Opens the inline name editor for a new offline account.
+    pub fn begin_account(&mut self) {
+        self.account_draft = Some(String::new());
+    }
+
+    /// Feeds one typed character into the draft.
+    pub fn push_account_char(&mut self, ch: char) {
+        if let Some(draft) = &mut self.account_draft
+            && draft.chars().count() < 16
+            && (ch.is_alphanumeric() || ch == '_')
+        {
+            draft.push(ch);
+        }
+    }
+
+    /// Removes the last character of the draft.
+    pub fn pop_account_char(&mut self) {
+        if let Some(draft) = &mut self.account_draft {
+            draft.pop();
+        }
+    }
+
+    /// Commits the draft as an offline account.
+    pub fn commit_account(&mut self) {
+        let Some(draft) = self.account_draft.take() else {
+            return;
+        };
+        let name = draft.trim().to_owned();
+        if name.is_empty() {
+            return;
+        }
+        let mut chars = name.chars();
+        let display = match chars.next() {
+            Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
+            None => name,
+        };
+        self.accounts
+            .add(sealy_core::accounts::Account::offline(&display));
+        self.save_accounts();
+    }
+
+    /// Closes the draft without creating anything.
+    pub fn cancel_account(&mut self) {
+        self.account_draft = None;
+    }
+
+    /// Removes the named account.
+    pub fn remove_account(&mut self, name: &str) {
+        self.accounts.remove(name);
+        self.save_accounts();
+    }
+
+    /// Selects the named account.
+    pub fn select_account(&mut self, name: &str) {
+        self.accounts.select(name);
+        self.save_accounts();
     }
 
     /// Creates an instance for `version_id` and selects it.

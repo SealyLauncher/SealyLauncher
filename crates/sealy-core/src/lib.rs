@@ -3,6 +3,7 @@
 //! This crate must stay UI-agnostic: it must never depend on GPUI or any
 //! presentation-layer crate.
 
+pub mod accounts;
 pub mod assets;
 pub mod config;
 pub mod error;

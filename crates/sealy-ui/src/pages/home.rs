@@ -23,6 +23,12 @@ const PLACEHOLDER_USER: &str = "Haikuorenyuyue";
 pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyElement {
     let t = state.theme();
     let lang = state.language();
+    let user = state
+        .accounts
+        .current()
+        .map(|account| account.name.clone())
+        .unwrap_or_else(|| PLACEHOLDER_USER.to_owned());
+
     let (instance_name, instance_meta) = match state.instances.current() {
         Some(instance) => (
             instance.name.clone(),
@@ -94,7 +100,7 @@ pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyEle
         .size_full()
         .flex()
         .flex_col()
-        .child(head_band_carousel(&t, lang, state.settings.motion))
+        .child(head_band_carousel(&t, lang, state.settings.motion, &user))
         .child(
             div()
                 .flex_1()
@@ -326,7 +332,7 @@ fn action_bar_content(
 /// Head band whose title crossfades between the launcher name and the signed-in
 /// greeting on an eight-second loop. When motion is disabled the launcher name
 /// stays put.
-fn head_band_carousel(t: &ThemeTokens, lang: Language, motion: MotionSetting) -> Div {
+fn head_band_carousel(t: &ThemeTokens, lang: Language, motion: MotionSetting, user: &str) -> Div {
     let _ = lang;
 
     let mut band = div()
@@ -352,7 +358,7 @@ fn head_band_carousel(t: &ThemeTokens, lang: Language, motion: MotionSetting) ->
     }
 
     let clock = Animation::new(Duration::from_secs(8)).repeat_synced();
-    let greeting = format!("Hi，{PLACEHOLDER_USER}");
+    let greeting = format!("Hi，{user}");
 
     band = band.child(
         div()

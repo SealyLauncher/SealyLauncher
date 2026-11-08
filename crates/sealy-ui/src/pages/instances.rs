@@ -21,7 +21,9 @@ pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyEle
         .map(|instance| row(instance, state, &t, cx))
         .collect::<Vec<_>>();
 
-    let body = if rows.is_empty() {
+    let body = if state.new_instance_open {
+        picker(state, &t, lang, cx)
+    } else if rows.is_empty() {
         empty(&t, lang)
     } else {
         div()
@@ -92,16 +94,15 @@ pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyEle
                         .role(Role::Button)
                         .aria_label("new-instance")
                         .on_click(cx.listener(|shell, _, _, cx| {
-                            let lang = shell.state.language();
-                            match shell.state.installed.first().map(|v| v.id.clone()) {
-                                Some(version_id) => {
-                                    shell.state.create_instance(&version_id);
-                                }
-                                None => shell.state.notify(tr(
+                            if shell.state.installed.is_empty() {
+                                let lang = shell.state.language();
+                                shell.state.notify(tr(
                                     lang,
                                     "请先在下载页安装一个版本",
                                     "Install a version from Downloads first",
-                                )),
+                                ));
+                            } else {
+                                shell.state.new_instance_open = true;
                             }
                             cx.notify();
                         })),
@@ -116,6 +117,68 @@ pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyEle
                             launch_flow::start_selected(&mut shell.state, cx);
                         })),
                 ),
+        )
+        .into_any_element()
+}
+
+/// Version picker shown while creating an instance.
+fn picker(
+    state: &ShellState,
+    t: &ThemeTokens,
+    lang: sealy_core::config::Language,
+    cx: &mut Context<SealyShell>,
+) -> AnyElement {
+    let mut choices = div().flex().flex_wrap().gap(px(10.0));
+
+    if state.installed.is_empty() {
+        choices = choices.child(div().text_size(px(12.0)).text_color(rgb(t.muted)).child(tr(
+            lang,
+            "还没有已安装的版本，请先去下载页安装",
+            "No installed version — install one from Downloads",
+        )));
+    } else {
+        for version in state.installed.iter().take(8) {
+            let id = version.id.clone();
+            choices = choices.child(
+                quiet_button(version.id.clone(), t)
+                    .id(("pick", version.id.len()))
+                    .role(Role::Button)
+                    .aria_label(format!("pick {}", version.id))
+                    .on_click(cx.listener(move |shell, _, _, cx| {
+                        shell.state.create_instance(&id);
+                        shell.state.new_instance_open = false;
+                        cx.notify();
+                    })),
+            );
+        }
+    }
+
+    div()
+        .flex_1()
+        .flex()
+        .flex_col()
+        .items_start()
+        .gap(px(16.0))
+        .pt(px(22.0))
+        .child(
+            div()
+                .text_size(px(13.0))
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(rgb(t.text))
+                .child(tr(lang, "选择版本", "Choose a version")),
+        )
+        .child(choices)
+        .child(
+            div().flex().child(
+                quiet_button(tr(lang, "取消", "Cancel"), t)
+                    .id("pick-cancel")
+                    .role(Role::Button)
+                    .aria_label("pick-cancel")
+                    .on_click(cx.listener(|shell, _, _, cx| {
+                        shell.state.new_instance_open = false;
+                        cx.notify();
+                    })),
+            ),
         )
         .into_any_element()
 }

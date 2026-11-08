@@ -42,7 +42,14 @@ pub(crate) fn start(state: &mut ShellState, instance: Instance, cx: &mut Context
     let memory = state.settings.java.memory.max_mb;
     let width = state.settings.launch.width;
     let height = state.settings.launch.height;
-    let username = "Haikuorenyuyue".to_owned();
+    let (username, uuid) = match state.accounts.current() {
+        Some(account) => (account.name.clone(), account.uuid.clone()),
+        None => {
+            let name = "Player".to_owned();
+            let uuid = sealy_core::accounts::offline_uuid(&name);
+            (name, uuid)
+        }
+    };
     let instance_name = instance.name.clone();
     let version_id = instance.version_id.clone();
 
@@ -57,6 +64,7 @@ pub(crate) fn start(state: &mut ShellState, instance: Instance, cx: &mut Context
                 width,
                 height,
                 username,
+                uuid,
             )
         });
 
@@ -99,6 +107,7 @@ fn launch_blocking(
     width: u32,
     height: u32,
     username: String,
+    uuid: String,
 ) -> Result<String, String> {
     let document = root
         .join("versions")
@@ -117,7 +126,6 @@ fn launch_blocking(
         .or_else(|| java_list.first())
         .ok_or_else(|| "没有可用的 Java，请先在下载页安装该版本".to_owned())?;
 
-    let uuid = offline_uuid(&username);
     let spec = sealy_core::launch::LaunchSpec {
         root: &root,
         game_dir: &instance_dir,
@@ -143,30 +151,6 @@ fn launch_blocking(
         status.code().unwrap_or(-1),
         log.display()
     ))
-}
-
-/// Deterministic offline UUID so worlds keep the same player identity.
-pub(crate) fn offline_uuid(name: &str) -> String {
-    use sha1::{Digest, Sha1};
-
-    let mut hasher = Sha1::new();
-    hasher.update(format!("OfflinePlayer:{name}").as_bytes());
-    let digest = hasher.finalize();
-
-    let mut bytes = [0_u8; 16];
-    bytes.copy_from_slice(&digest[..16]);
-    bytes[6] = (bytes[6] & 0x0f) | 0x30;
-    bytes[8] = (bytes[8] & 0x3f) | 0x80;
-
-    let hex: String = bytes.iter().map(|byte| format!("{byte:02x}")).collect();
-    format!(
-        "{}-{}-{}-{}-{}",
-        &hex[0..8],
-        &hex[8..12],
-        &hex[12..16],
-        &hex[16..20],
-        &hex[20..32]
-    )
 }
 
 /// Seconds since the Unix epoch.
