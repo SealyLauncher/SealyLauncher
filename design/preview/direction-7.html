@@ -1,0 +1,815 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>SealyLauncher · 方向 07</title>
+<style>
+  :root {
+    --canvas: #f2f1ed;
+    --paper: #ffffff;
+    --ink: #0b0b0b;
+    --ink-2: #34332f;
+    --muted: #7c7970;
+    --faint: #a8a49a;
+    --line: #d9d6ce;
+    --line-2: #e8e5dd;
+    --black: #0c0c0c;
+    --accent: #f1641e;
+    --r-sm: 4px;
+    --r-md: 6px;
+    --r-lg: 10px;
+    --ease: cubic-bezier(0.22, 1, 0.36, 1);
+    --sans: "Inter", "Segoe UI Variable Text", "Segoe UI", "PingFang SC", "Microsoft YaHei UI", system-ui, sans-serif;
+    --mono: ui-monospace, "SFMono-Regular", "Cascadia Mono", "Consolas", "Roboto Mono", monospace;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    display: grid;
+    place-items: center;
+    background: #d5d3cd;
+    font-family: var(--sans);
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .mono {
+    font-family: var(--mono);
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    font-size: 10.5px;
+    font-weight: 500;
+  }
+
+  .win {
+    position: relative;
+    width: 1280px;
+    height: 800px;
+    background: var(--canvas);
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 26px 64px rgba(20, 19, 15, 0.26), 0 2px 6px rgba(20, 19, 15, 0.1);
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ---------------- top strip ---------------- */
+  .top {
+    height: 42px;
+    flex: none;
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
+    border-bottom: 1px solid var(--line);
+    gap: 16px;
+  }
+  .dots { display: flex; gap: 7px; }
+  .dots i { width: 11px; height: 11px; border-radius: 50%; display: block; }
+  .dots i:nth-child(1) { background: #ff5f57; }
+  .dots i:nth-child(2) { background: #febc2e; }
+  .dots i:nth-child(3) { background: #28c840; }
+
+  .brand {
+    display: flex;
+    align-items: baseline;
+    gap: 7px;
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+  }
+  .brand span { color: var(--faint); font-weight: 500; }
+
+  .top .spacer { flex: 1; }
+  .top .state { display: flex; align-items: center; gap: 8px; color: var(--muted); }
+  .top .state i { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); display: block; }
+
+  /* ---------------- hero ---------------- */
+  .hero {
+    flex: none;
+    height: 306px;
+    display: grid;
+    grid-template-columns: 1fr 512px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .hero-l {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 18px;
+    padding: 0 20px 30px 40px;
+    min-width: 0;
+  }
+  .hero-foot {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 34px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0 20px 0 40px;
+    border-top: 1px solid var(--line);
+    color: var(--muted);
+  }
+  .hero-foot i { width: 3px; height: 3px; border-radius: 50%; background: var(--faint); display: block; }
+
+  .kicker { display: flex; align-items: center; gap: 12px; color: var(--muted); }
+  .kicker .idx {
+    display: inline-grid;
+    place-items: center;
+    width: 22px;
+    height: 18px;
+    background: var(--ink);
+    color: var(--canvas);
+    border-radius: 3px;
+    font-size: 10px;
+    letter-spacing: 0.02em;
+  }
+  .kicker .rule { width: 44px; height: 1px; background: var(--line); }
+
+  h1 {
+    font-size: 54px;
+    line-height: 0.96;
+    font-weight: 650;
+    letter-spacing: -0.035em;
+  }
+  h1 .ver {
+    font-family: var(--mono);
+    font-weight: 400;
+    font-size: 0.88em;
+    letter-spacing: -0.02em;
+    color: var(--ink-2);
+  }
+
+  .meta-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--muted);
+    flex-wrap: wrap;
+  }
+  .meta-row .sep { width: 3px; height: 3px; background: var(--faint); border-radius: 50%; }
+
+  .actions { display: flex; align-items: center; gap: 10px; margin-top: 4px; }
+
+  .primary {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    height: 46px;
+    padding: 0 22px;
+    border: 1px solid #d24f10;
+    border-radius: var(--r-md);
+    background: var(--accent);
+    color: #fff;
+    font-family: inherit;
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    cursor: pointer;
+    transition: background 0.15s var(--ease);
+  }
+  .primary:hover { background: #ff7331; }
+  .primary svg { width: 15px; height: 15px; }
+
+  .ghost {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    height: 46px;
+    padding: 0 16px;
+    border: 1px solid var(--line);
+    border-radius: var(--r-md);
+    background: transparent;
+    color: var(--ink-2);
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.15s var(--ease), border-color 0.15s var(--ease);
+  }
+  .ghost:hover { background: #eae8e2; border-color: #c9c5bb; }
+  .ghost svg { width: 13px; height: 13px; color: var(--muted); }
+
+  .hero-r {
+    position: relative;
+    overflow: hidden;
+    background: #100e1a;
+    border-left: 1px solid var(--line);
+  }
+  .hero-r svg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+    image-rendering: pixelated;
+  }
+  .hero-r::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, rgba(9, 8, 15, 0.24) 0%, rgba(9, 8, 15, 0) 34%),
+      linear-gradient(0deg, rgba(9, 8, 15, 0.66) 0%, rgba(9, 8, 15, 0) 30%);
+  }
+  .hero-r .caption {
+    position: absolute;
+    left: 18px;
+    bottom: 14px;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    color: rgba(255, 255, 255, 0.72);
+  }
+  .hero-r .caption b { color: #fff; font-weight: 600; letter-spacing: 0.04em; }
+  .crosshair {
+    position: absolute;
+    z-index: 3;
+    width: 11px;
+    height: 11px;
+    pointer-events: none;
+  }
+  .crosshair::before,
+  .crosshair::after {
+    content: "";
+    position: absolute;
+    background: var(--line);
+  }
+  .crosshair::before { left: 0; top: 5px; width: 11px; height: 1px; }
+  .crosshair::after { top: 0; left: 5px; height: 11px; width: 1px; }
+  .crosshair.tl { left: -6px; top: -6px; }
+  .crosshair.bl { left: -6px; bottom: -6px; }
+
+  /* ---------------- dither seam (image fringe only) ---------------- */
+  .seam-row {
+    display: flex;
+    flex: none;
+    height: 14px;
+    border-bottom: 1px solid var(--line);
+    background: var(--canvas);
+  }
+  .seam-row .pad { flex: 1; }
+  .seam {
+    display: block;
+    width: 512px;
+    height: 14px;
+    flex: none;
+    border-left: 1px solid var(--line);
+  }
+
+  /* ---------------- content grid ---------------- */
+  .grid {
+    flex: 1;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: 1fr 356px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .panel { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+  .panel + .panel { border-left: 1px solid var(--line); }
+
+  .panel-head {
+    height: 40px;
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 40px;
+    border-bottom: 1px solid var(--line);
+    color: var(--muted);
+  }
+  .panel-head .n { color: var(--ink); }
+
+  /* rows */
+  .rows { display: flex; flex-direction: column; }
+  .row {
+    display: grid;
+    grid-template-columns: 1fr 172px 96px 22px;
+    align-items: center;
+    gap: 16px;
+    padding: 0 40px;
+    height: 62px;
+    border-bottom: 1px solid var(--line-2);
+    cursor: pointer;
+    transition: background 0.14s var(--ease);
+  }
+  .row:hover { background: #eceae4; }
+  .row .name {
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .row .name em {
+    font-style: normal;
+    color: var(--faint);
+    font-weight: 500;
+    margin-left: 8px;
+  }
+  .row .desc { color: var(--muted); font-size: 11px; }
+  .row .when { color: var(--muted); text-align: right; }
+  .row .go { color: var(--faint); display: grid; place-items: center; }
+  .row:hover .go { color: var(--ink); }
+  .row .go svg { width: 13px; height: 13px; }
+
+  .empty {
+    margin: 18px 40px;
+    padding: 18px 20px;
+    border: 1px dashed #c9c5bb;
+    border-radius: var(--r-md);
+  }
+  .empty .t { font-size: 14px; font-weight: 600; }
+  .empty .h { margin-top: 5px; color: var(--muted); font-size: 12px; }
+
+  .panel-note {
+    margin-top: auto;
+    padding: 14px 40px;
+    border-top: 1px solid var(--line-2);
+    color: var(--muted);
+  }
+
+  /* side panel */
+  .side-body { padding: 20px 24px 20px; display: flex; flex-direction: column; gap: 14px; }
+  .stats-black {
+    background: var(--black);
+    border-radius: var(--r-md);
+    padding: 18px 18px 16px;
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+  }
+  .stat { padding: 0 10px; }
+  .stat + .stat { border-left: 1px solid rgba(255, 255, 255, 0.12); }
+  .stat .k {
+    color: rgba(255, 255, 255, 0.45);
+    font-size: 9.5px;
+    letter-spacing: 0.1em;
+    margin-bottom: 11px;
+  }
+  .stat .v { display: flex; align-items: baseline; gap: 5px; }
+  .stat svg { height: 20px; width: auto; display: block; }
+  .stat .u { color: rgba(255, 255, 255, 0.4); font-size: 9px; letter-spacing: 0.1em; }
+
+  .kv { display: flex; flex-direction: column; gap: 0; }
+  .kv-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 34px;
+    border-bottom: 1px solid var(--line-2);
+  }
+  .kv-row:first-child { border-top: 1px solid var(--line-2); }
+  .kv-row .k { color: var(--muted); }
+  .kv-row .v { font-size: 12px; font-weight: 500; }
+  .kv-row .v.warn { color: var(--accent); }
+
+  /* ---------------- footer ---------------- */
+  .foot {
+    height: 76px;
+    flex: none;
+    display: flex;
+    align-items: center;
+    padding: 0 24px;
+    gap: 16px;
+  }
+  .crumbs {
+    display: flex;
+    align-items: center;
+    height: 38px;
+    border: 1px solid var(--line);
+    border-radius: var(--r-md);
+    background: var(--paper);
+    padding: 0 4px 0 2px;
+  }
+  .crumb-btn {
+    width: 30px;
+    height: 26px;
+    display: grid;
+    place-items: center;
+    border: 0;
+    border-radius: var(--r-sm);
+    background: transparent;
+    color: var(--faint);
+    cursor: default;
+  }
+  .crumbs .here {
+    padding: 0 10px 0 4px;
+    font-size: 12.5px;
+    font-weight: 600;
+  }
+
+  .dock-wrap { flex: 1; display: flex; justify-content: center; }
+  .dock {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 5px;
+    border-radius: var(--r-lg);
+    background: var(--paper);
+    border: 1px solid var(--line);
+  }
+  .dock button {
+    position: relative;
+    width: 50px;
+    height: 40px;
+    display: grid;
+    place-items: center;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--ink-2);
+    cursor: pointer;
+    transition: background 0.14s var(--ease), color 0.14s var(--ease);
+  }
+  .dock button:hover { background: #eceae4; }
+  .dock button.on { background: var(--ink); color: #fff; }
+  .dock button.on svg { transform: translateY(-3px); }
+  .dock button.on::after {
+    content: "";
+    position: absolute;
+    bottom: 5px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: var(--accent);
+  }
+  .dock svg { width: 18px; height: 18px; }
+
+  .right { display: flex; align-items: center; gap: 8px; }
+  .who {
+    width: 38px;
+    height: 38px;
+    display: grid;
+    place-items: center;
+    border-radius: var(--r-md);
+    border: 1px solid var(--line);
+    background: var(--paper);
+    font-size: 13px;
+    font-weight: 700;
+    color: #8b2fa8;
+  }
+  .instance {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    height: 38px;
+    padding: 0 10px 0 6px;
+    border: 1px solid var(--line);
+    border-radius: var(--r-md);
+    background: var(--paper);
+    font-size: 12.5px;
+    font-weight: 600;
+  }
+  .instance .ico { width: 22px; height: 22px; border-radius: 3px; overflow: hidden; }
+  .instance .ico svg { width: 22px; height: 22px; display: block; image-rendering: pixelated; }
+  .instance svg.caret { width: 12px; height: 12px; color: var(--faint); }
+</style>
+</head>
+<body>
+  <div class="win">
+    <header class="top">
+      <div class="dots"><i></i><i></i><i></i></div>
+      <div class="brand">SEALY <span>LAUNCHER</span></div>
+      <div class="spacer"></div>
+      <div class="state mono"><i></i>就绪</div>
+      <div class="state mono">v0.1.0 · PORTABLE</div>
+    </header>
+
+    <section class="hero">
+      <div class="hero-l">
+        <div class="kicker">
+          <span class="idx mono">01</span>
+          <span class="rule"></span>
+          <span class="mono">接着上次</span>
+        </div>
+        <h1>Fabric<br><span class="ver">1.21.11</span></h1>
+        <div class="meta-row mono">
+          <span>1.21.11</span>
+          <span class="sep"></span>
+          <span>Fabric 0.16.5</span>
+          <span class="sep"></span>
+          <span>Java 17</span>
+          <span class="sep"></span>
+          <span>4096 MB</span>
+        </div>
+        <div class="actions">
+          <button class="primary">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.2v13.6L19 12z"/></svg>
+            继续
+          </button>
+          <button class="ghost">
+            打开目录
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+          </button>
+        </div>
+        <div class="hero-foot mono">
+          <span>Java 17.0.9</span><i></i><span>内存 512–4096 MB</span><i></i><span>BMCLAPI · 12ms</span>
+        </div>
+      </div>
+
+      <div class="hero-r">
+        <svg id="scene" viewBox="0 0 160 88" preserveAspectRatio="none" aria-hidden="true"></svg>
+        <div class="caption mono"><b>世界</b> Aurora · 上次 2 小时前</div>
+      </div>
+      <div class="crosshair tl"></div>
+      <div class="crosshair bl"></div>
+    </section>
+
+    <div class="seam-row">
+      <div class="pad"></div>
+      <svg class="seam" id="seam" viewBox="0 0 160 3" preserveAspectRatio="none" aria-hidden="true"></svg>
+    </div>
+
+    <main class="grid">
+      <section class="panel">
+        <div class="panel-head">
+          <span class="mono">最近启动 <span class="n">03</span></span>
+          <span class="mono">按时间排序</span>
+        </div>
+        <div class="rows">
+          <div class="row">
+            <div class="name">Fabric 1.21.11 <em>默认</em></div>
+            <div class="desc mono">1.21.11 · FABRIC</div>
+            <div class="when mono">2 小时前</div>
+            <div class="go"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
+          </div>
+          <div class="row">
+            <div class="name">Vanilla 1.21.4</div>
+            <div class="desc mono">1.21.4 · VANILLA</div>
+            <div class="when mono">昨天</div>
+            <div class="go"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
+          </div>
+          <div class="row">
+            <div class="name">Aurora 整合包</div>
+            <div class="desc mono">1.20.1 · 128 MODS</div>
+            <div class="when mono">3 天前</div>
+            <div class="go"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
+          </div>
+        </div>
+        <div class="panel-note mono">还没有世界 · 按「继续」进入游戏后，世界会出现在这里</div>
+      </section>
+
+      <aside class="panel">
+        <div class="panel-head">
+          <span class="mono">游戏记录</span>
+          <span class="mono">ALL TIME</span>
+        </div>
+        <div class="side-body">
+          <div class="stats-black">
+            <div class="stat">
+              <div class="k mono">游玩时间</div>
+              <div class="v"><svg id="d-min" viewBox="0 0 24 20"></svg><span class="u mono">MIN</span></div>
+            </div>
+            <div class="stat">
+              <div class="k mono">世界</div>
+              <div class="v"><svg id="d-world" viewBox="0 0 24 20"></svg></div>
+            </div>
+            <div class="stat">
+              <div class="k mono">服务器</div>
+              <div class="v"><svg id="d-server" viewBox="0 0 24 20"></svg></div>
+            </div>
+          </div>
+
+          <div class="kv">
+            <div class="kv-row"><span class="k mono">Java</span><span class="v">17.0.9 · Microsoft</span></div>
+            <div class="kv-row"><span class="k mono">内存</span><span class="v">512 – 4096 MB</span></div>
+            <div class="kv-row"><span class="k mono">下载源</span><span class="v">自动 · BMCLAPI</span></div>
+            <div class="kv-row"><span class="k mono">待处理</span><span class="v warn">2 项更新</span></div>
+          </div>
+        </div>
+      </aside>
+    </main>
+
+    <footer class="foot">
+      <div class="crumbs">
+        <button class="crumb-btn" aria-label="后退">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 6-6 6 6 6"/></svg>
+        </button>
+        <button class="crumb-btn" aria-label="前进">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 6 6 6-6 6"/></svg>
+        </button>
+        <span class="here">首页</span>
+      </div>
+
+      <div class="dock-wrap">
+        <nav class="dock">
+          <button class="on" aria-label="首页">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-4.5v-6h-5v6H5a1 1 0 0 1-1-1z"/></svg>
+          </button>
+          <button aria-label="实例">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3.5" y="4.5" width="17" height="6" rx="1.4"/><rect x="3.5" y="13.5" width="17" height="6" rx="1.4"/></svg>
+          </button>
+          <button aria-label="下载">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 3.5v10M8.2 10l3.8 3.8 3.8-3.8"/><path d="M4.5 17.5v1.6a1.4 1.4 0 0 0 1.4 1.4h12.2a1.4 1.4 0 0 0 1.4-1.4v-1.6"/></svg>
+          </button>
+          <button aria-label="活动">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3.5 14h4l2.6-7 3.2 11 2.5-6h4.7"/></svg>
+          </button>
+          <button aria-label="账号">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="9" r="3.4"/><path d="M5.5 19.5a6.5 6.5 0 0 1 13 0"/></svg>
+          </button>
+          <button aria-label="设置">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="2.6"/><path d="M12 4v2.2M12 17.8V20M4 12h2.2M17.8 12H20M6.3 6.3l1.6 1.6M16.1 16.1l1.6 1.6M17.7 6.3l-1.6 1.6M7.9 16.1l-1.6 1.6"/></svg>
+          </button>
+        </nav>
+      </div>
+
+      <div class="right">
+        <div class="who">L</div>
+        <div class="instance">
+          <div class="ico"><svg id="block" viewBox="0 0 16 16"></svg></div>
+          <span>Fabric 1.21.11</span>
+          <svg class="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m7 10 5 5 5-5"/></svg>
+        </div>
+      </div>
+    </footer>
+  </div>
+
+<script>
+const NS = "http://www.w3.org/2000/svg";
+const px = (parent, x, y, w, h, fill, opacity) => {
+  const r = document.createElementNS(NS, "rect");
+  r.setAttribute("x", x); r.setAttribute("y", y);
+  r.setAttribute("width", w); r.setAttribute("height", h);
+  r.setAttribute("fill", fill);
+  if (opacity !== undefined) r.setAttribute("opacity", opacity);
+  parent.appendChild(r);
+};
+function rng(seed) {
+  return function () {
+    seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/* ------------- hero pixel scene ------------- */
+(function scene() {
+  const svg = document.getElementById("scene");
+  const W = 160, H = 88;
+  const r = rng(20261109);
+
+  const defs = document.createElementNS(NS, "defs");
+  defs.innerHTML =
+    '<linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">' +
+    '<stop offset="0" stop-color="#0b0a14"/><stop offset="0.5" stop-color="#131126"/>' +
+    '<stop offset="0.82" stop-color="#1d1730"/><stop offset="1" stop-color="#241a33"/>' +
+    "</linearGradient>";
+  svg.appendChild(defs);
+  px(svg, 0, 0, W, H, "url(#sky)");
+
+  // sparse bright stars (restraint: fewer, brighter)
+  for (let i = 0; i < 70; i++) {
+    const x = Math.floor(r() * W), y = Math.floor(r() * 46);
+    const s = r() < 0.9 ? 1 : 2;
+    px(svg, x, y, s, s, r() < 0.15 ? "#ffd9a8" : "#e7e4f7", (0.25 + r() * 0.6).toFixed(2));
+  }
+
+  // moon
+  px(svg, 118, 8, 11, 11, "#f0eefb", 0.96);
+  px(svg, 120, 8, 7, 11, "#fbfaff", 0.9);
+  px(svg, 116, 10, 15, 7, "#f0eefb", 0.07);
+  px(svg, 121, 11, 2, 2, "#cfcae6", 0.55);
+
+  // ridge
+  for (let x = 0; x < W; ) {
+    const w = 5 + Math.floor(r() * 6), h = 2 + Math.floor(r() * 6);
+    px(svg, x, 62 - h, w, h, "#141227", 0.95);
+    x += w;
+  }
+  for (let x = 0; x < W; x += 3) {
+    const h = 3 + Math.floor(r() * 4);
+    px(svg, x, 58 - h, 3, h, "#1a1830", 0.9);
+  }
+
+  // ground
+  px(svg, 0, 70, W, 3, "#22301a");
+  px(svg, 0, 73, W, 2, "#2a381c");
+  px(svg, 0, 75, W, 13, "#221911");
+  px(svg, 0, 75, W, 1, "#18110b");
+  for (let i = 0; i < 110; i++) {
+    px(svg, Math.floor(r() * W), 69, 1, 2, r() < 0.5 ? "#3b5020" : "#2f4a1d", 0.85);
+  }
+  for (let i = 0; i < 70; i++) {
+    px(svg, Math.floor(r() * W), 76 + Math.floor(r() * 11), 1, 1, r() < 0.5 ? "#1a120c" : "#2b2015", 0.9);
+  }
+
+  // tree
+  px(svg, 30, 55, 3, 16, "#2b1d12");
+  px(svg, 27, 62, 3, 2, "#2b1d12");
+  px(svg, 27, 48, 10, 6, "#1d3318");
+  px(svg, 25, 51, 14, 5, "#183016");
+  px(svg, 29, 44, 6, 5, "#22401c");
+  px(svg, 31, 42, 3, 3, "#284a20");
+
+  // house
+  const hx = 96, hy = 58;
+  px(svg, hx, hy + 6, 24, 18, "#291b12");
+  px(svg, hx, hy + 6, 24, 1, "#382518");
+  px(svg, hx - 2, hy + 4, 28, 3, "#3b2617");
+  px(svg, hx + 1, hy, 22, 4, "#452a19");
+  px(svg, hx + 4, hy - 3, 16, 3, "#50321c");
+  px(svg, hx + 7, hy - 5, 10, 2, "#59391f");
+  px(svg, hx + 4, hy + 11, 5, 5, "#ffb347");
+  px(svg, hx + 15, hy + 11, 5, 5, "#ffb347");
+  px(svg, hx + 4, hy + 11, 5, 5, "#ffd88c", 0.45);
+  px(svg, hx + 15, hy + 11, 5, 5, "#ffd88c", 0.45);
+  px(svg, hx + 10, hy + 15, 4, 9, "#170f09");
+  px(svg, hx + 2, hy + 9, 9, 9, "#ffb347", 0.05);
+  px(svg, hx + 13, hy + 9, 9, 9, "#ffb347", 0.05);
+
+  // torch
+  const tx = 74, ty = 62;
+  px(svg, tx, ty + 2, 2, 12, "#392818");
+  px(svg, tx - 1, ty, 4, 3, "#ff7a18");
+  px(svg, tx - 1, ty - 2, 4, 2, "#ffc24a");
+  px(svg, tx, ty - 3, 2, 1, "#ffe7a3");
+  px(svg, tx - 8, ty - 6, 18, 18, "#ff7a18", 0.045);
+  px(svg, tx - 5, ty - 3, 12, 12, "#ff7a18", 0.06);
+
+  // fireflies
+  for (let i = 0; i < 22; i++) {
+    px(svg, Math.floor(r() * W), 56 + Math.floor(r() * 14), 1, 1, "#8fe36b", (0.2 + r() * 0.45).toFixed(2));
+  }
+})();
+
+/* ------------- dither seam ------------- */
+(function seam() {
+  const svg = document.getElementById("seam");
+  const W = 160, H = 3;
+  px(svg, 0, 0, W, H, "#f2f1ed");
+  const tones = ["#3b3450", "#7b7389", "#c2bccb"];
+  for (let row = 0; row < H; row++) {
+    for (let col = 0; col < W; col++) {
+      if ((col + row) % 2 === 0) px(svg, col, row, 1, 1, tones[row]);
+    }
+  }
+})();
+
+/* ------------- 5x7 pixel digits ------------- */
+const DIGITS = {
+  "0": ["01110","10001","10011","10101","11001","10001","01110"],
+  "1": ["00100","01100","00100","00100","00100","00100","01110"],
+  "2": ["01110","10001","00001","00010","00100","01000","11111"],
+  "3": ["11110","00001","00001","01110","00001","00001","11110"],
+  "4": ["00010","00110","01010","10010","11111","00010","00010"],
+  "5": ["11111","10000","11110","00001","00001","10001","01110"],
+  "6": ["00110","01000","10000","11110","10001","10001","01110"],
+  "7": ["11111","00001","00010","00100","01000","01000","01000"],
+  "8": ["01110","10001","10001","01110","10001","10001","01110"],
+  "9": ["01110","10001","10001","01111","00001","00010","01100"],
+};
+function drawDigits(id, text, color) {
+  const svg = document.getElementById(id);
+  const cell = 3, gap = 3, dh = 7 * cell;
+  let ox = 0;
+  for (const ch of text) {
+    const glyph = DIGITS[ch];
+    if (glyph) {
+      for (let y = 0; y < 7; y++) {
+        for (let x = 0; x < 5; x++) {
+          if (glyph[y][x] === "1") px(svg, ox + x * cell, y * cell, cell, cell, color);
+        }
+      }
+    }
+    ox += 5 * cell + gap;
+  }
+  const w = Math.max(ox - gap, 1);
+  svg.setAttribute("viewBox", `0 0 ${w} ${dh}`);
+  svg.style.width = `${(w / dh) * 20}px`;
+}
+drawDigits("d-min", "128", "#ff6a1a");
+drawDigits("d-world", "04", "#ff6a1a");
+drawDigits("d-server", "01", "#ff6a1a");
+
+/* ------------- grass block icon ------------- */
+(function block() {
+  const svg = document.getElementById("block");
+  px(svg, 0, 0, 16, 6, "#a9d95c");
+  px(svg, 0, 6, 16, 10, "#6f4a2a");
+  px(svg, 0, 6, 16, 1, "#54371f");
+  const tones = ["#8fbf4a", "#7fb03f", "#5c8a2e", "#4a7424"];
+  for (let i = 0; i < 30; i++) {
+    const r = rng(i * 977 + 13)();
+    px(svg, Math.floor(r * 15), 1 + Math.floor(r * 5), 1, 1, tones[Math.floor(r * 4)]);
+  }
+  for (let i = 0; i < 20; i++) {
+    const r = rng(i * 331 + 7)();
+    px(svg, Math.floor(r * 15), 7 + Math.floor(r * 8), 1, 1, "#4a2f1a");
+  }
+  px(svg, 0, 0, 15, 5, "#ffffff", 0.05);
+})();
+</script>
+</body>
+</html>

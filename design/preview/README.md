@@ -21,6 +21,8 @@ Start-Process .\design\preview\index.html
 | 03 | 杂志深色 | 纯排版驱动：大字重、细线、编号元数据、极少装饰 | Linear / Vercel |
 | 04 | Fluent 2 | Windows 11 语言：Mica 底、4/8px 圆角、1px 描边、Segoe UI、accent 填充按钮、NavigationView 选中条 | Windows 11 原生应用 |
 | 05 | Material Design 3 | 深色基线紫（seed #6750A4）：tonal surface、全圆角按钮、导航栏胶囊指示、FAB、state layer | Android / Material You |
+| 06 | 像素叙事 | 暖白画布 + 全幅像素 hero + 抖动接缝 + 橙色强调 + 底部 dock | LumilioCL |
+| 07 | 像素叙事 × 杂志排版 | 分栏 hero（左排版 / 右像素画）、等宽小标签、发丝分隔线、列表化最近启动、黑色记录卡 | LumilioCL + Vercel |
 
 ## 说明
 
