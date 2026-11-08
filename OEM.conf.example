@@ -1,0 +1,23 @@
+# SealyLauncher OEM configuration example.
+#
+# OEM mode is enabled only when this file exists as `OEM.conf` in the
+# launcher root (next to the executable, or next to the .app on macOS).
+# It only affects that launcher copy.
+
+schema = 1
+id = "example-server"
+
+# Local branding (used by the v1 launcher shell).
+display_name = "Example Launcher"
+accent = "#4CC2FF"
+background = "assets/oem-bg.webp"
+logo = "assets/oem-logo.svg"
+
+# Optional defaults.
+server_address = "play.example.com"
+authlib_injector_url = "https://skin.example.com/api/yggdrasil"
+links = { website = "https://example.com" }
+
+# Reserved for the signed remote manifest (not fetched in Phase 1).
+# api_base = "https://launcher.example.com/api/v1"
+# public_key = "base64:..."

@@ -6,15 +6,17 @@ Rust + GPUI 的便携式 Minecraft 启动器，目标平台为 Windows、macOS �
 
 ## 当前状态
 
-- 阶段：Phase 0 Step 1 — 工具链、workspace、GPUI 壳层与 CI 骨架
+- 阶段：Phase 1 — 设计系统、导航、页面骨架与便携发布流程
 - Rust：`1.99.1`（MSVC toolchain，`rust-toolchain.toml` 固定）
 - 实施计划：[docs/PLAN.md](docs/PLAN.md)
 - 变更日志：[CHANGELOG.md](CHANGELOG.md)
 
 Phase 0 已安装 Rust + Visual Studio 2022 Build Tools（C++ 桌面开发 + Windows SDK），
-并建立 `sealy-core` / `sealy-ui` / `sealy-app` workspace 与 CI 骨架。
-Windows 本地 `cargo check` / `clippy` / `test` / `build` 与窗口 smoke 已通过；
-macOS/Linux 仍需通过远端 CI 与真机 smoke 验证。
+并建立 `sealy-core` / `sealy-ui` / `sealy-app` workspace。
+Phase 1 已接入 portable 路径/设置/日志/单实例、GPUI 设计系统、NavRail、
+Home/实例/下载/账号/设置页面，以及 Windows/macOS/Linux 的 CI 与 portable 发布 workflow。
+Windows 本地 `cargo fmt` / `clippy` / `test` / `build` 与窗口 smoke 已通过；
+macOS/Linux 目前只配置构建与打包任务，测试按约定暂不执行。
 
 ## 目标
 
@@ -30,7 +32,17 @@ macOS/Linux 仍需通过远端 CI 与真机 smoke 验证。
 - Windows：Rust stable、Visual Studio 2022 Build Tools（C++ 桌面开发）、Windows SDK。
 - macOS：Rust stable、Xcode / Command Line Tools。
 - Linux：Rust stable，以及 GPUI 所需的 X11/Wayland、Vulkan、字体开发库。
-- 精确版本在 Phase 0 验证后写入 `rust-toolchain.toml` 和 `Cargo.lock`。
+- 精确版本在 `rust-toolchain.toml` 固定，依赖由 `Cargo.lock` 锁定。
+
+## CI / 发布
+
+- [CI](.github/workflows/ci.yml)：Windows 运行 fmt/clippy/test/build；macOS/Linux 目前只构建，测试暂不执行。
+- [Release](.github/workflows/release.yml)：推送 `v*` tag 时生成 portable 包：
+  - Windows x64 `.zip`
+  - macOS universal `.zip`（含 `.app`）
+  - Linux x86_64 `.tar.zst`
+- 发布产物包含 `README.md`、`LICENSE`、`THIRD_PARTY_NOTICES.md`、`OEM.conf.example`，并生成 `SHA256SUMS`。
+- 不产出 MSI/DMG/DEB/RPM/AppImage 安装包。
 
 ## 文档
 

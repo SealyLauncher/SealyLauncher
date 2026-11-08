@@ -12,3 +12,4 @@ workspace = true
 [dependencies]
 sealy-core.workspace = true
 gpui-kit.workspace = true
+tracing.workspace = true
