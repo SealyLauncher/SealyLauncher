@@ -110,7 +110,7 @@ pub(crate) fn render(state: &mut ShellState, cx: &mut Context<SealyShell>) -> An
         )
         .child(
             action_bar(&t)
-                .child(mono(count_label(state, lang), &t))
+                .child(install_status(state, &t, lang))
                 .child(div().flex_1())
                 .child(
                     quiet_button(tr(lang, "刷新", "Refresh"), &t)
@@ -122,6 +122,63 @@ pub(crate) fn render(state: &mut ShellState, cx: &mut Context<SealyShell>) -> An
                             cx.notify();
                         })),
                 ),
+        )
+        .into_any_element()
+}
+
+/// Action-bar content: live install progress, otherwise the version count.
+fn install_status(state: &ShellState, t: &ThemeTokens, lang: Language) -> AnyElement {
+    let Some(install) = &state.install else {
+        return mono(count_label(state, lang), t).into_any_element();
+    };
+
+    let ratio = install.ratio();
+    let detail = if let Some(error) = &install.error {
+        error.clone()
+    } else if install.total == 0 {
+        tr(lang, "正在获取版本文件…", "Fetching version files…").to_owned()
+    } else {
+        format!(
+            "{} / {} · {}",
+            install.done,
+            install.total,
+            install
+                .current
+                .rsplit('/')
+                .next()
+                .unwrap_or(&install.current)
+        )
+    };
+
+    div()
+        .flex()
+        .items_center()
+        .gap(px(12.0))
+        .child(
+            div()
+                .w(px(180.0))
+                .h(px(4.0))
+                .rounded(px(2.0))
+                .bg(rgb(t.line_soft))
+                .child(
+                    div()
+                        .w(relative(ratio))
+                        .h_full()
+                        .rounded(px(2.0))
+                        .bg(rgb(t.text)),
+                ),
+        )
+        .child(
+            div()
+                .max_w(px(460.0))
+                .overflow_hidden()
+                .text_size(px(11.0))
+                .text_color(rgb(if install.error.is_some() {
+                    t.danger
+                } else {
+                    t.muted
+                }))
+                .child(detail),
         )
         .into_any_element()
 }
@@ -287,14 +344,94 @@ fn row(
         .child(
             quiet_button(tr(lang, "安装", "Install"), t)
                 .id(("install", index))
-                .on_click(cx.listener(|shell, _, _, cx| {
-                    shell.state.notify(tr(
-                        shell.state.language(),
-                        "下载器将在 Phase 2 下一步接入",
-                        "The downloader arrives next in Phase 2",
-                    ));
-                    cx.notify();
+                .role(Role::Button)
+                .aria_label(format!("install {}", version.id))
+                .on_click(cx.listener({
+                    let id = version.id.clone();
+                    move |shell, _, _, cx| {
+                        start_install(&mut shell.state, id.clone(), cx);
+                    }
                 })),
         )
         .into_any_element()
+}
+
+/// Kicks off a background install and mirrors its progress into the shell.
+fn start_install(state: &mut ShellState, id: String, cx: &mut Context<SealyShell>) {
+    if state
+        .install
+        .as_ref()
+        .is_some_and(|install| !install.finished)
+    {
+        return;
+    }
+
+    let root = state.paths.root.clone();
+    let policy = state.settings.download.metadata_source;
+    state.install = Some(crate::state::InstallView {
+        id: id.clone(),
+        done: 0,
+        total: 0,
+        current: String::new(),
+        finished: false,
+        error: None,
+    });
+
+    let handle = std::sync::Arc::new(std::sync::Mutex::new(
+        sealy_core::install::Progress::default(),
+    ));
+    let worker = handle.clone();
+
+    cx.spawn(async move |this, cx| {
+        let task = cx
+            .background_executor()
+            .spawn(async move { sealy_core::install::install(&root, &id, policy, worker) });
+
+        loop {
+            cx.background_executor()
+                .timer(std::time::Duration::from_millis(200))
+                .await;
+
+            let snapshot = handle
+                .lock()
+                .map(|progress| progress.clone())
+                .unwrap_or_default();
+            let finished = snapshot.finished;
+
+            let _ = this.update(cx, |shell, cx| {
+                if let Some(view) = &mut shell.state.install {
+                    view.done = snapshot.done;
+                    view.total = snapshot.total;
+                    view.current = snapshot.current.clone();
+                    view.error = snapshot.error.clone();
+                }
+                cx.notify();
+            });
+
+            if finished {
+                break;
+            }
+        }
+
+        match task.await {
+            Ok(installed) => {
+                let _ = this.update(cx, |shell, cx| {
+                    shell.state.install = None;
+                    let message = format!("已安装 {}（{} 个文件）", installed.id, installed.files);
+                    shell.state.notify(message);
+                    cx.notify();
+                });
+            }
+            Err(err) => {
+                let _ = this.update(cx, |shell, cx| {
+                    if let Some(view) = &mut shell.state.install {
+                        view.error = Some(err.to_string());
+                        view.finished = true;
+                    }
+                    cx.notify();
+                });
+            }
+        }
+    })
+    .detach();
 }

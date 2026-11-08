@@ -47,6 +47,34 @@ pub struct DownloadsState {
     pub filter: VersionFilter,
 }
 
+/// Live view of the running install.
+#[derive(Debug, Clone)]
+pub struct InstallView {
+    /// Version being installed.
+    pub id: String,
+    /// Files finished.
+    pub done: usize,
+    /// Files planned; zero until the metadata arrives.
+    pub total: usize,
+    /// File currently fetching.
+    pub current: String,
+    /// Whether the worker stopped.
+    pub finished: bool,
+    /// Failure message.
+    pub error: Option<String>,
+}
+
+impl InstallView {
+    /// Completion in `0.0..=1.0`.
+    pub fn ratio(&self) -> f32 {
+        if self.total == 0 {
+            0.0
+        } else {
+            (self.done as f32 / self.total as f32).clamp(0.0, 1.0)
+        }
+    }
+}
+
 /// Top-level pages.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Route {
@@ -137,6 +165,8 @@ pub struct ShellState {
     pub oobe_step: Option<usize>,
     /// Downloads page data.
     pub downloads: DownloadsState,
+    /// Running install, if any.
+    pub install: Option<InstallView>,
 }
 
 impl ShellState {
@@ -150,6 +180,7 @@ impl ShellState {
             notice: None,
             oobe_step: first_run.then_some(0),
             downloads: DownloadsState::default(),
+            install: None,
         }
     }
 

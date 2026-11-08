@@ -6,10 +6,13 @@
 pub mod config;
 pub mod error;
 pub mod events;
+pub mod install;
 pub mod logging;
 pub mod manifest;
+pub mod net;
 pub mod paths;
 pub mod single_instance;
+pub mod version;
 
 pub use config::Settings;
 pub use error::CoreError;
