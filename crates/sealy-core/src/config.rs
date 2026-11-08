@@ -91,12 +91,20 @@ pub enum MotionSetting {
 pub struct AppearanceSettings {
     /// Theme preset.
     pub theme: ThemeName,
+    /// Whether the launcher may play background music and interface sound.
+    #[serde(default = "default_true")]
+    pub background_music: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 impl Default for AppearanceSettings {
     fn default() -> Self {
         Self {
             theme: ThemeName::Paper,
+            background_music: true,
         }
     }
 }

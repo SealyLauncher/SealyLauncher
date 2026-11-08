@@ -35,6 +35,7 @@
 - 2026-11-08 — 设计探索：新增 `design/preview/home-v2.html`（BakaXL 磁贴式主页，中性深色外壳 + 绿色启动）与 `design/preview/home-v3.html`（同一布局的杂志排版版：纸白、发丝线、等宽小标签、纯黑区块），用于同构对比两套视觉语言。
 - 2026-11-08 — 定稿方向：以 `home-v3` 的杂志排版为视觉基线，新增 `design/preview/home-v4.html` 与 `oobe-v4.html` —— 全部改用系统自带字体、颜色收敛到 `[data-theme]` 的 4 套 token（paper/ink/clay/celadon）、去掉网络延迟/Java 版本/上次游玩等装饰性小字；`docs/PLAN.md` §9.1/§9.2 与 skill 的 tokens/patterns/checklist 同步更新。
 - 2026-11-08 — 重写 `sealy-ui`：移除 M3 原型（`m3` 模块、`m3_demo`、`material-colors` 依赖）；`theme.rs` 改为 `ThemeTokens` + 4 套预设；`AppBar`/`ActionBar`/`Tile`/`Breadcrumb` 组件落地；主页改为磁贴布局，设置页可切换主题与语言并持久化；窗口 1120×700，最小 960×640。
+- 2026-11-08 — 修复与补全：最小窗口改为 1030×640（磁贴网格固定 950px）；`Assets`→`AllAssets` 修好缺失图标；标题栏跟随主题；`最近世界` 计数与右侧对齐；上一步按钮与主按钮同高。新增首启向导 `pages/oobe.rs`（语言 → 音频 → 完成），首次启动自动进入、完成后落盘，设置页可重新运行；主页与向导的中英文文案接入 `i18n::tr`。
 
 ### Verified
 

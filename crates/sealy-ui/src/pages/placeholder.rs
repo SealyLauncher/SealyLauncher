@@ -2,9 +2,9 @@
 
 use crate::app::SealyShell;
 use crate::components::{action_bar, head_band, quiet_button};
+use crate::i18n::tr;
 use crate::kit::*;
 use crate::state::ShellState;
-use crate::theme;
 
 /// Page body shared by every unfinished route.
 pub(crate) fn placeholder(
@@ -45,7 +45,11 @@ pub(crate) fn placeholder(
                     )
                     .child(quiet_button(action, &t).id("placeholder-action").on_click(
                         cx.listener(|shell, _, _, cx| {
-                            shell.state.notify("该功能将在后续阶段接入");
+                            shell.state.notify(tr(
+                                shell.state.language(),
+                                "该功能将在后续阶段接入",
+                                "This arrives in a later phase",
+                            ));
                             cx.notify();
                         }),
                     )),
@@ -66,10 +70,10 @@ pub(crate) fn placeholder(
 pub(crate) fn render_instances(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyElement {
     placeholder(
         "02",
-        "实例",
+        tr(state.language(), "实例", "Instances"),
         IconName::Layers,
-        "还没有创建实例",
-        "创建实例",
+        tr(state.language(), "还没有创建实例", "No instances yet"),
+        tr(state.language(), "创建实例", "Create instance"),
         state,
         cx,
     )
@@ -79,10 +83,14 @@ pub(crate) fn render_instances(state: &ShellState, cx: &mut Context<SealyShell>)
 pub(crate) fn render_downloads(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyElement {
     placeholder(
         "03",
-        "下载",
+        tr(state.language(), "下载", "Downloads"),
         IconName::Download,
-        "版本列表将在 Phase 2 接入",
-        "浏览版本",
+        tr(
+            state.language(),
+            "版本列表将在 Phase 2 接入",
+            "Version list arrives in Phase 2",
+        ),
+        tr(state.language(), "浏览版本", "Browse versions"),
         state,
         cx,
     )
@@ -92,14 +100,11 @@ pub(crate) fn render_downloads(state: &ShellState, cx: &mut Context<SealyShell>)
 pub(crate) fn render_accounts(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyElement {
     placeholder(
         "04",
-        "账号",
+        tr(state.language(), "账号", "Accounts"),
         IconName::CircleUser,
-        "还没有添加账号",
-        "添加账号",
+        tr(state.language(), "还没有添加账号", "No accounts yet"),
+        tr(state.language(), "添加账号", "Add account"),
         state,
         cx,
     )
 }
-
-#[allow(dead_code)]
-fn _unused(_: theme::ThemeTokens) {}

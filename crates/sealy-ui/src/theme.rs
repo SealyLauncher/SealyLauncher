@@ -111,8 +111,8 @@ pub fn alpha(color: u32, a: u8) -> u32 {
 pub const WINDOW_WIDTH: f32 = 1120.0;
 /// Window height used by the shell.
 pub const WINDOW_HEIGHT: f32 = 700.0;
-/// Minimum window size, per plan §9.3.
-pub const MIN_WIDTH: f32 = 960.0;
+/// Minimum window size: the tile grid needs 950 px plus two page insets.
+pub const MIN_WIDTH: f32 = 1030.0;
 /// Minimum window height.
 pub const MIN_HEIGHT: f32 = 640.0;
 

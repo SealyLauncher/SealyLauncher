@@ -8,6 +8,9 @@ use crate::i18n;
 use crate::kit::IconName;
 use crate::theme::ThemeTokens;
 
+/// Number of first-run wizard steps.
+pub const OOBE_STEPS: usize = 3;
+
 /// Top-level pages.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Route {
@@ -94,16 +97,50 @@ pub struct ShellState {
     pub paths: LauncherPaths,
     /// Optional toast.
     pub notice: Option<String>,
+    /// Active first-run wizard step; `None` once the wizard is done.
+    pub oobe_step: Option<usize>,
 }
 
 impl ShellState {
     /// Builds shell state from core bootstrap data.
     pub fn from_bootstrap(bootstrap: Bootstrap) -> Self {
+        let first_run = !bootstrap.paths.settings_file().exists();
         Self {
             route: Route::Home,
             settings: bootstrap.settings,
             paths: bootstrap.paths,
             notice: None,
+            oobe_step: first_run.then_some(0),
+        }
+    }
+
+    /// Whether the first-run wizard is showing.
+    pub fn in_oobe(&self) -> bool {
+        self.oobe_step.is_some()
+    }
+
+    /// Shows the wizard from the first step.
+    pub fn start_oobe(&mut self) {
+        self.oobe_step = Some(0);
+    }
+
+    /// Advances one step, finishing the wizard after the last one.
+    pub fn oobe_next(&mut self) {
+        match self.oobe_step {
+            Some(step) if step + 1 < OOBE_STEPS => self.oobe_step = Some(step + 1),
+            Some(_) => {
+                self.oobe_step = None;
+                self.route = Route::Home;
+                self.persist();
+            }
+            None => {}
+        }
+    }
+
+    /// Returns to the previous step, if any.
+    pub fn oobe_back(&mut self) {
+        if let Some(step) = self.oobe_step {
+            self.oobe_step = (step > 0).then(|| step - 1);
         }
     }
 
@@ -138,6 +175,11 @@ impl ShellState {
     }
 
     fn persist(&mut self) {
+        // Inside the wizard nothing is written until the user finishes, so an
+        // interrupted first run still shows the wizard next time.
+        if self.in_oobe() {
+            return;
+        }
         match save_settings(&self.paths, &self.settings) {
             Ok(()) => self.notice = Some(i18n::toast_settings_saved(self.language()).to_owned()),
             Err(err) => {

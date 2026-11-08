@@ -1,10 +1,13 @@
 //! Home: tile dashboard with a persistent launch action.
 
+use sealy_core::config::Language;
+
 use crate::app::SealyShell;
 use crate::components::{
     action_bar, avatar, block_tile, head_band, icon_button, list_tile, medium_tile, mono,
     primary_button, small_tile, wide_tile,
 };
+use crate::i18n::tr;
 use crate::kit::*;
 use crate::state::{Route, ShellState};
 use crate::theme::{self, ThemeTokens};
@@ -14,25 +17,30 @@ const PLACEHOLDER_INSTANCE: &str = "Fabric 1.21.11";
 
 pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyElement {
     let t = state.theme();
+    let lang = state.language();
 
-    let t_home = nav_tile(Route::Home, state.route, &t, cx);
-    let t_downloads = nav_tile(Route::Downloads, state.route, &t, cx);
-    let t_accounts = nav_tile(Route::Accounts, state.route, &t, cx);
-    let t_settings = nav_tile(Route::Settings, state.route, &t, cx);
+    let t_home = nav_tile(Route::Home, state.route, &t, lang, cx);
+    let t_downloads = nav_tile(Route::Downloads, state.route, &t, lang, cx);
+    let t_accounts = nav_tile(Route::Accounts, state.route, &t, lang, cx);
+    let t_settings = nav_tile(Route::Settings, state.route, &t, lang, cx);
 
-    let t_instances = medium_tile(IconName::Layers, "实例", &t)
+    let t_instances = medium_tile(IconName::Layers, tr(lang, "实例", "Instances"), &t)
         .id("tile-instances")
         .on_click(cx.listener(|shell, _, _, cx| {
             shell.state.route = Route::Instances;
             cx.notify();
         }));
 
-    let t_install = wide_tile(IconName::Download, "安装新版本", &t)
-        .id("tile-install")
-        .on_click(cx.listener(|shell, _, _, cx| {
-            shell.state.route = Route::Downloads;
-            cx.notify();
-        }));
+    let t_install = wide_tile(
+        IconName::Download,
+        tr(lang, "安装新版本", "Install a version"),
+        &t,
+    )
+    .id("tile-install")
+    .on_click(cx.listener(|shell, _, _, cx| {
+        shell.state.route = Route::Downloads;
+        cx.notify();
+    }));
 
     let small_grid = div()
         .flex()
@@ -78,10 +86,10 @@ pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyEle
                 .flex()
                 .gap(px(theme::TILE_GAP))
                 .child(left)
-                .child(notice_tile(&t))
-                .child(worlds_tile(&t)),
+                .child(notice_tile(&t, lang))
+                .child(worlds_tile(&t, lang)),
         )
-        .child(action_bar(&t).child(action_bar_content(&t, cx)))
+        .child(action_bar(&t).child(action_bar_content(&t, lang, cx)))
         .into_any_element()
 }
 
@@ -89,9 +97,10 @@ fn nav_tile(
     route: Route,
     active: Route,
     t: &ThemeTokens,
+    lang: Language,
     cx: &mut Context<SealyShell>,
 ) -> AnyElement {
-    let label = route.label(sealy_core::config::Language::ZhCn);
+    let label = route.label(lang);
     small_tile(route.icon(), route == active, t)
         .id(("tile", route.index()))
         .role(Role::Button)
@@ -103,7 +112,7 @@ fn nav_tile(
         .into_any_element()
 }
 
-fn notice_tile(t: &ThemeTokens) -> impl IntoElement {
+fn notice_tile(t: &ThemeTokens, lang: Language) -> impl IntoElement {
     let muted = rgba(theme::alpha(t.block_text, 0x99));
     let faint = rgba(theme::alpha(t.block_text, 0x66));
 
@@ -115,22 +124,36 @@ fn notice_tile(t: &ThemeTokens) -> impl IntoElement {
                 .text_size(px(13.0))
                 .font_weight(FontWeight::SEMIBOLD)
                 .text_color(rgb(t.block_text))
-                .child("公告"),
+                .child(tr(lang, "公告", "News")),
         )
         .child(
             div()
                 .text_size(px(19.0))
                 .font_weight(FontWeight::SEMIBOLD)
                 .text_color(rgb(t.block_text))
-                .child("1.21.11 已可安装，Fabric 0.16.5 同步更新"),
+                .child(tr(
+                    lang,
+                    "1.21.11 已可安装，Fabric 0.16.5 同步更新",
+                    "1.21.11 is available, Fabric 0.16.5 updated",
+                )),
         )
         .child(
             div()
                 .flex()
                 .flex_col()
                 .gap(px(10.0))
-                .child(notice_line("11-08", "BMCLAPI 线路维护", muted, faint))
-                .child(notice_line("11-06", "aurora 整合包自动更新", muted, faint)),
+                .child(notice_line(
+                    "11-08",
+                    tr(lang, "BMCLAPI 线路维护", "BMCLAPI maintenance"),
+                    muted,
+                    faint,
+                ))
+                .child(notice_line(
+                    "11-06",
+                    tr(lang, "aurora 整合包自动更新", "aurora modpack auto-update"),
+                    muted,
+                    faint,
+                )),
         )
         .child(div().flex_1())
         .child(
@@ -138,12 +161,11 @@ fn notice_tile(t: &ThemeTokens) -> impl IntoElement {
                 .flex()
                 .items_center()
                 .gap(px(6.0))
-                .child(
-                    div()
-                        .text_size(px(11.0))
-                        .text_color(muted)
-                        .child("全部公告"),
-                )
+                .child(div().text_size(px(11.0)).text_color(muted).child(tr(
+                    lang,
+                    "全部公告",
+                    "All news",
+                )))
                 .child(
                     Icon::new(IconName::ArrowRight)
                         .w(px(11.0))
@@ -176,12 +198,13 @@ fn notice_line(date: &str, text: &str, body: Rgba, faint: Rgba) -> Div {
         )
 }
 
-fn worlds_tile(t: &ThemeTokens) -> impl IntoElement {
+fn worlds_tile(t: &ThemeTokens, lang: Language) -> impl IntoElement {
     list_tile(t)
         .id("tile-worlds")
         .gap(px(2.0))
         .child(
             div()
+                .w_full()
                 .flex()
                 .items_center()
                 .justify_between()
@@ -190,9 +213,9 @@ fn worlds_tile(t: &ThemeTokens) -> impl IntoElement {
                         .text_size(px(13.0))
                         .font_weight(FontWeight::SEMIBOLD)
                         .text_color(rgb(t.text))
-                        .child("最近世界"),
+                        .child(tr(lang, "最近世界", "Recent worlds")),
                 )
-                .child(mono("02", t)),
+                .child(mono("03", t)),
         )
         .child(world_row("Aurora", "2H", t))
         .child(world_row("Skyblock", "3D", t))
@@ -206,12 +229,11 @@ fn worlds_tile(t: &ThemeTokens) -> impl IntoElement {
                 .pt(px(10.0))
                 .border_t_1()
                 .border_color(rgb(t.line))
-                .child(
-                    div()
-                        .text_size(px(11.0))
-                        .text_color(rgb(t.text))
-                        .child("查看全部"),
-                )
+                .child(div().text_size(px(11.0)).text_color(rgb(t.text)).child(tr(
+                    lang,
+                    "查看全部",
+                    "View all",
+                )))
                 .child(
                     Icon::new(IconName::ArrowRight)
                         .w(px(11.0))
@@ -241,7 +263,10 @@ fn world_row(name: &str, when: &str, t: &ThemeTokens) -> Div {
         .child(div().flex_shrink_0().child(mono(when, t)))
 }
 
-fn action_bar_content(t: &ThemeTokens, cx: &mut Context<SealyShell>) -> AnyElement {
+fn action_bar_content(t: &ThemeTokens, lang: Language, cx: &mut Context<SealyShell>) -> AnyElement {
+    let greet = tr(lang, "您好！", "Hi!");
+    let launch = tr(lang, "启动游戏", "Launch");
+
     div()
         .w_full()
         .flex()
@@ -258,7 +283,7 @@ fn action_bar_content(t: &ThemeTokens, cx: &mut Context<SealyShell>) -> AnyEleme
                         .text_size(px(24.0))
                         .font_weight(FontWeight::SEMIBOLD)
                         .text_color(rgb(t.text))
-                        .child("您好！"),
+                        .child(greet),
                 )
                 .child(
                     div()
@@ -271,16 +296,24 @@ fn action_bar_content(t: &ThemeTokens, cx: &mut Context<SealyShell>) -> AnyEleme
         .child(
             icon_button(IconName::FileText, t)
                 .id("open-logs")
-                .on_click(cx.listener(|shell, _, _, cx| {
-                    shell.state.notify("日志目录将在 Phase 2 接入");
+                .on_click(cx.listener(move |shell, _, _, cx| {
+                    shell
+                        .state
+                        .notify(tr(lang, "日志将在 Phase 2 接入", "Logs arrive in Phase 2"));
                     cx.notify();
                 })),
         )
         .child(
-            primary_button("启动游戏", t)
+            primary_button(launch, t)
                 .id("play")
-                .on_click(cx.listener(|shell, _, _, cx| {
-                    shell.state.notify("启动流程将在 Phase 2 接入");
+                .role(Role::Button)
+                .aria_label(launch)
+                .on_click(cx.listener(move |shell, _, _, cx| {
+                    shell.state.notify(tr(
+                        lang,
+                        "启动流程将在 Phase 2 接入",
+                        "Launching arrives in Phase 2",
+                    ));
                     cx.notify();
                 })),
         )

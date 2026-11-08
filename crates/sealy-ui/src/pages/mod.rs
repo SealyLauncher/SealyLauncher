@@ -4,6 +4,7 @@ mod accounts;
 mod downloads;
 mod home;
 mod instances;
+mod oobe;
 pub(crate) mod placeholder;
 mod settings;
 
@@ -13,6 +14,10 @@ use crate::state::{Route, ShellState};
 
 /// Renders the active page below the window chrome.
 pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyElement {
+    if let Some(step) = state.oobe_step {
+        return oobe::render(state, step, cx);
+    }
+
     match state.route {
         Route::Home => home::render(state, cx),
         Route::Instances => instances::render(state, cx),
