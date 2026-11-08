@@ -10,6 +10,8 @@
     <string>sealy-launcher</string>
     <key>CFBundleIdentifier</key>
     <string>com.sealy.launcher</string>
+    <key>CFBundleIconFile</key>
+    <string>SealyLauncher</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>

@@ -48,12 +48,15 @@ cargo run -p sealy-app
 
 ## CI / 发布
 
-- [CI](.github/workflows/ci.yml)：Windows 运行 fmt/clippy/test/build；macOS/Linux 目前只构建，测试暂不执行。
-- [Release](.github/workflows/release.yml)：推送 `v*` tag 时生成 portable 包：
-  - Windows x64 `.zip`
-  - macOS universal `.zip`（含 `.app`）
-  - Linux x86_64 `.tar.zst`
-- 发布产物包含 `README.md`、`LICENSE`、`THIRD_PARTY_NOTICES.md`、`OEM.conf.example`，并生成 `SHA256SUMS`。
+- [CI](.github/workflows/ci.yml)：Windows 运行 fmt/clippy/test/build；macOS/Linux 只构建。
+- [Release](.github/workflows/release.yml)：**每次推送到 `main` 自动发版**
+  1. 读取 `Cargo.toml` 里的版本号，patch +1，提交 `chore(release): vX.Y.Z [skip ci]` 并打 tag；
+  2. 三平台并行构建：Windows x64 `.zip`、macOS universal `.zip`（含 `.app`）、Linux x86_64 `.tar.zst`；
+  3. 生成 `SHA256SUMS` 并发布到 GitHub Release。
+- 也可以手动触发，`bump` 可选 `patch` / `minor` / `major` / `none`。
+- 图标：`packaging/windows/sealy.ico` 由 `crates/sealy-app/build.rs` 在检测到 `rc.exe` 时嵌入 exe；
+  macOS 用 `SealyLauncher.icns`，Linux 附带 `sealy-launcher.png`。
+- 产物包含 `README.md`、`LICENSE`、`THIRD_PARTY_NOTICES.md`、`OEM.conf.example`。
 - 不产出 MSI/DMG/DEB/RPM/AppImage 安装包。
 
 ## 文档

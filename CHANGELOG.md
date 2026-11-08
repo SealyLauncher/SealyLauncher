@@ -16,6 +16,9 @@
 
 ## [Unreleased]
 
+- 2026-11-08 — 打包与发版：Release 工作流改为**每次推 main 自动发版**（patch 自增 → 提交 chore(release): vX.Y.Z [skip ci] → 打 tag → 三平台构建 → 发布 Release + SHA256SUMS），支持手动 workflow_dispatch 选 patch/minor/major/none；新增 packaging/windows/sealy.ico、packaging/macos/SealyLauncher.icns、packaging/linux/sealy-launcher.png，crates/sealy-app/build.rs 在找到 c.exe 时把图标嵌进 exe（找不到则跳过，不阻断构建），macOS Info.plist 引用 CFBundleIconFile，Linux 包附带 png。
+
+
 ### Added
 
 - 2026-11-08 — Step 0：保存实施计划到 `docs/PLAN.md`；新增 `README.md`、`.gitignore`、`.gitattributes`；建立本变更日志。
