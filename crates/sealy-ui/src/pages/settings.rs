@@ -3,7 +3,7 @@
 use sealy_core::config::{Language, MotionSetting, SourcePolicy, ThemeName};
 
 use crate::app::SealyShell;
-use crate::components::{action_bar, choice_button, field_row, head_band, quiet_button};
+use crate::components::{action_bar, choice_button, field_row, head_band_back, quiet_button};
 use crate::i18n::tr;
 use crate::kit::*;
 use crate::state::ShellState;
@@ -28,7 +28,7 @@ pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyEle
         .size_full()
         .flex()
         .flex_col()
-        .child(head_band("05", tr(lang, "设置", "Settings"), &t))
+        .child(head_band_back("05", tr(lang, "设置", "Settings"), &t, cx))
         .child(
             div()
                 .flex_1()

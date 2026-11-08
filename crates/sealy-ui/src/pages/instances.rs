@@ -1,7 +1,7 @@
 //! Instances: a scannable list with a persistent launch action.
 
 use crate::app::SealyShell;
-use crate::components::{action_bar, head_band, mono, primary_button, quiet_button};
+use crate::components::{action_bar, head_band_back, mono, primary_button, quiet_button};
 use crate::i18n::tr;
 use crate::kit::*;
 use crate::state::ShellState;
@@ -60,7 +60,7 @@ pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyEle
         .size_full()
         .flex()
         .flex_col()
-        .child(head_band("02", tr(lang, "实例", "Instances"), &t))
+        .child(head_band_back("02", tr(lang, "实例", "Instances"), &t, cx))
         .child(
             div()
                 .flex_1()

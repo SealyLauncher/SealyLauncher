@@ -1,7 +1,7 @@
 //! Accounts: three sign-in methods plus the current account.
 
 use crate::app::SealyShell;
-use crate::components::{action_bar, avatar, head_band, mono, quiet_button};
+use crate::components::{action_bar, avatar, head_band_back, mono, quiet_button};
 use crate::i18n::tr;
 use crate::kit::*;
 use crate::state::ShellState;
@@ -15,7 +15,7 @@ pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyEle
         .size_full()
         .flex()
         .flex_col()
-        .child(head_band("04", tr(lang, "账号", "Accounts"), &t))
+        .child(head_band_back("04", tr(lang, "账号", "Accounts"), &t, cx))
         .child(
             div()
                 .flex_1()

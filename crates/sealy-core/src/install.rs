@@ -2,6 +2,7 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use sha1::{Digest, Sha1};
@@ -32,6 +33,9 @@ pub struct Progress {
 /// Shared handle the worker writes progress into.
 pub type ProgressHandle = Arc<Mutex<Progress>>;
 
+/// Cooperative cancellation flag; checked between files.
+pub type CancelFlag = Arc<AtomicBool>;
+
 /// What an install produced.
 #[derive(Debug, Clone)]
 pub struct Installed {
@@ -48,9 +52,11 @@ pub fn install(
     root: &Path,
     id: &str,
     policy: SourcePolicy,
+    concurrency: usize,
     progress: ProgressHandle,
+    cancel: CancelFlag,
 ) -> Result<Installed, CoreError> {
-    let result = install_inner(root, id, policy, &progress);
+    let result = install_inner(root, id, policy, concurrency, &progress, &cancel);
     let mut state = progress.lock().unwrap_or_else(|err| err.into_inner());
     state.finished = true;
     if let Err(err) = &result {
@@ -63,7 +69,9 @@ fn install_inner(
     root: &Path,
     id: &str,
     policy: SourcePolicy,
+    concurrency: usize,
     progress: &ProgressHandle,
+    cancel: &CancelFlag,
 ) -> Result<Installed, CoreError> {
     let manifest = manifest::fetch_manifest(policy)?;
     let summary = manifest
@@ -85,7 +93,7 @@ fn install_inner(
         state.total = tasks.len();
     }
 
-    let bytes = run_tasks(root, tasks, progress)?;
+    let bytes = run_tasks(root, tasks, concurrency, progress, cancel)?;
 
     Ok(Installed {
         id: id.to_owned(),
@@ -97,51 +105,115 @@ fn install_inner(
     })
 }
 
-/// Downloads every task, skipping files whose SHA-1 already matches.
+/// Downloads every task across a small worker pool.
+///
+/// Files whose SHA-1 already matches are skipped, so re-installing is cheap.
 pub fn run_tasks(
     root: &Path,
     tasks: Vec<Task>,
+    concurrency: usize,
     progress: &ProgressHandle,
+    cancel: &CancelFlag,
 ) -> Result<u64, CoreError> {
-    let agent = net::agent()?;
-    let mut total_bytes = 0_u64;
+    let queue = Arc::new(Mutex::new(tasks));
+    let bytes = Arc::new(AtomicU64::new(0));
+    let failure: Arc<Mutex<Option<CoreError>>> = Arc::new(Mutex::new(None));
+    let workers = concurrency
+        .clamp(1, 16)
+        .min(queue.lock().unwrap().len().max(1));
 
-    for task in tasks {
-        let destination = root.join(&task.path);
-        if let Some(parent) = destination.parent() {
-            fs::create_dir_all(parent)?;
+    std::thread::scope(|scope| {
+        for _ in 0..workers {
+            let queue = Arc::clone(&queue);
+            let bytes = Arc::clone(&bytes);
+            let failure = Arc::clone(&failure);
+
+            scope.spawn(move || {
+                let Ok(agent) = net::agent() else {
+                    if let Ok(mut slot) = failure.lock()
+                        && slot.is_none()
+                    {
+                        *slot = Some(CoreError::Network("tls backend unavailable".to_owned()));
+                    }
+                    cancel.store(true, Ordering::Relaxed);
+                    return;
+                };
+
+                loop {
+                    if cancel.load(Ordering::Relaxed) {
+                        break;
+                    }
+
+                    let Some(task) = queue.lock().unwrap().pop() else {
+                        break;
+                    };
+
+                    match fetch_one(&agent, root, &task, progress) {
+                        Ok(written) => {
+                            bytes.fetch_add(written, Ordering::Relaxed);
+                            bump(progress, &task.path, written);
+                        }
+                        Err(err) => {
+                            if let Ok(mut slot) = failure.lock()
+                                && slot.is_none()
+                            {
+                                *slot = Some(err);
+                            }
+                            cancel.store(true, Ordering::Relaxed);
+                            break;
+                        }
+                    }
+                }
+            });
         }
+    });
 
-        if is_current(&destination, &task) {
-            bump(progress, &task.path, 0);
-            continue;
-        }
-
-        {
-            let mut state = progress.lock().unwrap_or_else(|err| err.into_inner());
-            state.current = task.path.clone();
-        }
-
-        let mut file = fs::File::create(&destination)?;
-        let written = net::download_to(&agent, &task.url, &mut file)?;
-        drop(file);
-
-        if !task.sha1.is_empty() {
-            let actual = sha1_of(&destination)?;
-            if !actual.eq_ignore_ascii_case(&task.sha1) {
-                let _ = fs::remove_file(&destination);
-                return Err(CoreError::Network(format!(
-                    "checksum mismatch for {}",
-                    task.path
-                )));
-            }
-        }
-
-        total_bytes += written;
-        bump(progress, &task.path, written);
+    if let Some(err) = failure.lock().unwrap_or_else(|e| e.into_inner()).take() {
+        return Err(err);
+    }
+    if cancel.load(Ordering::Relaxed) {
+        return Err(CoreError::Network("install cancelled".to_owned()));
     }
 
-    Ok(total_bytes)
+    Ok(bytes.load(Ordering::Relaxed))
+}
+
+fn fetch_one(
+    agent: &ureq::Agent,
+    root: &Path,
+    task: &Task,
+    progress: &ProgressHandle,
+) -> Result<u64, CoreError> {
+    let destination = root.join(&task.path);
+    if let Some(parent) = destination.parent() {
+        fs::create_dir_all(parent)?;
+    }
+
+    if is_current(&destination, task) {
+        return Ok(0);
+    }
+
+    {
+        let mut state = progress.lock().unwrap_or_else(|err| err.into_inner());
+        state.current = task.path.clone();
+    }
+
+    let mut file = fs::File::create(&destination)?;
+    let written = net::download_to(agent, &task.url, &mut file)?;
+    drop(file);
+
+    if !task.sha1.is_empty() {
+        let actual = sha1_of(&destination)?;
+        if !actual.eq_ignore_ascii_case(&task.sha1) {
+            let _ = fs::remove_file(&destination);
+            return Err(CoreError::Network(format!(
+                "checksum mismatch for {}",
+                task.path
+            )));
+        }
+    }
+
+    Ok(written)
 }
 
 fn bump(progress: &ProgressHandle, path: &str, bytes: u64) {
@@ -219,7 +291,8 @@ mod tests {
         assert!(is_current(&file, &task));
 
         let progress = Arc::new(Mutex::new(Progress::default()));
-        let bytes = run_tasks(&dir, vec![task], &progress).unwrap();
+        let cancel = Arc::new(AtomicBool::new(false));
+        let bytes = run_tasks(&dir, vec![task], 2, &progress, &cancel).unwrap();
         assert_eq!(bytes, 0);
         assert_eq!(progress.lock().unwrap().done, 1);
     }

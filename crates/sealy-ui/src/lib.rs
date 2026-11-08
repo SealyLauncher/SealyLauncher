@@ -6,5 +6,6 @@ pub mod i18n;
 pub mod kit;
 pub mod motion;
 pub(crate) mod pages;
+pub mod panel;
 pub mod state;
 pub mod theme;

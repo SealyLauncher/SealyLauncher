@@ -54,6 +54,10 @@ impl Render for SealyShell {
 
         let tokens = self.state.theme();
         let page = pages::render(&mut self.state, cx);
+        let panel = self
+            .state
+            .message_open
+            .then(|| crate::panel::render(&self.state, cx));
         let notice = self
             .state
             .notice
@@ -74,14 +78,68 @@ impl Render for SealyShell {
                 TitleBar::new()
                     .bg(rgb(tokens.surface))
                     .text_color(rgb(tokens.text))
-                    .child(brand(&tokens)),
+                    .child(brand(&tokens))
+                    .child(div().flex_1())
+                    .child(message_button(&tokens, self.state.running_messages(), cx)),
             )
-            .child(div().flex_1().overflow_hidden().child(page))
+            .child(
+                div()
+                    .flex_1()
+                    .relative()
+                    .overflow_hidden()
+                    .child(page)
+                    .children(panel),
+            )
             .children(notice)
             .on_key_down(cx.listener(|shell, event: &KeyDownEvent, _, cx| {
                 shell.handle_key(&event.keystroke, cx);
             }))
     }
+}
+
+/// Bell in the title bar; the badge shows how many tasks are still running.
+fn message_button(
+    tokens: &theme::ThemeTokens,
+    running: usize,
+    cx: &mut Context<SealyShell>,
+) -> AnyElement {
+    div()
+        .id("messages-toggle")
+        .role(Role::Button)
+        .aria_label("messages")
+        .mr(px(8.0))
+        .w(px(34.0))
+        .h(px(26.0))
+        .flex()
+        .items_center()
+        .justify_center()
+        .gap(px(4.0))
+        .rounded(px(theme::RADIUS_TILE))
+        .cursor_pointer()
+        .hover({
+            let bg = theme::alpha(tokens.line_soft, 0xFF);
+            move |s| s.bg(rgba(bg))
+        })
+        .child(
+            Icon::new(IconName::Bell)
+                .w(px(15.0))
+                .h(px(15.0))
+                .text_color(rgb(tokens.muted)),
+        )
+        .when(running > 0, |this| {
+            this.child(
+                div()
+                    .text_size(px(10.0))
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_color(rgb(tokens.accent_text))
+                    .child(running.to_string()),
+            )
+        })
+        .on_click(cx.listener(|shell, _, _, cx| {
+            shell.state.toggle_messages();
+            cx.notify();
+        }))
+        .into_any_element()
 }
 
 impl SealyShell {

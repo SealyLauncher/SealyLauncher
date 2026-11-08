@@ -75,6 +75,43 @@ impl InstallView {
     }
 }
 
+/// Tone of a message center row.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MessageTone {
+    /// Work in progress.
+    Running,
+    /// Finished successfully.
+    Done,
+    /// Finished with an error.
+    Failed,
+}
+
+/// One row in the message center.
+#[derive(Debug, Clone)]
+pub struct Message {
+    /// Stable id.
+    pub id: u64,
+    /// Headline.
+    pub title: String,
+    /// Secondary line, updated live for tasks.
+    pub detail: String,
+    /// Progress in `0.0..=1.0` for running tasks.
+    pub progress: Option<f32>,
+    /// Tone.
+    pub tone: MessageTone,
+}
+
+/// Handle to a running install so the UI can poll and cancel it.
+#[derive(Debug, Clone)]
+pub struct InstallTask {
+    /// Message row this task reports into.
+    pub message_id: u64,
+    /// Shared progress written by the workers.
+    pub progress: sealy_core::install::ProgressHandle,
+    /// Cooperative cancel flag.
+    pub cancel: sealy_core::install::CancelFlag,
+}
+
 /// Top-level pages.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Route {
@@ -166,7 +203,13 @@ pub struct ShellState {
     /// Downloads page data.
     pub downloads: DownloadsState,
     /// Running install, if any.
-    pub install: Option<InstallView>,
+    pub install: Option<InstallTask>,
+    /// Message center rows, newest first.
+    pub messages: Vec<Message>,
+    /// Whether the message panel is open.
+    pub message_open: bool,
+    /// Monotonic id for messages.
+    pub next_message_id: u64,
 }
 
 impl ShellState {
@@ -181,12 +224,53 @@ impl ShellState {
             oobe_step: first_run.then_some(0),
             downloads: DownloadsState::default(),
             install: None,
+            messages: Vec::new(),
+            message_open: false,
+            next_message_id: 1,
         }
     }
 
     /// Whether the first-run wizard is showing.
     pub fn in_oobe(&self) -> bool {
         self.oobe_step.is_some()
+    }
+
+    /// Adds a message and returns its id.
+    pub fn push_message(&mut self, title: String, detail: String, tone: MessageTone) -> u64 {
+        let id = self.next_message_id;
+        self.next_message_id += 1;
+        self.messages.insert(
+            0,
+            Message {
+                id,
+                title,
+                detail,
+                progress: None,
+                tone,
+            },
+        );
+        self.messages.truncate(40);
+        id
+    }
+
+    /// Mutates one message by id.
+    pub fn update_message(&mut self, id: u64, update: impl FnOnce(&mut Message)) {
+        if let Some(message) = self.messages.iter_mut().find(|message| message.id == id) {
+            update(message);
+        }
+    }
+
+    /// Number of messages still running.
+    pub fn running_messages(&self) -> usize {
+        self.messages
+            .iter()
+            .filter(|message| message.tone == MessageTone::Running)
+            .count()
+    }
+
+    /// Toggles the message panel.
+    pub fn toggle_messages(&mut self) {
+        self.message_open = !self.message_open;
     }
 
     /// Shows the wizard from the first step.

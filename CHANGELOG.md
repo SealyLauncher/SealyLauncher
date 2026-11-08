@@ -41,6 +41,7 @@
 - 2026-11-08 — 三页结构落地：`实例`（排序行 + 4 行列表 + 计数/编辑/启动）、`下载`（搜索框 + 版本行 + 安装 + 进度动作带）、`账号`（三张登录方式卡 + 当前账号行 + 切换）；删除已无用的 `placeholder.rs`，下载按钮改用索引 id 避免重复。
 - 2026-11-08 — Phase 2 起步：新增 `sealy-core::manifest`（`version_manifest_v2.json` 的类型、`VersionKind` 过滤、BMCLAPI→官方回退），下载页改为真实数据 —— 后台线程拉取、加载/失败/重试三种状态、按 全部/正式版/快照 过滤、列表可滚动；共 922 个版本。`ureq` 采用 `native-tls`（SChannel），因为本机没有 C 编译器和 nasm，rustls/ring 构建失败。
 - 2026-11-08 — Phase 2 下载器：新增 `net`（ureq 封装）、`version`（版本文档、规则过滤、classpath/plan）、`install`（拉文档 → 落盘 `<id>.json` → 下载 client jar 与全部 libraries → SHA-1 校验、相同哈希跳过、进度回传）；下载页「安装」调用真安装，动作带显示进度条与 `done/total · 文件名`，完成弹「已安装 …（76 个文件）」。实测安装 `26.4-snapshot-7`：客户端 jar 42 MB + 75 个库 84.6 MB，全部通过校验。
+- 2026-11-08 — 消息中心 + 多线程下载 + 返回按钮：新增全局 `panel.rs`（标题栏铃铛 + 右侧滑出面板，列出运行中/已完成/失败任务，带进度条与取消）；安装状态从下载页动作带迁到消息中心（`Message` / `MessageTone` / `InstallTask`）；`install::run_tasks` 改为线程池并发（线程数取 `settings.download.concurrency`），支持 `CancelFlag` 协作取消；所有子页面标题带加「←」返回主页。
 
 ### Verified
 

@@ -59,6 +59,63 @@ pub fn head_band(index: &str, title: impl Into<SharedString>, t: &ThemeTokens) -
         )
 }
 
+/// Head band with a back arrow, for every page except the home screen.
+pub(crate) fn head_band_back(
+    index: &str,
+    title: impl Into<SharedString>,
+    t: &ThemeTokens,
+    cx: &mut Context<crate::app::SealyShell>,
+) -> Div {
+    let title: SharedString = title.into();
+    let muted = t.muted;
+    let line_soft = t.line_soft;
+
+    div()
+        .h(px(theme::HEAD_HEIGHT))
+        .flex_shrink_0()
+        .flex()
+        .items_center()
+        .gap(px(14.0))
+        .px(px(theme::PAGE_PADDING))
+        .bg(rgb(t.surface))
+        .border_b_1()
+        .border_color(rgb(t.line))
+        .child(
+            div()
+                .id("back")
+                .role(Role::Button)
+                .aria_label("back")
+                .w(px(34.0))
+                .h(px(34.0))
+                .flex()
+                .items_center()
+                .justify_center()
+                .rounded(px(theme::RADIUS_TILE))
+                .border_1()
+                .border_color(rgb(t.line_soft))
+                .cursor_pointer()
+                .hover(move |style| style.bg(rgb(line_soft)))
+                .child(
+                    Icon::new(IconName::ArrowLeft)
+                        .w(px(16.0))
+                        .h(px(16.0))
+                        .text_color(rgb(muted)),
+                )
+                .on_click(cx.listener(|shell, _, _, cx| {
+                    shell.state.route = crate::state::Route::Home;
+                    cx.notify();
+                })),
+        )
+        .child(index_badge(index, t))
+        .child(
+            div()
+                .text_size(px(42.0))
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(rgb(t.text))
+                .child(title),
+        )
+}
+
 /// Base tile surface.
 pub fn tile(t: &ThemeTokens) -> Div {
     div()
