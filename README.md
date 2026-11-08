@@ -6,11 +6,15 @@ Rust + GPUI 的便携式 Minecraft 启动器，目标平台为 Windows、macOS �
 
 ## 当前状态
 
-- 阶段：Step 0 — 仓库初始化
+- 阶段：Phase 0 Step 1 — 工具链、workspace、GPUI 壳层与 CI 骨架
+- Rust：`1.99.1`（MSVC toolchain，`rust-toolchain.toml` 固定）
 - 实施计划：[docs/PLAN.md](docs/PLAN.md)
 - 变更日志：[CHANGELOG.md](CHANGELOG.md)
 
-Step 0 只建立文档、变更日志和 Git 仓库；Rust 工具链、Cargo workspace 与 UI 代码从 Phase 0 开始。
+Phase 0 已安装 Rust + Visual Studio 2022 Build Tools（C++ 桌面开发 + Windows SDK），
+并建立 `sealy-core` / `sealy-ui` / `sealy-app` workspace 与 CI 骨架。
+Windows 本地 `cargo check` / `clippy` / `test` / `build` 与窗口 smoke 已通过；
+macOS/Linux 仍需通过远端 CI 与真机 smoke 验证。
 
 ## 目标
 
@@ -32,10 +36,12 @@ Step 0 只建立文档、变更日志和 Git 仓库；Rust 工具链、Cargo wor
 
 - [实施计划](docs/PLAN.md)
 - [变更日志](CHANGELOG.md)
+- [第三方声明](THIRD_PARTY_NOTICES.md)
+- [GPL-3.0 许可证](LICENSE)
 
 ## 许可
 
-项目计划采用 `GPL-3.0-or-later`。HMCL 仅作为协议与行为参考，不复制其源码。
+项目采用 `GPL-3.0-or-later`，见 [LICENSE](LICENSE)。HMCL 仅作为协议与行为参考，不复制其源码。
 
 ## 变更记录约定
 

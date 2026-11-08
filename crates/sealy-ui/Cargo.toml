@@ -1,0 +1,14 @@
+[package]
+name = "sealy-ui"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+sealy-core.workspace = true
+gpui-kit.workspace = true
