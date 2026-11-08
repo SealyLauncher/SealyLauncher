@@ -24,6 +24,7 @@
 - 2026-11-08 — 新增 `sealy-launcher --version` 与基础 `sealy-core` 版本测试；`sealy-core` 保持无 GPUI 依赖。
 - 2026-11-08 — CI/CD：拆分 Windows 质量任务与 macOS/Linux 仅构建任务；新增 tag 触发的 portable 发布 workflow（Windows zip、macOS universal zip、Linux tar.zst、SHA256SUMS）；新增 macOS `Info.plist`、Linux `.desktop`、`OEM.conf.example`。
 - 2026-11-08 — Phase 1：`sealy-core` 新增 portable 路径、设置读写、日志、单实例锁、事件/任务骨架；`sealy-ui` 新增 kit 封装、主题 tokens、动效 tokens、双语文案、ShellState/Route、共享组件、NavRail、Home/实例/下载/账号/设置页面与路由动效；设置页可切换中英文并持久化。
+- 2026-11-08 — 设计探索：新增 `design/preview/index.html`，提供三个 UI 方向的静态预览（深海玻璃 / 流畅霓虹 / 杂志深色）及 headless Edge 生成的 1280×800 截图；待确认方向后再重做 `sealy-ui`。
 
 ### Verified
 
