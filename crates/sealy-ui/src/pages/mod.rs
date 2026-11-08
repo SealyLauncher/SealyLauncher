@@ -5,7 +5,6 @@ mod downloads;
 mod home;
 mod instances;
 mod oobe;
-pub(crate) mod placeholder;
 mod settings;
 
 use crate::app::SealyShell;
