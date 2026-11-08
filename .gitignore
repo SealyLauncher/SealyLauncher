@@ -1,0 +1,57 @@
+# Rust build output
+/target/
+**/target/
+
+# Distribution / packaging artifacts
+/dist/
+/out/
+*.zip
+*.tar.zst
+*.7z
+*.msi
+*.dmg
+*.deb
+*.rpm
+*.AppImage
+
+# Portable runtime data (never commit user data, game files, tokens or logs)
+/SealyData/
+/SealyLauncher.exe
+/sealy-launcher
+
+# Local OEM deployment config (provide OEM.conf.example instead)
+/OEM.conf
+/oem.conf
+!.OEM.conf.example
+
+# Local environment / signing material
+.env
+.env.*
+!.env.example
+*.pem
+*.p12
+*.pfx
+*.key
+*.sig
+!LICENSES/**
+secrets/
+*.secret
+
+# Logs / crash dumps
+*.log
+/logs/
+/crash-reports/
+
+# IDE / editor
+.idea/
+.vscode/
+*.iml
+*.swp
+*~
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Temp
+*.tmp
+*.part
