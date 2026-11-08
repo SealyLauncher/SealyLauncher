@@ -1,4 +1,4 @@
-# Rust build output
+﻿# Rust build output
 /target/
 **/target/
 
@@ -16,6 +16,11 @@
 
 # Portable runtime data (never commit user data, game files, tokens or logs)
 /SealyData/
+/.minecraft/
+/versions/
+/libraries/
+/assets/
+/runtime/
 /SealyLauncher.exe
 /sealy-launcher
 
