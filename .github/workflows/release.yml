@@ -14,10 +14,6 @@ on:
 permissions:
   contents: write
 
-concurrency:
-  group: release-${{ github.ref }}
-  cancel-in-progress: false
-
 env:
   CARGO_TERM_COLOR: always
   RUST_VERSION: "1.99.1"
@@ -116,7 +112,7 @@ jobs:
   macos:
     name: package (macos-universal)
     needs: version
-    runs-on: macos-14
+    runs-on: macos-latest
     timeout-minutes: 90
     steps:
       - name: Checkout
@@ -218,6 +214,7 @@ jobs:
   publish:
     name: publish release
     needs: [version, windows, macos, linux]
+    if: ${{ always() && !cancelled() && needs.windows.result == 'success' && needs.linux.result == 'success' }}
     runs-on: ubuntu-22.04
     steps:
       - name: Download artifacts
