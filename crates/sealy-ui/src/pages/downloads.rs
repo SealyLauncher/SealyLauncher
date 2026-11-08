@@ -309,6 +309,7 @@ fn start_install(state: &mut ShellState, id: String, cx: &mut Context<SealyShell
     }
 
     let game = state.paths.game.clone();
+    let game_for_files = game.clone();
     let policy = state.settings.download.metadata_source;
     let concurrency = usize::from(state.settings.download.concurrency).max(1);
     let auto_java = state.settings.java.auto_download;
@@ -339,7 +340,7 @@ fn start_install(state: &mut ShellState, id: String, cx: &mut Context<SealyShell
     cx.spawn(async move |this, cx| {
         let task = cx.background_executor().spawn(async move {
             sealy_core::install::install(
-                &game,
+                &game_for_files,
                 &task_id,
                 policy,
                 concurrency,
@@ -513,6 +514,101 @@ fn start_install(state: &mut ShellState, id: String, cx: &mut Context<SealyShell
             }
         }
 
+        // Phase three: asset objects, when the version declares an index.
+        if let Some((index_id, index_url)) = installed.assets.clone() {
+            let assets_message = {
+                let mut created = 0;
+                let _ = this.update(cx, |shell, cx| {
+                    created = shell.state.push_message(
+                        format!("下载资源 {index_id}"),
+                        tr(
+                            shell.state.language(),
+                            "正在读取资源索引…",
+                            "Reading the asset index…",
+                        )
+                        .to_owned(),
+                        MessageTone::Running,
+                    );
+                    cx.notify();
+                });
+                created
+            };
+
+            let assets_progress = std::sync::Arc::new(std::sync::Mutex::new(
+                sealy_core::install::Progress::default(),
+            ));
+            let assets_cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+            let assets_worker = assets_progress.clone();
+            let assets_flag = assets_cancel.clone();
+            let assets_dir = game.clone();
+            let assets_id = index_id.clone();
+
+            let assets_task = cx.background_executor().spawn(async move {
+                sealy_core::assets::install(
+                    &assets_dir,
+                    &index_url,
+                    &assets_id,
+                    &assets_worker,
+                    &assets_flag,
+                )
+            });
+
+            loop {
+                cx.background_executor()
+                    .timer(std::time::Duration::from_millis(250))
+                    .await;
+
+                let snapshot = assets_progress
+                    .lock()
+                    .map(|progress| progress.clone())
+                    .unwrap_or_default();
+                let finished = snapshot.finished;
+                let ratio = if snapshot.total == 0 {
+                    0.0
+                } else {
+                    (snapshot.done as f32 / snapshot.total as f32).clamp(0.0, 1.0)
+                };
+                let detail = format!("{} / {} objects", snapshot.done, snapshot.total);
+
+                let _ = this.update(cx, |shell, cx| {
+                    shell.state.update_message(assets_message, |row| {
+                        row.progress = Some(ratio);
+                        row.detail = detail.clone();
+                    });
+                    cx.notify();
+                });
+
+                if finished {
+                    break;
+                }
+                if snapshot.total == 0 && snapshot.done == 0 && !snapshot.finished {
+                    // Index fetch still in flight; keep waiting.
+                }
+            }
+
+            match assets_task.await {
+                Ok(count) => {
+                    let _ = this.update(cx, |shell, cx| {
+                        shell.state.update_message(assets_message, |row| {
+                            row.tone = MessageTone::Done;
+                            row.progress = Some(1.0);
+                            row.detail = format!("{count} 个资源对象");
+                        });
+                        cx.notify();
+                    });
+                }
+                Err(err) => {
+                    let _ = this.update(cx, |shell, cx| {
+                        shell.state.update_message(assets_message, |row| {
+                            row.tone = MessageTone::Failed;
+                            row.progress = None;
+                            row.detail = err.to_string();
+                        });
+                        cx.notify();
+                    });
+                }
+            }
+        }
         match java_task.await {
             Ok(java) => {
                 let _ = this.update(cx, |shell, cx| {

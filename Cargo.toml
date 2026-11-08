@@ -30,6 +30,7 @@ tracing = "0.1"
 tracing-appender = "0.2"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 tempfile = "3"
+zip = { version = "2", default-features = false, features = ["deflate"] }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

@@ -3,11 +3,13 @@
 //! This crate must stay UI-agnostic: it must never depend on GPUI or any
 //! presentation-layer crate.
 
+pub mod assets;
 pub mod config;
 pub mod error;
 pub mod events;
 pub mod install;
 pub mod java;
+pub mod launch;
 pub mod logging;
 pub mod manifest;
 pub mod net;

@@ -47,6 +47,8 @@ pub struct Installed {
     pub bytes: u64,
     /// Java component and required major version, when declared.
     pub java: Option<(String, u32)>,
+    /// Asset index id and URL, when declared.
+    pub assets: Option<(String, String)>,
 }
 
 /// Installs `id` under `root`, fetching metadata first.
@@ -109,6 +111,10 @@ fn install_inner(
             .as_ref()
             .filter(|java| java.major_version > 0)
             .map(|java| (java.component.clone(), java.major_version)),
+        assets: doc
+            .asset_index
+            .as_ref()
+            .map(|index| (index.id.clone(), index.url.clone())),
     })
 }
 
@@ -206,7 +212,14 @@ fn fetch_one(
     }
 
     let mut file = fs::File::create(&destination)?;
-    let written = net::download_to(agent, &task.url, &mut file)?;
+    let written = match net::download_to(agent, &task.url, &mut file) {
+        Ok(bytes) => bytes,
+        Err(err) => {
+            drop(file);
+            let _ = fs::remove_file(&destination);
+            return Err(err);
+        }
+    };
     drop(file);
 
     if !task.sha1.is_empty() {

@@ -212,6 +212,8 @@ pub struct ShellState {
     pub next_message_id: u64,
     /// Java installations found on this machine.
     pub java: Vec<sealy_core::java::JavaInstall>,
+    /// Versions installed under `<game>/versions`.
+    pub installed: Vec<sealy_core::version::InstalledVersion>,
 }
 
 impl ShellState {
@@ -230,6 +232,7 @@ impl ShellState {
             message_open: false,
             next_message_id: 1,
             java: Vec::new(),
+            installed: Vec::new(),
         }
     }
 

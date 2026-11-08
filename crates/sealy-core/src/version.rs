@@ -300,6 +300,34 @@ pub fn load(path: &std::path::Path) -> Result<VersionDocument, CoreError> {
     Ok(serde_json::from_str(&text)?)
 }
 
+/// A version currently installed under `<game>/versions`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InstalledVersion {
+    /// Version id.
+    pub id: String,
+    /// Path of `<id>.json`.
+    pub document: std::path::PathBuf,
+}
+
+/// Scans `<game>/versions` for installed versions, newest first.
+pub fn installed(game_dir: &std::path::Path) -> Vec<InstalledVersion> {
+    let mut found = Vec::new();
+    let Ok(entries) = std::fs::read_dir(game_dir.join("versions")) else {
+        return found;
+    };
+
+    for entry in entries.flatten() {
+        let id = entry.file_name().to_string_lossy().to_string();
+        let document = entry.path().join(format!("{id}.json"));
+        if document.is_file() {
+            found.push(InstalledVersion { id, document });
+        }
+    }
+
+    found.sort_by(|a, b| b.id.cmp(&a.id));
+    found
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

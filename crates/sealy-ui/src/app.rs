@@ -46,13 +46,19 @@ impl SealyShell {
 
         // Java probing spawns processes, so it happens after the first frame.
         let game = shell.state.paths.game.clone();
+        let installed_game = game.clone();
         cx.spawn(async move |this, cx| {
             let found = cx
                 .background_executor()
                 .spawn(async move { sealy_core::java::detect(&game) })
                 .await;
+            let installed = cx
+                .background_executor()
+                .spawn(async move { sealy_core::version::installed(&installed_game) })
+                .await;
             let _ = this.update(cx, |shell, cx| {
                 shell.state.java = found;
+                shell.state.installed = installed;
                 cx.notify();
             });
         })
