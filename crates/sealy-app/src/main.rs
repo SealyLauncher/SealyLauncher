@@ -1,3 +1,9 @@
+// Release builds are windowed apps: no console window behind the launcher.
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
+#[cfg(windows)]
+mod window_icon;
+
 fn main() {
     if std::env::args().any(|arg| arg == "--version") {
         println!("SealyLauncher {}", sealy_core::version());
@@ -27,6 +33,9 @@ fn main() {
             return;
         }
     };
+
+    #[cfg(windows)]
+    window_icon::apply();
 
     sealy_ui::app::run(bootstrap);
 }

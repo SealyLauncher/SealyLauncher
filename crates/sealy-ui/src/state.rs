@@ -104,6 +104,8 @@ pub struct Message {
     pub tone: MessageTone,
     /// Version id a failed install can retry.
     pub retry: Option<String>,
+    /// Cancellation flag of the task behind this message.
+    pub cancel: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
 }
 
 /// Handle to a running install so the UI can poll and cancel it.
@@ -487,6 +489,7 @@ impl ShellState {
                 progress: None,
                 tone,
                 retry: None,
+                cancel: None,
             },
         );
         self.messages.truncate(40);

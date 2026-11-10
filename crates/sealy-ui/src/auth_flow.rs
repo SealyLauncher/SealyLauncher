@@ -20,6 +20,10 @@ pub(crate) fn start(state: &mut ShellState, cx: &mut Context<SealyShell>) {
     state.message_open = true;
 
     let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    {
+        let handle = cancel.clone();
+        state.update_message(message_id, move |row| row.cancel = Some(handle));
+    }
     state.microsoft_login = Some(crate::state::MicrosoftLogin {
         message_id,
         user_code: String::new(),
@@ -44,6 +48,7 @@ pub(crate) fn start(state: &mut ShellState, cx: &mut Context<SealyShell>) {
                     shell.state.microsoft_login = None;
                     shell.state.update_message(message_id, |row| {
                         row.tone = MessageTone::Failed;
+                        row.cancel = None;
                         row.progress = None;
                         row.detail = detail;
                     });
@@ -76,6 +81,17 @@ pub(crate) fn start(state: &mut ShellState, cx: &mut Context<SealyShell>) {
                 .await;
 
             if cancel.load(std::sync::atomic::Ordering::Relaxed) {
+                let _ = this.update(cx, |shell, cx| {
+                    shell.state.microsoft_login = None;
+                    shell.state.update_message(message_id, |row| {
+                        row.tone = MessageTone::Failed;
+                        row.cancel = None;
+                        row.progress = None;
+                        row.cancel = None;
+                        row.detail = "已取消".to_owned();
+                    });
+                    cx.notify();
+                });
                 return;
             }
 
@@ -102,6 +118,7 @@ pub(crate) fn start(state: &mut ShellState, cx: &mut Context<SealyShell>) {
                         shell.state.microsoft_login = None;
                         shell.state.update_message(message_id, |row| {
                             row.tone = MessageTone::Failed;
+                            row.cancel = None;
                             row.progress = None;
                             row.detail = detail;
                         });
@@ -153,6 +170,7 @@ pub(crate) fn start(state: &mut ShellState, cx: &mut Context<SealyShell>) {
                     shell.state.save_tokens();
                     shell.state.update_message(message_id, |row| {
                         row.tone = MessageTone::Done;
+                        row.cancel = None;
                         row.progress = Some(1.0);
                         row.detail = format!("已登录 {name}");
                     });
@@ -165,6 +183,7 @@ pub(crate) fn start(state: &mut ShellState, cx: &mut Context<SealyShell>) {
                     shell.state.microsoft_login = None;
                     shell.state.update_message(message_id, |row| {
                         row.tone = MessageTone::Failed;
+                        row.cancel = None;
                         row.progress = None;
                         row.detail = detail;
                     });

@@ -52,6 +52,7 @@ pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyEle
 
     div()
         .absolute()
+        .occlude()
         .top(px(0.0))
         .right(px(0.0))
         .bottom(px(0.0))
@@ -148,7 +149,8 @@ fn row(
                         .text_color(rgb(t.text))
                         .child(message.title.clone()),
                 )
-                .when(message.tone == MessageTone::Running, |this| {
+                .when(message.cancel.is_some(), |this| {
+                    let cancel = message.cancel.clone();
                     this.child(
                         div()
                             .id(("cancel", message_id as usize))
@@ -166,9 +168,8 @@ fn row(
                             .text_color(rgb(t.muted))
                             .child("取消")
                             .on_click(cx.listener(move |shell, _, _, cx| {
-                                if let Some(task) = &shell.state.install {
-                                    task.cancel
-                                        .store(true, std::sync::atomic::Ordering::Relaxed);
+                                if let Some(flag) = &cancel {
+                                    flag.store(true, std::sync::atomic::Ordering::Relaxed);
                                 }
                                 shell.state.update_message(message_id, |row| {
                                     row.detail = "正在取消…".to_owned();

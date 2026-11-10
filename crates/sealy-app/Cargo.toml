@@ -13,6 +13,12 @@ workspace = true
 sealy-core.workspace = true
 sealy-ui.workspace = true
 
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = [
+    "Win32_Foundation",
+    "Win32_UI_WindowsAndMessaging",
+] }
+
 [[bin]]
 name = "sealy-launcher"
 path = "src/main.rs"

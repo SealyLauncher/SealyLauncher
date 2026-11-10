@@ -110,6 +110,22 @@ impl Render for SealyShell {
                     .relative()
                     .overflow_hidden()
                     .child(page)
+                    .children(self.state.message_open.then(|| {
+                        div()
+                            .id("messages-backdrop")
+                            .absolute()
+                            .top(px(0.0))
+                            .left(px(0.0))
+                            .right(px(0.0))
+                            .bottom(px(0.0))
+                            .on_mouse_down(
+                                gpui_kit::MouseButton::Left,
+                                cx.listener(|shell, _, _, cx| {
+                                    shell.state.message_open = false;
+                                    cx.notify();
+                                }),
+                            )
+                    }))
                     .children(panel),
             )
             .children(notice)
@@ -168,6 +184,13 @@ impl SealyShell {
     /// Window-wide shortcuts: Enter runs the primary action, Escape steps back,
     /// digits jump between pages.
     fn handle_key(&mut self, keystroke: &Keystroke, cx: &mut Context<Self>) {
+        // Escape closes the message center before anything else.
+        if keystroke.key == "escape" && self.state.message_open {
+            self.state.message_open = false;
+            cx.notify();
+            return;
+        }
+
         // Inline name editors capture typing while they are open.
         if self.state.account_draft.is_some() || self.state.rename_draft.is_some() {
             let renaming = self.state.rename_draft.is_some();
