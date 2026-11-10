@@ -30,6 +30,8 @@ pub struct LaunchSpec<'a> {
     pub access_token: &'a str,
     /// `msa` for Microsoft accounts, `legacy` otherwise.
     pub user_type: &'a str,
+    /// Extra JVM arguments, e.g. the authlib-injector `-javaagent`.
+    pub jvm_extra: &'a [String],
     /// Maximum heap in MB.
     pub max_memory_mb: u32,
     /// Window width.
@@ -87,6 +89,9 @@ pub fn build_command(
     let mut command = vec![spec.java.display().to_string()];
     command.push(format!("-Xmx{}M", spec.max_memory_mb));
     command.push(format!("-Xms{}M", (spec.max_memory_mb / 2).max(512)));
+    for extra in spec.jvm_extra {
+        command.push(extra.clone());
+    }
 
     let jvm = jvm_args(doc);
     if jvm.is_empty() {
@@ -132,11 +137,12 @@ pub fn classpath(game_dir: &Path, doc: &VersionDocument, version_id: &str) -> Ve
             entries.push(game_dir.join("libraries").join(path).display().to_string());
         }
     }
+    let jar = doc.jar_owner(version_id);
     entries.push(
         game_dir
             .join("versions")
-            .join(version_id)
-            .join(format!("{version_id}.jar"))
+            .join(&jar)
+            .join(format!("{jar}.jar"))
             .display()
             .to_string(),
     );

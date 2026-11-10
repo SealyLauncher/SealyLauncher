@@ -116,7 +116,9 @@ fn launch_blocking(
         .join("versions")
         .join(&version_id)
         .join(format!("{version_id}.json"));
-    let doc = sealy_core::version::load(&document).map_err(|err| err.to_string())?;
+    // Loader profiles inherit their jar, assets and arguments from the parent.
+    let doc = sealy_core::version::resolve(&root, &version_id).map_err(|err| err.to_string())?;
+    let _ = document;
 
     let required = doc
         .java_version
@@ -131,10 +133,20 @@ fn launch_blocking(
 
     let access_token = sealy_core::auth::ensure_minecraft_token(&mut tokens, &account, &client_id)
         .map_err(|err| err.to_string())?;
-    let user_type = if account.kind == sealy_core::accounts::AccountKind::Microsoft {
-        "msa"
-    } else {
-        "legacy"
+    let (user_type, jvm_extra) = match account.kind {
+        sealy_core::accounts::AccountKind::Microsoft => ("msa", Vec::new()),
+        sealy_core::accounts::AccountKind::Authlib => {
+            let server = account
+                .server
+                .clone()
+                .ok_or_else(|| "外置账号缺少服务器地址，请重新登录".to_owned())?;
+            let jar = sealy_core::authlib::ensure_injector(&root).map_err(|err| err.to_string())?;
+            (
+                "mojang",
+                vec![sealy_core::authlib::javaagent(&jar, &server)],
+            )
+        }
+        sealy_core::accounts::AccountKind::Offline => ("legacy", Vec::new()),
     };
 
     let spec = sealy_core::launch::LaunchSpec {
@@ -146,6 +158,7 @@ fn launch_blocking(
         uuid: &account.uuid,
         access_token: &access_token,
         user_type,
+        jvm_extra: &jvm_extra,
         max_memory_mb: memory,
         width,
         height,

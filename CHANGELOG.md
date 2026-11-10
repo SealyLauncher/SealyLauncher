@@ -16,6 +16,10 @@
 
 ## [Unreleased]
 
+- 2026-11-10 — 版本继承与加载器：ersion::resolve 合并 inheritsFrom 链（父版本 jar/assets/Java/参数 + 子版本 mainClass 与库，库按 group:artifact 去重），启动与安装都改走合并后的文档，jar_id 决定用哪个版本的 client jar；新增 loader 模块从 Fabric/Quilt 元数据取最新稳定加载器、写入 profile JSON，下载页每个版本多出「Fabric」「Quilt」按钮，走统一安装流程（版本文件 → assets → Java）。实测 Fabric 0.20.1 + 26.4-snapshot-7 能启动，日志出现 Loading Minecraft 26.4-snapshot-7 with Fabric Loader 0.20.1。
+- 2026-11-10 — authlib-injector：新增 uthlib 模块（Yggdrasil 登录/刷新、API 根规范化、错误消息透传、ensure_injector 自动下载 jar、-javaagent 参数生成）；账号模型加 server 字段，令牌缓存加 authlib 两项，启动时自动刷新并注入；账号页新增「外置登录」三字段表单（Tab 切换 / 回车登录 / Esc 取消），失败信息落消息中心。
+- 2026-11-10 — PLAN 增补「16.1 实施状态」小节，逐阶段记录完成度与偏差。
+
 - 2026-11-10 — 任务取消与消息中心：每条消息携带自己的取消开关（Message.cancel），消息中心的「取消」只停对应任务，微软登录与版本安装可以并存互不影响；安装流程重写为三段（版本文件 → 资源文件 → Java）并共用同一条消息，阶段名显示在详情行；补回缺失的资源文件（assets）下载阶段——此前安装只拉取版本文件，导致新版本没有 assets。消息面板加 occlude() 与点击空白的遮罩层，Esc 也能关闭。窗口内嵌图标经 Win32 WM_SETICON 设为任务栏图标；release 构建使用 windows_subsystem = "windows"，不再弹出控制台窗口。
 
 - 2026-11-08 — 引导页账号步骤：向导从 3 步变 4 步（语言 → 声音 → 账号 → 完成），账号步骤必须至少有一个账号才能继续（无账号时「下一步」置灰且 oobe_next 直接返回）；提供「离线账号」（内联输入名字，回车确认 / Esc 取消）与「Microsoft 登录」（设备码卡片，登录成功自动进入下一步）两条路径，start_microsoft 抽到 uth_flow 供账号页与向导共用。主页左下角在没有实例时显示「无实例 / 先在实例页新建」，不再用假数据占位。

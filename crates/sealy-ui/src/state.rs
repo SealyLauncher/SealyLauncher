@@ -48,6 +48,8 @@ pub struct DownloadsState {
     pub loading: bool,
     /// Active kind filter.
     pub filter: VersionFilter,
+    /// Version picked for a loader install.
+    pub choice: Option<String>,
 }
 
 /// Live view of the running install.
@@ -231,10 +233,25 @@ pub struct ShellState {
     pub new_instance_open: bool,
     /// Inline instance rename buffer.
     pub rename_draft: Option<RenameDraft>,
+    /// authlib-injector login form.
+    pub authlib_draft: Option<AuthlibDraft>,
     /// Cached authentication tokens.
     pub tokens: sealy_core::auth::TokenStore,
     /// Pending Microsoft device-code sign-in.
     pub microsoft_login: Option<MicrosoftLogin>,
+}
+
+/// authlib-injector login form state.
+#[derive(Debug, Clone, Default)]
+pub struct AuthlibDraft {
+    /// Yggdrasil API root.
+    pub server: String,
+    /// Account name.
+    pub username: String,
+    /// Password (masked in the UI).
+    pub password: String,
+    /// Focused field: 0 server, 1 user, 2 password.
+    pub field: usize,
 }
 
 /// Inline rename of one instance.
@@ -285,6 +302,7 @@ impl ShellState {
             account_draft: None,
             new_instance_open: false,
             rename_draft: None,
+            authlib_draft: None,
             tokens,
             microsoft_login: None,
         }
@@ -441,6 +459,46 @@ impl ShellState {
             let _ = std::fs::rename(&from, &to);
         }
         self.save_instances();
+    }
+
+    /// Feeds one character into the focused authlib field.
+    pub fn authlib_push_char(&mut self, ch: char) {
+        if let Some(draft) = &mut self.authlib_draft {
+            let field = match draft.field {
+                0 => &mut draft.server,
+                1 => &mut draft.username,
+                _ => &mut draft.password,
+            };
+            if field.chars().count() < 120 {
+                field.push(ch);
+            }
+        }
+    }
+
+    /// Removes the last character of the focused authlib field.
+    pub fn authlib_pop_char(&mut self) {
+        if let Some(draft) = &mut self.authlib_draft {
+            let field = match draft.field {
+                0 => &mut draft.server,
+                1 => &mut draft.username,
+                _ => &mut draft.password,
+            };
+            field.pop();
+        }
+    }
+
+    /// Moves focus to the next authlib field.
+    pub fn authlib_next_field(&mut self) {
+        if let Some(draft) = &mut self.authlib_draft {
+            draft.field = (draft.field + 1).min(2);
+        }
+    }
+
+    /// Whether the password field is focused.
+    pub fn authlib_last_field(&self) -> bool {
+        self.authlib_draft
+            .as_ref()
+            .is_some_and(|draft| draft.field == 2)
     }
 
     /// Discards the rename buffer.

@@ -81,19 +81,25 @@ fn install_inner(
     progress: &ProgressHandle,
     cancel: &CancelFlag,
 ) -> Result<Installed, CoreError> {
-    let manifest = manifest::fetch_manifest(policy)?;
-    let summary = manifest
-        .versions
-        .iter()
-        .find(|version| version.id == id)
-        .ok_or_else(|| CoreError::Network(format!("version {id} is not in the manifest")))?;
-
-    let body = net::get_text(&summary.url)?;
-    let doc: version::VersionDocument = serde_json::from_str(&body)?;
-
     let version_dir = root.join("versions").join(id);
     fs::create_dir_all(&version_dir)?;
-    fs::write(version_dir.join(format!("{id}.json")), &body)?;
+    let document = version_dir.join(format!("{id}.json"));
+
+    // Loader profiles are written by the loader installer; vanilla versions are
+    // fetched from the manifest on first install.
+    if !document.is_file() {
+        let manifest = manifest::fetch_manifest(policy)?;
+        let summary = manifest
+            .versions
+            .iter()
+            .find(|version| version.id == id)
+            .ok_or_else(|| CoreError::Network(format!("version {id} is not in the manifest")))?;
+
+        let body = net::get_text(&summary.url)?;
+        fs::write(&document, &body)?;
+    }
+
+    let doc = version::resolve(root, id)?;
 
     let tasks = doc.plan(id);
     {

@@ -30,6 +30,9 @@ pub struct Account {
     /// Authentication kind.
     #[serde(default)]
     pub kind: AccountKind,
+    /// Yggdrasil API root, for authlib accounts.
+    #[serde(default)]
+    pub server: Option<String>,
 }
 
 impl Account {
@@ -39,6 +42,7 @@ impl Account {
             name: name.to_owned(),
             uuid: offline_uuid(name),
             kind: AccountKind::Offline,
+            server: None,
         }
     }
 }

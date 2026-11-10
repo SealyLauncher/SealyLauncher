@@ -191,6 +191,30 @@ impl SealyShell {
             return;
         }
 
+        // The authlib form captures typing while it is open.
+        if self.state.authlib_draft.is_some() {
+            match keystroke.key.as_str() {
+                "escape" => self.state.authlib_draft = None,
+                "tab" => self.state.authlib_next_field(),
+                "enter" => {
+                    if self.state.authlib_last_field() {
+                        crate::auth_flow::start_authlib(&mut self.state, cx);
+                    } else {
+                        self.state.authlib_next_field();
+                    }
+                }
+                "backspace" => self.state.authlib_pop_char(),
+                key if key.chars().count() == 1 => {
+                    if let Some(ch) = key.chars().next() {
+                        self.state.authlib_push_char(ch);
+                    }
+                }
+                _ => {}
+            }
+            cx.notify();
+            return;
+        }
+
         // Inline name editors capture typing while they are open.
         if self.state.account_draft.is_some() || self.state.rename_draft.is_some() {
             let renaming = self.state.rename_draft.is_some();

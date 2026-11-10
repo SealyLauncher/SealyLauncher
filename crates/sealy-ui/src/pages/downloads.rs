@@ -256,39 +256,62 @@ fn row(
     cx: &mut Context<SealyShell>,
 ) -> AnyElement {
     let installed = state.installed.iter().any(|entry| entry.id == version.id);
+    let selected = state.downloads.choice.as_deref() == Some(version.id.as_str());
+    let pick = {
+        let id = version.id.clone();
+        cx.listener(move |shell, _, _, cx| {
+            shell.state.downloads.choice = Some(id.clone());
+            cx.notify();
+        })
+    };
 
     div()
         .h(px(60.0))
         .flex()
         .items_center()
         .gap(px(16.0))
-        .border_b_1()
-        .border_color(rgb(t.line_soft))
+        .when(selected, |this| this.bg(rgb(t.line_soft)))
         .child(
             div()
-                .w(px(150.0))
-                .text_size(px(14.0))
-                .font_weight(FontWeight::MEDIUM)
-                .text_color(rgb(t.text))
-                .child(version.id.clone()),
-        )
-        .child(
-            div()
-                .w(px(72.0))
-                .text_size(px(11.0))
-                .text_color(rgb(t.muted))
-                .child(match version.kind {
-                    VersionKind::Release => tr(lang, "正式版", "Release"),
-                    VersionKind::Snapshot => tr(lang, "快照", "Snapshot"),
-                    VersionKind::OldAlpha => tr(lang, "远古 Alpha", "Old alpha"),
-                    VersionKind::OldBeta => tr(lang, "远古 Beta", "Old beta"),
-                }),
+                .id(("pick", index))
+                .role(Role::Button)
+                .aria_label(format!("select {}", version.id))
+                .w(px(260.0))
+                .h_full()
+                .flex()
+                .items_center()
+                .gap(px(16.0))
+                .cursor_pointer()
+                .on_click(pick)
+                .child(
+                    div()
+                        .w(px(150.0))
+                        .text_size(px(14.0))
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(rgb(t.text))
+                        .child(version.id.clone()),
+                )
+                .child(
+                    div()
+                        .w(px(72.0))
+                        .text_size(px(11.0))
+                        .text_color(rgb(t.muted))
+                        .child(match version.kind {
+                            VersionKind::Release => tr(lang, "正式版", "Release"),
+                            VersionKind::Snapshot => tr(lang, "快照", "Snapshot"),
+                            VersionKind::OldAlpha => tr(lang, "远古 Alpha", "Old alpha"),
+                            VersionKind::OldBeta => tr(lang, "远古 Beta", "Old beta"),
+                        }),
+                ),
         )
         .child(div().flex_1())
         .child(mono(VersionManifest::date_of(version), t))
         .child(mono(format!("#{:03}", index + 1), t))
         .child(
             div()
+                .flex()
+                .items_center()
+                .gap(px(8.0))
                 .when(installed, |this| {
                     this.child(
                         div()
@@ -304,6 +327,40 @@ fn row(
                             .child(mono(tr(lang, "已安装", "installed"), t)),
                     )
                 })
+                .child(
+                    quiet_button(tr(lang, "Fabric", "Fabric"), t)
+                        .id(("fabric", index))
+                        .role(Role::Button)
+                        .aria_label(format!("fabric {}", version.id))
+                        .on_click(cx.listener({
+                            let id = version.id.clone();
+                            move |shell, _, _, cx| {
+                                crate::install_flow::start_loader(
+                                    &mut shell.state,
+                                    id.clone(),
+                                    sealy_core::loader::LoaderKind::Fabric,
+                                    cx,
+                                );
+                            }
+                        })),
+                )
+                .child(
+                    quiet_button(tr(lang, "Quilt", "Quilt"), t)
+                        .id(("quilt", index))
+                        .role(Role::Button)
+                        .aria_label(format!("quilt {}", version.id))
+                        .on_click(cx.listener({
+                            let id = version.id.clone();
+                            move |shell, _, _, cx| {
+                                crate::install_flow::start_loader(
+                                    &mut shell.state,
+                                    id.clone(),
+                                    sealy_core::loader::LoaderKind::Quilt,
+                                    cx,
+                                );
+                            }
+                        })),
+                )
                 .when(!installed, |this| {
                     this.child(
                         quiet_button(tr(lang, "安装", "Install"), t)

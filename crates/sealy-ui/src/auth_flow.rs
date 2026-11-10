@@ -157,6 +157,7 @@ pub(crate) fn start(state: &mut ShellState, cx: &mut Context<SealyShell>) {
                         name: name.clone(),
                         uuid: uuid.clone(),
                         kind: sealy_core::accounts::AccountKind::Microsoft,
+                        server: None,
                     });
                     shell.state.tokens.store(
                         &uuid,
@@ -164,6 +165,7 @@ pub(crate) fn start(state: &mut ShellState, cx: &mut Context<SealyShell>) {
                             refresh_token: refresh,
                             minecraft_token: Some(access),
                             expires_at,
+                            ..Default::default()
                         },
                     );
                     shell.state.save_accounts();
@@ -185,6 +187,88 @@ pub(crate) fn start(state: &mut ShellState, cx: &mut Context<SealyShell>) {
                         row.tone = MessageTone::Failed;
                         row.cancel = None;
                         row.progress = None;
+                        row.detail = detail;
+                    });
+                    cx.notify();
+                });
+            }
+        }
+    })
+    .detach();
+}
+
+/// Signs in through an authlib-injector server (Yggdrasil).
+pub(crate) fn start_authlib(state: &mut ShellState, cx: &mut Context<SealyShell>) {
+    let Some(draft) = state.authlib_draft.clone() else {
+        return;
+    };
+
+    if draft.server.trim().is_empty()
+        || draft.username.trim().is_empty()
+        || draft.password.is_empty()
+    {
+        return;
+    }
+
+    let lang = state.language();
+    let message_id = state.push_message(
+        "外置登录".to_owned(),
+        tr(lang, "正在向服务器验证…", "Contacting the server…").to_owned(),
+        MessageTone::Running,
+    );
+    state.message_open = true;
+
+    let server = sealy_core::authlib::normalize_api(&draft.server);
+    let username = draft.username.clone();
+    let password = draft.password.clone();
+
+    cx.spawn(async move |this, cx| {
+        let login = {
+            let server = server.clone();
+            cx.background_executor()
+                .spawn(async move { sealy_core::authlib::login(&server, &username, &password) })
+                .await
+        };
+
+        match login {
+            Ok(session) => {
+                let name = session.name.clone();
+                let uuid = session.uuid.clone();
+                let _ = this.update(cx, |shell, cx| {
+                    shell.state.authlib_draft = None;
+                    let account = sealy_core::accounts::Account {
+                        name: name.clone(),
+                        uuid: uuid.clone(),
+                        kind: sealy_core::accounts::AccountKind::Authlib,
+                        server: Some(server.clone()),
+                    };
+                    shell.state.accounts.add(account);
+                    let account = shell.state.accounts.current().cloned();
+                    if let Some(account) = account {
+                        sealy_core::auth::cached_authlib(
+                            &mut shell.state.tokens,
+                            &account,
+                            &session,
+                        );
+                    }
+                    shell.state.save_accounts();
+                    shell.state.save_tokens();
+                    shell.state.update_message(message_id, |row| {
+                        row.tone = MessageTone::Done;
+                        row.progress = Some(1.0);
+                        row.cancel = None;
+                        row.detail = format!("已登录 {name}");
+                    });
+                    cx.notify();
+                });
+            }
+            Err(err) => {
+                let detail = err.to_string();
+                let _ = this.update(cx, |shell, cx| {
+                    shell.state.update_message(message_id, |row| {
+                        row.tone = MessageTone::Failed;
+                        row.progress = None;
+                        row.cancel = None;
                         row.detail = detail;
                     });
                     cx.notify();

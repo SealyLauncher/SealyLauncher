@@ -24,6 +24,12 @@ pub struct StoredTokens {
     /// Expiry of the Minecraft token, seconds since the Unix epoch.
     #[serde(default)]
     pub expires_at: u64,
+    /// authlib-injector access token.
+    #[serde(default)]
+    pub authlib_access_token: Option<String>,
+    /// authlib-injector client token.
+    #[serde(default)]
+    pub authlib_client_token: Option<String>,
 }
 
 /// `SealyData/tokens.json`.
@@ -85,8 +91,10 @@ pub fn ensure_minecraft_token(
     account: &Account,
     client_id: &str,
 ) -> Result<String, CoreError> {
-    if account.kind != AccountKind::Microsoft {
-        return Ok("0".to_owned());
+    match account.kind {
+        AccountKind::Offline => return Ok("0".to_owned()),
+        AccountKind::Authlib => return authlib_token(store, account),
+        AccountKind::Microsoft => {}
     }
 
     let now = now_epoch();
@@ -112,10 +120,49 @@ pub fn ensure_minecraft_token(
             refresh_token: msa.refresh_token.or(Some(refresh_token)),
             minecraft_token: Some(session.access_token.clone()),
             expires_at: now + session.expires_in,
+            ..Default::default()
         },
     );
 
     Ok(session.access_token)
+}
+
+/// Refreshes an authlib-injector session.
+fn authlib_token(store: &mut TokenStore, account: &Account) -> Result<String, CoreError> {
+    let server = account
+        .server
+        .clone()
+        .ok_or_else(|| CoreError::Network("外置账号缺少服务器地址，请重新登录".to_owned()))?;
+
+    let cached = store.entry(&account.uuid).cloned().unwrap_or_default();
+    let Some(access) = cached.authlib_access_token.clone() else {
+        return Err(CoreError::Network(
+            "外置登录已过期，请在账号页重新登录".to_owned(),
+        ));
+    };
+    let client = cached.authlib_client_token.unwrap_or_default();
+
+    match crate::authlib::refresh(&server, &access, &client) {
+        Ok(session) => {
+            cached_authlib(store, account, &session);
+            Ok(session.access_token)
+        }
+        Err(_) => Err(CoreError::Network(
+            "外置登录已过期，请在账号页重新登录".to_owned(),
+        )),
+    }
+}
+
+/// Caches an authlib session for later launches.
+pub fn cached_authlib(
+    store: &mut TokenStore,
+    account: &Account,
+    session: &crate::authlib::Session,
+) {
+    let mut entry = store.entry(&account.uuid).cloned().unwrap_or_default();
+    entry.authlib_access_token = Some(session.access_token.clone());
+    entry.authlib_client_token = Some(session.client_token.clone());
+    store.store(&account.uuid, entry);
 }
 
 #[cfg(test)]
@@ -139,6 +186,7 @@ mod tests {
             name: "Alex".to_owned(),
             uuid: "u".to_owned(),
             kind: AccountKind::Microsoft,
+            server: None,
         };
         store.store(
             "u",
@@ -146,6 +194,7 @@ mod tests {
                 refresh_token: Some("r".to_owned()),
                 minecraft_token: Some("mc".to_owned()),
                 expires_at: now_epoch() + 3_600,
+                ..Default::default()
             },
         );
         assert_eq!(

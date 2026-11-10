@@ -6,6 +6,7 @@
 pub mod accounts;
 pub mod assets;
 pub mod auth;
+pub mod authlib;
 pub mod config;
 pub mod error;
 pub mod events;
@@ -13,6 +14,7 @@ pub mod install;
 pub mod instances;
 pub mod java;
 pub mod launch;
+pub mod loader;
 pub mod logging;
 pub mod manifest;
 pub mod microsoft;

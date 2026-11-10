@@ -23,8 +23,11 @@ pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyEle
 
     let draft = state.account_draft.clone();
     let login = state.microsoft_login.clone();
+    let authlib = state.authlib_draft.clone();
 
-    let body: AnyElement = if let Some(login) = login {
+    let body: AnyElement = if let Some(authlib) = authlib {
+        authlib_form(&authlib, &t, lang, cx)
+    } else if let Some(login) = login {
         login_card(&login, &t, lang, cx)
     } else if draft.is_some() {
         editor(&draft.unwrap_or_default(), &t, lang, cx)
@@ -86,6 +89,16 @@ pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyEle
                             if let Some(account) = shell.state.accounts.current().cloned() {
                                 shell.state.remove_account(&account.name);
                             }
+                            cx.notify();
+                        })),
+                )
+                .child(
+                    quiet_button(tr(lang, "外置登录", "Authlib"), &t)
+                        .id("account-authlib")
+                        .role(Role::Button)
+                        .aria_label("authlib-login")
+                        .on_click(cx.listener(|shell, _, _, cx| {
+                            shell.state.authlib_draft = Some(Default::default());
                             cx.notify();
                         })),
                 )
@@ -211,6 +224,114 @@ fn editor(
                         .on_click(cx.listener(|shell, _, _, cx| {
                             shell.state.commit_account();
                             cx.notify();
+                        })),
+                ),
+        )
+        .into_any_element()
+}
+
+/// Three-field form for authlib-injector (Yggdrasil) sign-in.
+fn authlib_form(
+    draft: &crate::state::AuthlibDraft,
+    t: &ThemeTokens,
+    lang: Language,
+    cx: &mut Context<SealyShell>,
+) -> AnyElement {
+    let field = |index: usize, label: &'static str, value: String, masked: bool| {
+        let focused = draft.field == index;
+        let text = if masked {
+            "•".repeat(value.chars().count())
+        } else {
+            value
+        };
+        div()
+            .w(px(460.0))
+            .flex()
+            .flex_col()
+            .gap(px(6.0))
+            .child(
+                div()
+                    .text_size(px(11.0))
+                    .text_color(rgb(t.muted))
+                    .child(label),
+            )
+            .child(
+                div()
+                    .h(px(46.0))
+                    .px(px(14.0))
+                    .flex()
+                    .items_center()
+                    .rounded(px(theme::RADIUS_TILE))
+                    .border_1()
+                    .border_color(rgb(if focused { t.text } else { t.line }))
+                    .bg(rgb(t.surface))
+                    .child(
+                        div()
+                            .text_size(px(15.0))
+                            .text_color(rgb(t.text))
+                            .child(text),
+                    )
+                    .child(div().w(px(2.0)).h(px(18.0)).bg(rgb(t.text))),
+            )
+    };
+
+    div()
+        .flex()
+        .flex_col()
+        .items_center()
+        .gap(px(16.0))
+        .child(
+            div()
+                .text_size(px(22.0))
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(rgb(t.text))
+                .child(tr(lang, "外置登录", "Authlib sign-in")),
+        )
+        .child(field(
+            0,
+            tr(lang, "服务器地址", "Server (Yggdrasil API root)"),
+            draft.server.clone(),
+            false,
+        ))
+        .child(field(
+            1,
+            tr(lang, "用户名", "Username"),
+            draft.username.clone(),
+            false,
+        ))
+        .child(field(
+            2,
+            tr(lang, "密码", "Password"),
+            draft.password.clone(),
+            true,
+        ))
+        .child(
+            div()
+                .flex()
+                .items_center()
+                .gap(px(12.0))
+                .child(div().text_size(px(11.0)).text_color(rgb(t.muted)).child(tr(
+                    lang,
+                    "Tab 切换 · 回车登录 · Esc 取消",
+                    "Tab to switch · Enter to sign in · Esc to cancel",
+                )))
+                .child(
+                    quiet_button(tr(lang, "取消", "Cancel"), t)
+                        .id("authlib-cancel")
+                        .role(Role::Button)
+                        .aria_label("authlib-cancel")
+                        .on_click(cx.listener(|shell, _, _, cx| {
+                            shell.state.authlib_draft = None;
+                            cx.notify();
+                        })),
+                )
+                .child(
+                    quiet_button(tr(lang, "登录", "Sign in"), t)
+                        .id("authlib-submit")
+                        .role(Role::Button)
+                        .aria_label("authlib-submit")
+                        .on_click(cx.listener(|shell, _, _, cx| {
+                            crate::auth_flow::start_authlib(&mut shell.state, cx);
                         })),
                 ),
         )
