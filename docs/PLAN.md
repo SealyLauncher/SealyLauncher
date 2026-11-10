@@ -840,7 +840,7 @@ pub trait SkinProvider: Send + Sync;
 | Phase 5 打包发布 | ~70% | 三平台产物、SHA256SUMS、自动升版本发版、exe/macOS/Linux 图标、portable 目录 | xtask、诊断页、只读/多副本手工矩阵 |
 | Phase 6/7 | 0% | — | OEM 远程、Node 管理端、Forge 安装、自更新 |
 
-整体 v1 约 **75%**。已知与计划的偏差：
+整体 v1 约 **78%**。验证记录：\n\n- Fabric 0.20.1 + 26.4-snapshot-7：安装后启动成功，日志 Loading Minecraft 26.4-snapshot-7 with Fabric Loader 0.20.1。\n- Quilt 0.20.0-beta.9 + 同版本：安装与启动链路正常，Quilt Loader 自身报 UNABLE TO NORMALIZE MINECRAFT VERSION 26.4 Snapshot 7（加载器不支持该快照的版本号格式），与本项目无关。\n- authlib-injector：UI 表单、Yggdrasil 请求与错误透传、jar 下载均通过（cargo test -- --ignored 两项网络用例）；尚无真实第三方账号做端到端登录。\n\n已知与计划的偏差：
 
 1. 账户是单页而不是「三屏」，属于设计阶段调整（见 §9），功能等价。
 2. OOBE 由计划的五步合并为四步，账号步骤为强制项。
