@@ -59,6 +59,15 @@ cargo run -p sealy-app
 - 产物包含 `README.md`、`LICENSE`、`THIRD_PARTY_NOTICES.md`、`OEM.conf.example`。
 - 不产出 MSI/DMG/DEB/RPM/AppImage 安装包。
 
+## Microsoft 登录返回 403
+
+`api.minecraftservices.com` 只放行通过 Minecraft API 审核的 client id。收到 403 时服务端仍未认可当前应用：
+
+1. 核对 ID：Azure → App registrations → 目标应用概览页的 **Application (client) ID** 应等于启动器使用的值（默认 `e95460ea-8dcc-4dbc-bc2c-b823b9035ccb`，可通过 `SealyData/settings.json` 的 `auth.microsoft_client_id` 覆盖）。
+2. 核对审核：https://aka.ms/mce-reviewappid 提交的是否就是这个 ID；审批生效通常需要数小时到一天。
+3. 重新登录：消息中心会显示服务端原始返回与正在使用的 client id，可直接复制对照。
+
+客户端其他环节（设备码、Xbox Live、XSTS）失败会给出各自的错误码，不会落到 403。
 ## 文档
 
 - [实施计划](docs/PLAN.md)
