@@ -16,6 +16,8 @@
 
 ## [Unreleased]
 
+- 2026-11-11 — CI 与发版修复：ci.yml 的 Linux 依赖清单漏了续行符，libssl-dev 被当成命令执行，导致 ubuntu job 失败；Release 工作流的 bump 步骤推 tag 被拒（分支推送正常），改为由 ction-gh-release 通过 API 创建 tag（	arget_commitish: main）。Microsoft 登录的 403 现在会带上实际服务端返回与正在使用的 client id，便于核对审批。
+
 - 2026-11-10 — 版本继承与加载器：ersion::resolve 合并 inheritsFrom 链（父版本 jar/assets/Java/参数 + 子版本 mainClass 与库，库按 group:artifact 去重），启动与安装都改走合并后的文档，jar_id 决定用哪个版本的 client jar；新增 loader 模块从 Fabric/Quilt 元数据取最新稳定加载器、写入 profile JSON，下载页每个版本多出「Fabric」「Quilt」按钮，走统一安装流程（版本文件 → assets → Java）。实测 Fabric 0.20.1 + 26.4-snapshot-7 能启动，日志出现 Loading Minecraft 26.4-snapshot-7 with Fabric Loader 0.20.1。
 - 2026-11-10 — authlib-injector：新增 uthlib 模块（Yggdrasil 登录/刷新、API 根规范化、错误消息透传、ensure_injector 自动下载 jar、-javaagent 参数生成）；账号模型加 server 字段，令牌缓存加 authlib 两项，启动时自动刷新并注入；账号页新增「外置登录」三字段表单（Tab 切换 / 回车登录 / Esc 取消），失败信息落消息中心。
 - 2026-11-10 — PLAN 增补「16.1 实施状态」小节，逐阶段记录完成度与偏差。

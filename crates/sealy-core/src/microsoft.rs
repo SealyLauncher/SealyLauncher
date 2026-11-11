@@ -186,7 +186,11 @@ pub fn xsts(xbl_token: &str) -> Result<(String, String), CoreError> {
 }
 
 /// Logs into Minecraft services with an XSTS token.
-pub fn login_with_xbox(user_hash: &str, xsts_token: &str) -> Result<MinecraftSession, CoreError> {
+pub fn login_with_xbox(
+    user_hash: &str,
+    xsts_token: &str,
+    client_id: &str,
+) -> Result<MinecraftSession, CoreError> {
     let body = serde_json::json!({
         "identityToken": format!("XBL3.0 x={user_hash};{xsts_token}")
     });
@@ -197,9 +201,11 @@ pub fn login_with_xbox(user_hash: &str, xsts_token: &str) -> Result<MinecraftSes
     )?;
 
     if response.status == 403 {
-        return Err(CoreError::Network(
-            "Minecraft 拒绝了该应用（403）：Azure 应用尚未通过 Minecraft API 审核".to_owned(),
-        ));
+        let detail = describe(&response.body);
+        return Err(CoreError::Network(format!(
+            "Minecraft API 返回 403（应用未获授权）。客户端 ID：{client_id}；服务端返回：{detail}。\
+             若已通过审核，请确认提交审核的正是这个 ID，且审批生效可能需要数小时到一天"
+        )));
     }
     if !response.is_ok() {
         return Err(CoreError::Network(error_message(&response.body)));
@@ -209,6 +215,24 @@ pub fn login_with_xbox(user_hash: &str, xsts_token: &str) -> Result<MinecraftSes
         access_token: string_field(&response.body, "access_token"),
         expires_in: response.body["expires_in"].as_u64().unwrap_or(86_400),
     })
+}
+
+/// Compact description of an error body for messages.
+fn describe(body: &serde_json::Value) -> String {
+    if body.is_null() {
+        return "（空响应）".to_owned();
+    }
+    let error = body["error"].as_str().unwrap_or("");
+    let message = body["errorMessage"]
+        .as_str()
+        .or_else(|| body["error_description"].as_str())
+        .unwrap_or("");
+    match (error.is_empty(), message.is_empty()) {
+        (false, false) => format!("{error}: {message}"),
+        (false, true) => error.to_owned(),
+        (true, false) => message.to_owned(),
+        (true, true) => body.to_string(),
+    }
 }
 
 /// Reads the player profile.
@@ -234,10 +258,13 @@ pub fn profile(minecraft_token: &str) -> Result<Profile, CoreError> {
 }
 
 /// Runs the whole chain from an MSA token.
-pub fn complete_login(msa: &MsaToken) -> Result<(Profile, MinecraftSession), CoreError> {
+pub fn complete_login(
+    msa: &MsaToken,
+    client_id: &str,
+) -> Result<(Profile, MinecraftSession), CoreError> {
     let (xbl, _) = xbox_live(&msa.access_token)?;
     let (xsts_token, uhs) = xsts(&xbl)?;
-    let session = login_with_xbox(&uhs, &xsts_token)?;
+    let session = login_with_xbox(&uhs, &xsts_token, client_id)?;
     let profile = profile(&session.access_token)?;
     Ok((profile, session))
 }
@@ -297,6 +324,18 @@ mod tests {
         let body = serde_json::json!({ "XErr": 2_148_916_238u64 });
         let message = xsts_error(&body);
         assert!(message.contains("儿童账号"));
+    }
+
+    #[test]
+    fn describes_403_bodies() {
+        let body = serde_json::json!({
+            "path": "/authentication/login_with_xbox",
+            "error": "FORBIDDEN",
+            "errorMessage": "Invalid app registration"
+        });
+        let text = describe(&body);
+        assert!(text.contains("FORBIDDEN"));
+        assert!(text.contains("Invalid app registration"));
     }
 
     #[test]

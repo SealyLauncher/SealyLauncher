@@ -112,7 +112,7 @@ pub fn ensure_minecraft_token(
         .ok_or_else(|| CoreError::Network("登录已过期，请重新登录 Microsoft".to_owned()))?;
 
     let msa = microsoft::refresh(client_id, &refresh_token)?;
-    let (_, session) = microsoft::complete_login(&msa)?;
+    let (_, session) = microsoft::complete_login(&msa, client_id)?;
 
     store.store(
         &account.uuid,

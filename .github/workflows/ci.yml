@@ -89,7 +89,7 @@ jobs:
             libxkbcommon-x11-dev \
             libwayland-dev \
             libvulkan-dev \
-            libgl1-mesa-dev 
+            libgl1-mesa-dev \
             libssl-dev
 
       - name: Cache cargo

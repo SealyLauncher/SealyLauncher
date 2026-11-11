@@ -133,12 +133,13 @@ pub(crate) fn start(state: &mut ShellState, cx: &mut Context<SealyShell>) {
             .background_executor()
             .spawn({
                 let msa_access = msa.access_token.clone();
+                let client_id_clone = client_id.clone();
                 async move {
                     let token = sealy_core::microsoft::MsaToken {
                         access_token: msa_access,
                         refresh_token: None,
                     };
-                    sealy_core::microsoft::complete_login(&token)
+                    sealy_core::microsoft::complete_login(&token, &client_id_clone)
                 }
             })
             .await;
