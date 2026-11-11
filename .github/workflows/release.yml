@@ -180,9 +180,12 @@ jobs:
           toolchain: ${{ env.RUST_VERSION }}
 
       - name: Install Linux dependencies
+        timeout-minutes: 15
+        env:
+          DEBIAN_FRONTEND: noninteractive
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
+          sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=20 update
+          sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=20 install -y \
             build-essential pkg-config clang cmake ninja-build zstd \
             libfontconfig1-dev libfreetype-dev \
             libx11-dev libx11-xcb-dev libxcb1-dev libxcb-shape0-dev libxcb-xfixes0-dev \
