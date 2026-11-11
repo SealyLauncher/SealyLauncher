@@ -62,14 +62,32 @@ jobs:
         with:
           toolchain: "1.99.1"
 
+      - name: Point apt at upstream mirrors
+        if: runner.os == 'Linux'
+        timeout-minutes: 3
+        run: |
+          # The Azure mirror host intermittently fails DNS on hosted runners
+          # ("Temporary failure resolving 'azure.archive.ubuntu.com'").
+          sudo tee /etc/apt/sources.list > /dev/null <<'EOF'
+          deb http://archive.ubuntu.com/ubuntu jammy main restricted universe multiverse
+          deb http://archive.ubuntu.com/ubuntu jammy-updates main restricted universe multiverse
+          deb http://archive.ubuntu.com/ubuntu jammy-backports main restricted universe multiverse
+          deb http://security.ubuntu.com/ubuntu jammy-security main restricted universe multiverse
+          EOF
+          sudo rm -f /etc/apt/apt-mirrors.txt
+
       - name: Refresh apt indexes
         if: runner.os == 'Linux'
         timeout-minutes: 8
         env:
           DEBIAN_FRONTEND: noninteractive
         run: |
-          sudo apt-get -o Acquire::ForceIPv4=true -o Acquire::Retries=2 \
-            -o Acquire::http::Timeout=15 update
+          for attempt in 1 2 3; do
+            sudo apt-get -o Acquire::ForceIPv4=true -o Acquire::Retries=2 \
+              -o Acquire::http::Timeout=15 update && exit 0
+            sleep 10
+          done
+          exit 1
 
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
@@ -77,32 +95,21 @@ jobs:
         env:
           DEBIAN_FRONTEND: noninteractive
         run: |
-          sudo apt-get -o Acquire::ForceIPv4=true -o Acquire::Retries=3 \
-            -o Acquire::http::Timeout=30 -o APT::Get::Lock-Timeout=60 -o Dpkg::Use-Pty=0 install -y --no-install-recommends \
-            build-essential \
-            pkg-config \
-            clang \
-            cmake \
-            ninja-build \
-            libfontconfig1-dev \
-            libfreetype-dev \
-            libx11-dev \
-            libx11-xcb-dev \
-            libxcb1-dev \
-            libxcb-shape0-dev \
-            libxcb-xfixes0-dev \
-            libxcb-render0-dev \
-            libxcb-randr0-dev \
-            libxcb-util-dev \
-            libxcb-keysyms1-dev \
-            libxcb-icccm4-dev \
-            libxcb-xkb-dev \
-            libxkbcommon-dev \
-            libxkbcommon-x11-dev \
-            libwayland-dev \
-            libvulkan-dev \
-            libgl1-mesa-dev \
-            libssl-dev
+          packages="build-essential pkg-config clang cmake ninja-build \
+            libfontconfig1-dev libfreetype-dev \
+            libx11-dev libx11-xcb-dev libxcb1-dev libxcb-shape0-dev libxcb-xfixes0-dev \
+            libxcb-render0-dev libxcb-randr0-dev libxcb-util-dev libxcb-keysyms1-dev \
+            libxcb-icccm4-dev libxcb-xkb-dev libxkbcommon-dev libxkbcommon-x11-dev \
+            libwayland-dev libvulkan-dev libgl1-mesa-dev libssl-dev"
+          for attempt in 1 2 3; do
+            if sudo apt-get -o Acquire::ForceIPv4=true -o Acquire::Retries=3 \
+                -o Acquire::http::Timeout=30 -o APT::Get::Lock-Timeout=60 \
+                -o Dpkg::Use-Pty=0 install -y --no-install-recommends $packages; then
+              exit 0
+            fi
+            sleep 15
+          done
+          exit 1
 
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
