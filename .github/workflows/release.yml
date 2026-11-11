@@ -226,20 +226,34 @@ jobs:
           done
           exit 1
 
-      - name: Link runtime libraries for the linker
+      - name: Prepare xkbcommon shared libraries
         if: runner.os == 'Linux'
         shell: bash
         run: |
-          # The hosted image ships the runtime sonames but not the -dev
-          # symlinks; apt cannot reach ubuntu mirrors from these runners.
+          # The hosted image ships libxkbcommon.so.0 but no -dev symlink, and
+          # misses libxkbcommon-x11 entirely; apt cannot reach ubuntu mirrors
+          # from these runners ("Could not resolve 'archive.ubuntu.com'").
+          # The x11 variant is replaced by a link-time shim whose SONAME matches
+          # the real package, so the produced binary loads the system library at
+          # runtime.
           dir=/usr/lib/x86_64-linux-gnu
-          for stem in libxkbcommon libxkbcommon-x11; do
-            versioned=$(ls "$dir/$stem.so".0* 2>/dev/null | head -1 || true)
-            if [ -n "$versioned" ] && [ ! -e "$dir/$stem.so" ]; then
-              sudo ln -s "$(basename "$versioned")" "$dir/$stem.so"
-            fi
-          done
+          versioned=$(ls "$dir/libxkbcommon.so".0* 2>/dev/null | head -1 || true)
+          if [ -n "$versioned" ] && [ ! -e "$dir/libxkbcommon.so" ]; then
+            sudo ln -s "$(basename "$versioned")" "$dir/libxkbcommon.so"
+          fi
+          if [ ! -e "$dir/libxkbcommon-x11.so.0" ]; then
+            printf '%s\n' \
+              'int xkb_x11_get_core_keyboard_device_id(void *c) { (void)c; return -1; }' \
+              'void *xkb_x11_keymap_new_from_device(void *x, void *c, int id, int f) { (void)x; (void)c; (void)id; (void)f; return 0; }' \
+              'void *xkb_x11_state_new_from_device(void *k, void *c, int id) { (void)k; (void)c; (void)id; return 0; }' \
+              > /tmp/xkbcommon-x11-shim.c
+            gcc -shared -fPIC -Wl,-soname,libxkbcommon-x11.so.0 \
+              -o /tmp/libxkbcommon-x11.so.0 /tmp/xkbcommon-x11-shim.c
+            sudo cp /tmp/libxkbcommon-x11.so.0 "$dir/libxkbcommon-x11.so.0"
+            sudo ln -sf libxkbcommon-x11.so.0 "$dir/libxkbcommon-x11.so"
+          fi
           ls -l "$dir/libxkbcommon"*.so* || true
+
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
 
