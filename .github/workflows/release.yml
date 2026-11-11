@@ -226,6 +226,20 @@ jobs:
           done
           exit 1
 
+      - name: Link runtime libraries for the linker
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          # The hosted image ships the runtime sonames but not the -dev
+          # symlinks; apt cannot reach ubuntu mirrors from these runners.
+          dir=/usr/lib/x86_64-linux-gnu
+          for stem in libxkbcommon libxkbcommon-x11; do
+            versioned=$(ls "$dir/$stem.so".0* 2>/dev/null | head -1 || true)
+            if [ -n "$versioned" ] && [ ! -e "$dir/$stem.so" ]; then
+              sudo ln -s "$(basename "$versioned")" "$dir/$stem.so"
+            fi
+          done
+          ls -l "$dir/libxkbcommon"*.so* || true
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
 
