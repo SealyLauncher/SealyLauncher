@@ -77,6 +77,7 @@ jobs:
           sudo rm -f /etc/apt/apt-mirrors.txt
 
       - name: Refresh apt indexes
+        continue-on-error: true
         if: runner.os == 'Linux'
         timeout-minutes: 8
         env:
@@ -90,6 +91,7 @@ jobs:
           exit 1
 
       - name: Install Linux dependencies
+        continue-on-error: true
         if: runner.os == 'Linux'
         timeout-minutes: 20
         env:

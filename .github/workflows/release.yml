@@ -192,6 +192,7 @@ jobs:
           sudo rm -f /etc/apt/apt-mirrors.txt
 
       - name: Refresh apt indexes
+        continue-on-error: true
         timeout-minutes: 8
         env:
           DEBIAN_FRONTEND: noninteractive
@@ -204,6 +205,7 @@ jobs:
           exit 1
 
       - name: Install Linux dependencies
+        continue-on-error: true
         timeout-minutes: 20
         env:
           DEBIAN_FRONTEND: noninteractive
