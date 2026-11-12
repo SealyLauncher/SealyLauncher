@@ -5,8 +5,8 @@ use std::time::Duration;
 
 use crate::app::SealyShell;
 use crate::components::{
-    action_bar, block_tile, icon_button, index_badge, list_tile, medium_tile, mono, primary_button,
-    small_tile, wide_tile,
+    action_bar, block_tile, icon_button, list_tile, medium_tile, mono, primary_button, small_tile,
+    wide_tile,
 };
 use crate::i18n::tr;
 use crate::kit::*;
@@ -345,8 +345,7 @@ fn head_band_carousel(t: &ThemeTokens, lang: Language, motion: MotionSetting, us
         .px(px(theme::PAGE_PADDING))
         .bg(rgb(t.surface))
         .border_b_1()
-        .border_color(rgb(t.line))
-        .child(index_badge("01", t));
+        .border_color(rgb(t.line));
 
     if motion == MotionSetting::Never {
         return band.child(

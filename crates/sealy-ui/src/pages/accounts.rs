@@ -52,7 +52,7 @@ pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyEle
         .size_full()
         .flex()
         .flex_col()
-        .child(head_band_back("04", tr(lang, "账号", "Accounts"), &t, cx))
+        .child(head_band_back(tr(lang, "账号", "Accounts"), &t, cx))
         .child(
             div()
                 .flex_1()
@@ -87,7 +87,18 @@ pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyEle
                         .aria_label("delete-account")
                         .on_click(cx.listener(|shell, _, _, cx| {
                             if let Some(account) = shell.state.accounts.current().cloned() {
-                                shell.state.remove_account(&account.name);
+                                let name = account.name.clone();
+                                if let Some(pending) = shell.state.remove_account(&name) {
+                                    shell.state.pending_undo = Some(pending);
+                                    let lang = shell.state.language();
+                                    let message = format!(
+                                        "{} {name}",
+                                        tr(lang, "已删除账号", "Deleted account")
+                                    );
+                                    shell
+                                        .state
+                                        .show_toast(message, Some(crate::state::ToastAction::Undo));
+                                }
                             }
                             cx.notify();
                         })),

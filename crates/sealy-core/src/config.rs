@@ -213,6 +213,17 @@ pub struct Settings {
     /// Authentication.
     #[serde(default)]
     pub auth: AuthSettings,
+    /// Debugging.
+    #[serde(default)]
+    pub debug: DebugSettings,
+}
+
+/// Debugging settings.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DebugSettings {
+    /// When on, the launcher writes DEBUG-level logs to SealyData/logs.
+    #[serde(default)]
+    pub verbose_logging: bool,
 }
 
 /// Authentication settings.
@@ -246,6 +257,7 @@ impl Default for Settings {
             launch: LaunchSettings::default(),
             motion: MotionSetting::default(),
             auth: AuthSettings::default(),
+            debug: DebugSettings::default(),
         }
     }
 }

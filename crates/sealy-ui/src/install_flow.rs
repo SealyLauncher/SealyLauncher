@@ -140,15 +140,15 @@ fn spawn(state: &mut ShellState, cx: &mut Context<SealyShell>, title: String, jo
 
             if let Err(err) = outcome {
                 if err == CANCELLED {
-                    finish(&this, cx, message_id, MessageTone::Failed, "已取消");
+                    finish(&this, cx, message_id, MessageTone::Failed, "已取消", &root);
                 } else {
-                    finish(&this, cx, message_id, MessageTone::Failed, &err);
+                    finish(&this, cx, message_id, MessageTone::Failed, &err, &root);
                 }
                 return;
             }
         }
 
-        finish(&this, cx, message_id, MessageTone::Done, "安装完成");
+        finish(&this, cx, message_id, MessageTone::Done, "安装完成", &root);
     })
     .detach();
 }
@@ -296,10 +296,14 @@ fn finish(
     id: u64,
     tone: MessageTone,
     detail: &str,
+    root: &Path,
 ) {
+    // A loader install adds a version directory; refresh the picker data.
+    let installed = sealy_core::version::installed(root);
     let detail = detail.to_owned();
     let _ = this.update(cx, |shell, cx| {
         shell.state.install = None;
+        shell.state.installed = installed;
         shell.state.update_message(id, |row| {
             row.tone = tone;
             row.progress = if tone == MessageTone::Done {

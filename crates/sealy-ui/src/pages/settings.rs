@@ -33,7 +33,7 @@ pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyEle
         .size_full()
         .flex()
         .flex_col()
-        .child(head_band_back("05", tr(lang, "设置", "Settings"), &t, cx))
+        .child(head_band_back(tr(lang, "设置", "Settings"), &t, cx))
         .child(
             div()
                 .flex_1()
@@ -189,6 +189,63 @@ pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyEle
                             &t,
                         ))
                         .child(row(
+                            tr(lang, "调试日志", "Debug logging"),
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap(px(10.0))
+                                .child(div().text_size(px(11.0)).text_color(rgb(t.muted)).child(
+                                    tr(
+                                        lang,
+                                        "开启后把 DEBUG 级别写入 SealyData/logs",
+                                        "Writes DEBUG lines to SealyData/logs",
+                                    ),
+                                ))
+                                .child(
+                                    quiet_button(tr(lang, "打开日志", "Open logs"), &t)
+                                        .id("open-logs")
+                                        .role(Role::Button)
+                                        .aria_label("open-logs")
+                                        .on_click(cx.listener(|shell, _, _, cx| {
+                                            shell.state.open_logs_folder();
+                                            cx.notify();
+                                        })),
+                                )
+                                .child(
+                                    choice_button(
+                                        tr(lang, "开", "On"),
+                                        state.settings.debug.verbose_logging,
+                                        &t,
+                                    )
+                                    .id("debug-on")
+                                    .role(Role::Button)
+                                    .aria_label("debug-on")
+                                    .on_click(cx.listener(
+                                        |shell, _, _, cx| {
+                                            shell.state.set_verbose_logging(true);
+                                            cx.notify();
+                                        },
+                                    )),
+                                )
+                                .child(
+                                    choice_button(
+                                        tr(lang, "关", "Off"),
+                                        !state.settings.debug.verbose_logging,
+                                        &t,
+                                    )
+                                    .id("debug-off")
+                                    .role(Role::Button)
+                                    .aria_label("debug-off")
+                                    .on_click(cx.listener(
+                                        |shell, _, _, cx| {
+                                            shell.state.set_verbose_logging(false);
+                                            cx.notify();
+                                        },
+                                    )),
+                                ),
+                            &t,
+                        ))
+                        .child(row(
                             tr(lang, "设置向导", "Setup wizard"),
                             quiet_button(tr(lang, "重新运行", "Run again"), &t)
                                 .id("restart-oobe")
@@ -204,12 +261,10 @@ pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyEle
             action_bar(&t).child(div().flex_1()).child(
                 quiet_button(tr(lang, "打开数据目录", "Open data folder"), &t)
                     .id("open-data")
+                    .role(Role::Button)
+                    .aria_label("open-data")
                     .on_click(cx.listener(|shell, _, _, cx| {
-                        shell.state.notify(tr(
-                            shell.state.language(),
-                            "打开目录将在 Phase 2 接入",
-                            "Opening the folder arrives in Phase 2",
-                        ));
+                        shell.state.open_data_folder();
                         cx.notify();
                     })),
             ),

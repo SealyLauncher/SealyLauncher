@@ -26,7 +26,7 @@ pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyEle
     let body = if state.rename_draft.is_some() {
         rename_card(state, &t, lang, cx)
     } else if state.new_instance_open {
-        picker(state, &t, lang, cx)
+        create_panel(state, &t, lang, cx)
     } else if rows.is_empty() {
         empty(&t, lang)
     } else {
@@ -52,7 +52,7 @@ pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyEle
         .size_full()
         .flex()
         .flex_col()
-        .child(head_band_back("02", tr(lang, "实例", "Instances"), &t, cx))
+        .child(head_band_back(tr(lang, "实例", "Instances"), &t, cx))
         .child(
             div()
                 .flex_1()
@@ -117,7 +117,18 @@ pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyEle
                         .aria_label("delete-instance")
                         .on_click(cx.listener(|shell, _, _, cx| {
                             if let Some(instance) = shell.state.instances.current().cloned() {
-                                shell.state.remove_instance(&instance.name);
+                                let name = instance.name.clone();
+                                if let Some(pending) = shell.state.remove_instance(&name) {
+                                    shell.state.pending_undo = Some(pending);
+                                    let lang = shell.state.language();
+                                    let message = format!(
+                                        "{} {name}",
+                                        tr(lang, "已删除实例", "Deleted instance")
+                                    );
+                                    shell
+                                        .state
+                                        .show_toast(message, Some(crate::state::ToastAction::Undo));
+                                }
                             }
                             cx.notify();
                         })),
@@ -229,66 +240,224 @@ fn rename_card(
         .into_any_element()
 }
 
-/// Version picker shown while creating an instance.
-fn picker(
+/// New-instance panel: a scrollable version list with loader actions.
+fn create_panel(
     state: &ShellState,
     t: &ThemeTokens,
     lang: sealy_core::config::Language,
     cx: &mut Context<SealyShell>,
 ) -> AnyElement {
-    let mut choices = div().flex().flex_wrap().gap(px(10.0));
+    let mut list = div()
+        .id("create-list")
+        .flex_1()
+        .min_h(px(0.0))
+        .w_full()
+        .overflow_y_scroll()
+        .flex()
+        .flex_col();
 
     if state.installed.is_empty() {
-        choices = choices.child(div().text_size(px(12.0)).text_color(rgb(t.muted)).child(tr(
-            lang,
-            "还没有已安装的版本，请先去下载页安装",
-            "No installed version — install one from Downloads",
-        )));
+        list = list.child(
+            div()
+                .py(px(18.0))
+                .text_size(px(12.0))
+                .text_color(rgb(t.muted))
+                .child(tr(
+                    lang,
+                    "还没有已安装的版本，先去下载页安装一个",
+                    "No installed version — install one from Downloads",
+                )),
+        );
     } else {
-        for version in state.installed.iter().take(8) {
+        for (index, version) in state.installed.iter().take(40).enumerate() {
             let id = version.id.clone();
-            choices = choices.child(
-                quiet_button(version.id.clone(), t)
-                    .id(("pick", version.id.len()))
+            let (kind, inherits) = version_meta(&version.document, lang);
+            let subtitle = match &inherits {
+                Some(parent) => format!("{kind} · {parent}"),
+                None => kind.clone(),
+            };
+
+            let pick = {
+                let id = id.clone();
+                cx.listener(move |shell, _, _, cx| {
+                    shell.state.create_instance(&id);
+                    shell.state.new_instance_open = false;
+                    cx.notify();
+                })
+            };
+            let fabric = {
+                let id = id.clone();
+                cx.listener(move |shell, _, _, cx| {
+                    cx.stop_propagation();
+                    crate::install_flow::start_loader(
+                        &mut shell.state,
+                        id.clone(),
+                        sealy_core::loader::LoaderKind::Fabric,
+                        cx,
+                    );
+                })
+            };
+            let quilt = {
+                let id = id.clone();
+                cx.listener(move |shell, _, _, cx| {
+                    cx.stop_propagation();
+                    crate::install_flow::start_loader(
+                        &mut shell.state,
+                        id.clone(),
+                        sealy_core::loader::LoaderKind::Quilt,
+                        cx,
+                    );
+                })
+            };
+
+            list = list.child(
+                div()
+                    .id(("create-row", index))
                     .role(Role::Button)
-                    .aria_label(format!("pick {}", version.id))
-                    .on_click(cx.listener(move |shell, _, _, cx| {
-                        shell.state.create_instance(&id);
-                        shell.state.new_instance_open = false;
-                        cx.notify();
-                    })),
+                    .aria_label(format!("pick {id}"))
+                    .h(px(64.0))
+                    .w_full()
+                    .flex_shrink_0()
+                    .px(px(8.0))
+                    .flex()
+                    .items_center()
+                    .gap(px(14.0))
+                    .border_b_1()
+                    .border_color(rgb(t.line_soft))
+                    .cursor_pointer()
+                    .hover({
+                        let hover = t.line_soft;
+                        move |this| this.bg(rgb(hover))
+                    })
+                    .on_click(pick)
+                    .child(
+                        div()
+                            .w(px(30.0))
+                            .h(px(30.0))
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .rounded(px(theme::RADIUS_TILE))
+                            .border_1()
+                            .border_color(rgb(t.line))
+                            .child(
+                                Icon::new(IconName::Box)
+                                    .w(px(15.0))
+                                    .h(px(15.0))
+                                    .text_color(rgb(t.text)),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w(px(0.0))
+                            .flex()
+                            .flex_col()
+                            .gap(px(2.0))
+                            .child(
+                                div()
+                                    .text_size(px(14.0))
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .text_color(rgb(t.text))
+                                    .child(id.clone()),
+                            )
+                            .child(
+                                div()
+                                    .text_size(px(11.0))
+                                    .text_color(rgb(t.muted))
+                                    .child(subtitle),
+                            ),
+                    )
+                    .child(
+                        quiet_button(tr(lang, "Fabric", "Fabric"), t)
+                            .id(("create-fabric", index))
+                            .role(Role::Button)
+                            .aria_label(format!("fabric {id}"))
+                            .on_click(fabric),
+                    )
+                    .child(
+                        quiet_button(tr(lang, "Quilt", "Quilt"), t)
+                            .id(("create-quilt", index))
+                            .role(Role::Button)
+                            .aria_label(format!("quilt {id}"))
+                            .on_click(quilt),
+                    ),
             );
         }
     }
 
     div()
         .flex_1()
+        .min_h(px(0.0))
         .flex()
         .flex_col()
-        .items_start()
-        .gap(px(16.0))
-        .pt(px(22.0))
+        .gap(px(12.0))
+        .pt(px(6.0))
         .child(
             div()
-                .text_size(px(13.0))
-                .font_weight(FontWeight::SEMIBOLD)
-                .text_color(rgb(t.text))
-                .child(tr(lang, "选择版本", "Choose a version")),
+                .flex()
+                .items_baseline()
+                .gap(px(10.0))
+                .child(
+                    div()
+                        .text_size(px(13.0))
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_color(rgb(t.text))
+                        .child(tr(lang, "选择版本", "Choose a version")),
+                )
+                .child(div().text_size(px(11.0)).text_color(rgb(t.muted)).child(tr(
+                    lang,
+                    "点版本直接创建，或先装 Fabric / Quilt",
+                    "Click a version to create, or add Fabric / Quilt first",
+                ))),
         )
-        .child(choices)
+        .child(list)
         .child(
-            div().flex().child(
-                quiet_button(tr(lang, "取消", "Cancel"), t)
-                    .id("pick-cancel")
-                    .role(Role::Button)
-                    .aria_label("pick-cancel")
-                    .on_click(cx.listener(|shell, _, _, cx| {
-                        shell.state.new_instance_open = false;
-                        cx.notify();
-                    })),
-            ),
+            div()
+                .flex_shrink_0()
+                .flex()
+                .items_center()
+                .gap(px(10.0))
+                .child(
+                    quiet_button(tr(lang, "取消", "Cancel"), t)
+                        .id("pick-cancel")
+                        .role(Role::Button)
+                        .aria_label("pick-cancel")
+                        .on_click(cx.listener(|shell, _, _, cx| {
+                            shell.state.new_instance_open = false;
+                            cx.notify();
+                        })),
+                )
+                .child(div().flex_1())
+                .child(
+                    div()
+                        .text_size(px(11.0))
+                        .text_color(rgb(t.muted))
+                        .child(format!(
+                            "{} {}",
+                            state.installed.len(),
+                            tr(lang, "个已安装版本", "installed versions")
+                        )),
+                ),
         )
         .into_any_element()
+}
+
+/// Reads the version type and parent id from an installed document.
+fn version_meta(
+    document: &std::path::Path,
+    lang: sealy_core::config::Language,
+) -> (String, Option<String>) {
+    let Ok(text) = std::fs::read_to_string(document) else {
+        return (tr(lang, "未知", "unknown").to_owned(), None);
+    };
+    let Ok(json) = serde_json::from_str::<serde_json::Value>(&text) else {
+        return (tr(lang, "未知", "unknown").to_owned(), None);
+    };
+
+    let kind = json["type"].as_str().unwrap_or("release").to_owned();
+    let parent = json["inheritsFrom"].as_str().map(str::to_owned);
+    (kind, parent)
 }
 
 fn empty(t: &ThemeTokens, lang: sealy_core::config::Language) -> AnyElement {

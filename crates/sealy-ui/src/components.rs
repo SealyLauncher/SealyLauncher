@@ -16,40 +16,18 @@ pub fn mono(text: impl Into<SharedString>, t: &ThemeTokens) -> Div {
         .child(text)
 }
 
-/// Square index badge (`01`) used before a page title.
-pub fn index_badge(index: impl Into<SharedString>, t: &ThemeTokens) -> Div {
-    let index: SharedString = index.into();
-    div()
-        .w(px(26.0))
-        .h(px(18.0))
-        .flex()
-        .items_center()
-        .justify_center()
-        .rounded(px(theme::RADIUS_TILE))
-        .bg(rgb(t.block))
-        .child(
-            div()
-                .text_size(px(10.0))
-                .font_weight(FontWeight::MEDIUM)
-                .text_color(rgb(t.block_text))
-                .child(index),
-        )
-}
-
-/// Page title band: index badge plus the single large title.
-pub fn head_band(index: &str, title: impl Into<SharedString>, t: &ThemeTokens) -> Div {
+/// Page title band with the single large title.
+pub fn head_band(title: impl Into<SharedString>, t: &ThemeTokens) -> Div {
     let title: SharedString = title.into();
     div()
         .h(px(theme::HEAD_HEIGHT))
         .flex_shrink_0()
         .flex()
         .items_center()
-        .gap(px(14.0))
         .px(px(theme::PAGE_PADDING))
         .bg(rgb(t.surface))
         .border_b_1()
         .border_color(rgb(t.line))
-        .child(index_badge(index, t))
         .child(
             div()
                 .text_size(px(42.0))
@@ -61,7 +39,6 @@ pub fn head_band(index: &str, title: impl Into<SharedString>, t: &ThemeTokens) -
 
 /// Head band with a back arrow, for every page except the home screen.
 pub(crate) fn head_band_back(
-    index: &str,
     title: impl Into<SharedString>,
     t: &ThemeTokens,
     cx: &mut Context<crate::app::SealyShell>,
@@ -106,7 +83,6 @@ pub(crate) fn head_band_back(
                     cx.notify();
                 })),
         )
-        .child(index_badge(index, t))
         .child(
             div()
                 .text_size(px(42.0))

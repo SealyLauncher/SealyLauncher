@@ -84,6 +84,16 @@ impl AccountBook {
         self.accounts.push(account);
     }
 
+    /// Puts a removed account back at index, selecting it again if asked.
+    pub fn restore(&mut self, account: Account, index: usize, select: bool) {
+        let index = index.min(self.accounts.len());
+        let name = account.name.clone();
+        self.accounts.insert(index, account);
+        if select {
+            self.selected = Some(name);
+        }
+    }
+
     /// Removes an account by name.
     pub fn remove(&mut self, name: &str) {
         self.accounts.retain(|account| account.name != name);
@@ -131,6 +141,18 @@ pub fn offline_uuid(name: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn restore_keeps_position_and_selection() {
+        let mut book = AccountBook::default();
+        book.add(Account::offline("a"));
+        book.add(Account::offline("b"));
+        let removed = book.accounts[0].clone();
+        book.remove("a");
+        book.restore(removed, 0, true);
+        assert_eq!(book.accounts[0].name, "a");
+        assert_eq!(book.selected.as_deref(), Some("a"));
+    }
 
     #[test]
     fn offline_uuid_is_stable_and_dashed() {

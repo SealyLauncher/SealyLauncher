@@ -70,6 +70,16 @@ impl InstanceBook {
         }
     }
 
+    /// Puts a removed instance back at `index`, selecting it again if asked.
+    pub fn restore(&mut self, instance: Instance, index: usize, select: bool) {
+        let index = index.min(self.instances.len());
+        let name = instance.name.clone();
+        self.instances.insert(index, instance);
+        if select {
+            self.selected = Some(name);
+        }
+    }
+
     /// Renames an instance, keeping its position and selection.
     pub fn rename(&mut self, from: &str, to: &str) -> bool {
         let target = to.trim();
@@ -214,6 +224,20 @@ mod tests {
         assert_eq!(book.create("1.21.11").name, "1.21.11 (2)");
         assert_eq!(book.instances.len(), 2);
         assert_eq!(book.selected.as_deref(), Some("1.21.11 (2)"));
+    }
+
+    #[test]
+    fn restore_keeps_position_and_selection() {
+        let mut book = InstanceBook::default();
+        book.create("a");
+        book.create("b");
+        book.create("c");
+        let removed = book.instances[1].clone();
+        book.remove("b");
+        assert_eq!(book.instances.len(), 2);
+        book.restore(removed, 1, true);
+        assert_eq!(book.instances[1].name, "b");
+        assert_eq!(book.selected.as_deref(), Some("b"));
     }
 
     #[test]

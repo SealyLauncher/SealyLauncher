@@ -836,7 +836,7 @@ pub trait SkinProvider: Send + Sync;
 | Phase 1 壳层/设计 | ~90% | paths/config/logging/events/单实例、kit 封装、主题 token、组件、页面骨架、i18n、键盘导航 | UI 缩放（`ui_scale`） |
 | Phase 2 启动核心 | ~90% | 版本安装、assets、libraries、natives、Java 自动下载、参数生成、进程/日志、取消、**版本继承（inheritsFrom 合并）**、**Fabric/Quilt 安装并启动** | 整合包导入、CLI 启动参数、Forge/NeoForge 安装（v1.1） |
 | Phase 3 认证 | ~90% | 离线账号、Microsoft 设备码全链路、**authlib-injector 登录 + `-javaagent` 注入 + jar 自动下载** | 头像、账户流三屏（当前为单页）；外置登录尚无真实账号端到端验证 |
-| Phase 4 UI 产品化 | ~75% | 首页/实例/下载/设置/账号、OOBE 四步（含账号强制）、实例重命名/复制/开目录、消息中心 | OEM.conf 解析、`ui_scale`、OOBE 第五步（计划中已合并） |
+| Phase 4 UI 产品化 | ~85% | 首页/实例/下载/设置/账号、OOBE 四步（含账号强制）、实例重命名/复制/开目录、消息中心、**toast 自动消失 + 删除撤销**、**新建实例列表化并内置 Fabric/Quilt**、**去角标**、**调试日志开关** | OEM.conf 解析、`ui_scale`、OOBE 第五步（计划中已合并） |
 | Phase 5 打包发布 | ~70% | 三平台产物、SHA256SUMS、自动升版本发版、exe/macOS/Linux 图标、portable 目录 | xtask、诊断页、只读/多副本手工矩阵 |
 | Phase 6/7 | 0% | — | OEM 远程、Node 管理端、Forge 安装、自更新 |
 

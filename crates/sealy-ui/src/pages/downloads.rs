@@ -43,7 +43,7 @@ pub(crate) fn render(state: &mut ShellState, cx: &mut Context<SealyShell>) -> An
         .size_full()
         .flex()
         .flex_col()
-        .child(head_band_back("03", tr(lang, "下载", "Downloads"), &t, cx))
+        .child(head_band_back(tr(lang, "下载", "Downloads"), &t, cx))
         .child(
             div()
                 .flex_1()

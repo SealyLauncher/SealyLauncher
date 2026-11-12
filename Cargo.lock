@@ -5747,6 +5747,7 @@ version = "0.1.15"
 dependencies = [
  "gpui-kit",
  "sealy-core",
+ "serde_json",
  "sha1",
  "tracing",
 ]

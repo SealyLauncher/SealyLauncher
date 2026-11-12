@@ -64,6 +64,25 @@ impl SealyShell {
         })
         .detach();
 
+        // Toasts dismiss themselves; a single ticker keeps every call site
+        // from needing its own timer.
+        cx.spawn(async move |this, cx| {
+            loop {
+                cx.background_executor()
+                    .timer(std::time::Duration::from_millis(250))
+                    .await;
+                let updated = this.update(cx, |shell, cx| {
+                    if shell.state.expire_due_toast() {
+                        cx.notify();
+                    }
+                });
+                if updated.is_err() {
+                    return;
+                }
+            }
+        })
+        .detach();
+
         shell
     }
 }
@@ -82,9 +101,9 @@ impl Render for SealyShell {
             .then(|| crate::panel::render(&self.state, cx));
         let notice = self
             .state
-            .notice
+            .toast
             .clone()
-            .map(|message| toast(message, &tokens, cx));
+            .map(|toast| toast_element(toast, &tokens, self.state.language(), cx));
 
         div()
             .id("shell")
@@ -173,6 +192,12 @@ fn message_button(
                     .child(running.to_string()),
             )
         })
+        // Stop the title bar from arming a window drag on this click; the bar
+        // starts moving the window on the next mouse move, which used to
+        // swallow clicks on the bell.
+        .on_mouse_down(gpui_kit::MouseButton::Left, |_, _, cx| {
+            cx.stop_propagation()
+        })
         .on_click(cx.listener(|shell, _, _, cx| {
             shell.state.toggle_messages();
             cx.notify();
@@ -187,6 +212,13 @@ impl SealyShell {
         // Escape closes the message center before anything else.
         if keystroke.key == "escape" && self.state.message_open {
             self.state.message_open = false;
+            cx.notify();
+            return;
+        }
+
+        // Escape also leaves the new-instance picker.
+        if keystroke.key == "escape" && self.state.new_instance_open {
+            self.state.new_instance_open = false;
             cx.notify();
             return;
         }
@@ -328,16 +360,25 @@ fn brand(tokens: &theme::ThemeTokens) -> AnyElement {
         .into_any_element()
 }
 
-fn toast(message: String, tokens: &theme::ThemeTokens, cx: &mut Context<SealyShell>) -> AnyElement {
-    div()
+fn toast_element(
+    toast: crate::state::Toast,
+    tokens: &theme::ThemeTokens,
+    lang: sealy_core::config::Language,
+    cx: &mut Context<SealyShell>,
+) -> AnyElement {
+    let action = toast.action;
+    let mut card = div()
         .id("notice")
         .role(Role::Button)
-        .aria_label(message.clone())
+        .aria_label(toast.message.clone())
         .absolute()
         .bottom(px(theme::ACTION_BAR_HEIGHT + 16.0))
         .right(px(24.0))
         .px(px(14.0))
         .py(px(10.0))
+        .flex()
+        .items_center()
+        .gap(px(12.0))
         .rounded(px(theme::RADIUS_TILE))
         .bg(rgb(tokens.block))
         .cursor_pointer()
@@ -345,11 +386,37 @@ fn toast(message: String, tokens: &theme::ThemeTokens, cx: &mut Context<SealyShe
             div()
                 .text_size(px(12.0))
                 .text_color(rgb(tokens.block_text))
-                .child(message),
+                .child(toast.message.clone()),
         )
         .on_click(cx.listener(|shell, _, _, cx| {
-            shell.state.notice = None;
+            shell.state.dismiss_toast();
             cx.notify();
-        }))
-        .into_any_element()
+        }));
+
+    if action == Some(crate::state::ToastAction::Undo) {
+        card = card.child(
+            div()
+                .id("notice-undo")
+                .role(Role::Button)
+                .aria_label("undo")
+                .px(px(8.0))
+                .h(px(22.0))
+                .flex()
+                .items_center()
+                .rounded(px(theme::RADIUS_TILE))
+                .border_1()
+                .border_color(rgb(tokens.faint))
+                .text_size(px(11.0))
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(rgb(tokens.block_text))
+                .cursor_pointer()
+                .child(crate::i18n::tr(lang, "撤销", "Undo"))
+                .on_click(cx.listener(|shell, _, _, cx| {
+                    shell.state.undo();
+                    cx.notify();
+                })),
+        );
+    }
+
+    card.into_any_element()
 }

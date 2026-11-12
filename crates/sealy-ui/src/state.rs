@@ -110,6 +110,47 @@ pub struct Message {
     pub cancel: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
 }
 
+/// A transient message shown in the bottom-right corner.
+#[derive(Debug, Clone)]
+pub struct Toast {
+    /// Id used to ignore stale expiry timers.
+    pub id: u64,
+    /// Text shown to the user.
+    pub message: String,
+    /// Optional action button.
+    pub action: Option<ToastAction>,
+}
+
+/// Action attached to a toast.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ToastAction {
+    /// Restore the item that was just deleted.
+    Undo,
+}
+
+/// Item removed moments ago, kept until the toast expires.
+#[derive(Debug, Clone)]
+pub enum PendingUndo {
+    /// A deleted instance.
+    Instance {
+        /// The removed entry.
+        instance: sealy_core::instances::Instance,
+        /// Position it had in the book.
+        index: usize,
+        /// Whether it was the selected entry.
+        selected: bool,
+    },
+    /// A deleted account.
+    Account {
+        /// The removed entry.
+        account: sealy_core::accounts::Account,
+        /// Position it had in the book.
+        index: usize,
+        /// Whether it was the selected entry.
+        selected: bool,
+    },
+}
+
 /// Handle to a running install so the UI can poll and cancel it.
 #[derive(Debug, Clone)]
 pub struct InstallTask {
@@ -205,8 +246,14 @@ pub struct ShellState {
     pub settings: Settings,
     /// Portable paths.
     pub paths: LauncherPaths,
-    /// Optional toast.
-    pub notice: Option<String>,
+    /// Optional toast with an optional undo action.
+    pub toast: Option<Toast>,
+    /// Id source for toasts.
+    pub next_toast_id: u64,
+    /// When the visible toast should disappear.
+    pub toast_deadline: Option<std::time::Instant>,
+    /// Item deleted in the last few seconds, restorable from the toast.
+    pub pending_undo: Option<PendingUndo>,
     /// Active first-run wizard step; `None` once the wizard is done.
     pub oobe_step: Option<usize>,
     /// Downloads page data.
@@ -288,7 +335,10 @@ impl ShellState {
             route: Route::Home,
             settings: bootstrap.settings,
             paths: bootstrap.paths,
-            notice: None,
+            toast: None,
+            next_toast_id: 1,
+            toast_deadline: None,
+            pending_undo: None,
             oobe_step: first_run.then_some(0),
             downloads: DownloadsState::default(),
             install: None,
@@ -381,9 +431,23 @@ impl ShellState {
     }
 
     /// Removes the named account.
-    pub fn remove_account(&mut self, name: &str) {
-        self.accounts.remove(name);
+    pub fn remove_account(&mut self, name: &str) -> Option<PendingUndo> {
+        let index = self
+            .accounts
+            .accounts
+            .iter()
+            .position(|item| item.name == name)?;
+        let was_selected = self.accounts.selected.as_deref() == Some(name);
+        let account = self.accounts.accounts.remove(index);
+        if was_selected {
+            self.accounts.selected = None;
+        }
         self.save_accounts();
+        Some(PendingUndo::Account {
+            account,
+            index,
+            selected: was_selected,
+        })
     }
 
     /// Selects the named account.
@@ -402,9 +466,23 @@ impl ShellState {
     }
 
     /// Removes the named instance.
-    pub fn remove_instance(&mut self, name: &str) {
-        self.instances.remove(name);
+    pub fn remove_instance(&mut self, name: &str) -> Option<PendingUndo> {
+        let index = self
+            .instances
+            .instances
+            .iter()
+            .position(|item| item.name == name)?;
+        let was_selected = self.instances.selected.as_deref() == Some(name);
+        let instance = self.instances.instances.remove(index);
+        if was_selected {
+            self.instances.selected = None;
+        }
         self.save_instances();
+        Some(PendingUndo::Instance {
+            instance,
+            index,
+            selected: was_selected,
+        })
     }
 
     /// Selects the named instance.
@@ -664,17 +742,117 @@ impl ShellState {
             return;
         }
         match save_settings(&self.paths, &self.settings) {
-            Ok(()) => self.notice = Some(i18n::toast_settings_saved(self.language()).to_owned()),
+            Ok(()) => {
+                self.show_toast(i18n::toast_settings_saved(self.language()).to_owned(), None);
+            }
             Err(err) => {
                 tracing::warn!(error = %err, "failed to save settings");
-                self.notice = Some(err.to_string());
+                self.show_toast(err.to_string(), None);
             }
         }
     }
 
-    /// Shows a transient notice.
+    /// Shows a transient message without an action.
     pub fn notify(&mut self, message: impl Into<String>) {
-        self.notice = Some(message.into());
+        self.show_toast(message, None);
+    }
+
+    /// Shows a toast, replacing any previous one, and returns its id.
+    pub fn show_toast(&mut self, message: impl Into<String>, action: Option<ToastAction>) -> u64 {
+        let id = self.next_toast_id;
+        self.next_toast_id += 1;
+        self.toast = Some(Toast {
+            id,
+            message: message.into(),
+            action,
+        });
+        self.toast_deadline = Some(std::time::Instant::now() + std::time::Duration::from_secs(5));
+        id
+    }
+
+    /// Clears the toast if `id` is still the visible one.
+    pub fn expire_toast(&mut self, id: u64) {
+        if self.toast.as_ref().is_some_and(|toast| toast.id == id) {
+            self.toast = None;
+            self.pending_undo = None;
+            self.toast_deadline = None;
+        }
+    }
+
+    /// Clears the toast once its deadline passed; returns whether it did.
+    pub fn expire_due_toast(&mut self) -> bool {
+        let Some(deadline) = self.toast_deadline else {
+            return false;
+        };
+        if std::time::Instant::now() < deadline {
+            return false;
+        }
+        self.toast = None;
+        self.pending_undo = None;
+        self.toast_deadline = None;
+        true
+    }
+
+    /// Turns verbose file logging on or off and persists the choice.
+    pub fn set_verbose_logging(&mut self, on: bool) {
+        self.settings.debug.verbose_logging = on;
+        sealy_core::logging::set_verbose(on);
+        self.persist();
+    }
+
+    /// Reveals the data directory in the platform file manager.
+    pub fn open_data_folder(&mut self) {
+        let _ = std::fs::create_dir_all(&self.paths.data);
+        reveal(&self.paths.data);
+    }
+
+    /// Reveals SealyData/logs in the platform file manager.
+    pub fn open_logs_folder(&mut self) {
+        let _ = std::fs::create_dir_all(&self.paths.logs);
+        reveal(&self.paths.logs);
+    }
+
+    /// Dismisses the toast immediately.
+    pub fn dismiss_toast(&mut self) {
+        self.toast = None;
+        self.pending_undo = None;
+        self.toast_deadline = None;
+    }
+
+    /// Restores the last deleted item.
+    pub fn undo(&mut self) {
+        let Some(pending) = self.pending_undo.take() else {
+            return;
+        };
+
+        match pending {
+            PendingUndo::Instance {
+                instance,
+                index,
+                selected,
+            } => {
+                let name = instance.name.clone();
+                self.instances.restore(instance, index, selected);
+                self.save_instances();
+                self.instances.select(&name);
+                self.show_toast(
+                    crate::i18n::tr(self.language(), "已恢复实例", "Instance restored"),
+                    None,
+                );
+            }
+            PendingUndo::Account {
+                account,
+                index,
+                selected,
+            } => {
+                self.accounts.restore(account, index, selected);
+                self.save_accounts();
+                self.show_toast(
+                    crate::i18n::tr(self.language(), "已恢复账号", "Account restored"),
+                    None,
+                );
+            }
+        }
     }
 }
 
