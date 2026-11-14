@@ -67,9 +67,12 @@ cargo run -p sealy-app
 2. **对照官方启动器**：用同一个微软账号登录官方启动器。
    - 官方能登录、这里 403 → 问题在应用（ID 不对 / 审批未生效）。
    - 官方也失败 → 问题在账号（封禁、地区、儿童账号等），与 client id 无关。
-3. **核对邮件措辞**：Mojang Enforcement 的「approved」邮件才会放行；「request received / under review」还不是通过。审批生效通常数小时到一天，偶尔更久。
-4. **看服务端原话**：登录失败会在消息中心留下一条记录，包含 `客户端 ID：…` 与 `服务端返回：FORBIDDEN: …`。把这一行发出来即可判断是应用还是账号。
-5. **日志**：设置页打开「调试日志」后重试，`SealyData/logs/launcher.log.*` 会记录每一步的 `microsoft: …` 行（状态码 + 脱敏后的响应体），其中 `microsoft: minecraft login_with_xbox finished` 的 `status` 就是 403 的来源。
+3. **看懂 Mojang 的邮件**：`AppID Review Complete` 是**批量模板**，正文是「如果你的应用符合条件，那么它已被加入白名单」，并不点名你的 AppID，也没有单独确认；同一封信还覆盖「被举报应用已屏蔽」的结果。因此**收到这封信 ≠ 已通过**，最终以 API 是否放行为准。
+4. **看服务端原话**：登录失败会在消息中心留下一条记录，包含 `客户端 ID：…` 与 `服务端返回：…`。
+   - `Invalid app registration` → 该 AppID 不在白名单（或注册已失效），与账号无关；
+   - 其他 `FORBIDDEN` → 再按第 2 条对照官方启动器判断。
+5. **重新提交**：确认 ID 无误后，用 https://aka.ms/mce-reviewappid 再提交一次。表单要求应用是**个人 Microsoft 帐户 + 允许公共客户端流**，且不得违反 Minecraft 使用准则（Mojang 明确不提供 API 访问的技术支持，不会逐案答疑）。
+6. **日志**：设置页打开「调试日志」后重试，`SealyData/logs/launcher.log.*` 会记录每一步的 `microsoft: …` 行（状态码 + 脱敏后的响应体），其中 `microsoft: minecraft login_with_xbox finished` 的 `status` 就是 403 的来源。
 
 请求本身已带 `User-Agent`、`Content-Type`、`Accept`；用无效 token 探测得到的是 401 而不是 403，所以 403 不是请求格式或网络层问题。客户端其他环节（设备码、Xbox Live、XSTS）失败会给出各自错误码，不会落到 403。
 ## 文档
