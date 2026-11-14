@@ -4,6 +4,7 @@
 //! MSA token -> Xbox Live -> XSTS -> Minecraft services -> profile.
 
 use serde::{Deserialize, Serialize};
+use tracing::{info, warn};
 
 use crate::error::CoreError;
 use crate::net;
@@ -72,7 +73,13 @@ pub fn request_device_code(client_id: &str) -> Result<DeviceCode, CoreError> {
     let url = format!("{AUTH_HOST}/devicecode");
     let response = net::post_form(&url, &[("client_id", client_id), ("scope", SCOPE)])?;
 
+    info!(
+        client_id,
+        status = response.status,
+        "microsoft: device code requested"
+    );
     if !response.is_ok() {
+        warn!(body = %snippet(&response.body), "microsoft: device code rejected");
         return Err(CoreError::Network(error_message(&response.body)));
     }
 
@@ -107,10 +114,17 @@ pub fn poll_device_code(client_id: &str, code: &DeviceCode) -> Result<Poll, Core
     match response.body["error"].as_str().unwrap_or("") {
         "authorization_pending" => Ok(Poll::Pending),
         "slow_down" => Ok(Poll::SlowDown),
-        other => Err(CoreError::Network(format!(
-            "device code poll failed: {other} ({})",
-            error_message(&response.body)
-        ))),
+        other => {
+            warn!(
+                error = other,
+                body = %snippet(&response.body),
+                "microsoft: device code poll failed"
+            );
+            Err(CoreError::Network(format!(
+                "device code poll failed: {other} ({})",
+                error_message(&response.body)
+            )))
+        }
     }
 }
 
@@ -153,7 +167,12 @@ pub fn xbox_live(msa_access_token: &str) -> Result<(String, String), CoreError> 
     });
 
     let response = net::post_json("https://user.auth.xboxlive.com/user/authenticate", &body)?;
+    info!(
+        status = response.status,
+        "microsoft: xbox live authenticate finished"
+    );
     if !response.is_ok() {
+        warn!(body = %snippet(&response.body), "microsoft: xbox live rejected");
         return Err(CoreError::Network(error_message(&response.body)));
     }
 
@@ -175,14 +194,23 @@ pub fn xsts(xbl_token: &str) -> Result<(String, String), CoreError> {
     });
 
     let response = net::post_json("https://xsts.auth.xboxlive.com/xsts/authorize", &body)?;
+    let xsts_uhs = user_hash(&response.body);
+    info!(
+        status = response.status,
+        user_hash_len = xsts_uhs.len(),
+        xerr = response.body["XErr"].as_u64().unwrap_or(0),
+        "microsoft: xsts authorize finished"
+    );
     if !response.is_ok() {
+        warn!(
+            body = %snippet(&response.body),
+            redirect = response.body["Redirect"].as_str().unwrap_or(""),
+            "microsoft: xsts rejected"
+        );
         return Err(CoreError::Network(xsts_error(&response.body)));
     }
 
-    Ok((
-        string_field(&response.body, "Token"),
-        user_hash(&response.body),
-    ))
+    Ok((string_field(&response.body, "Token"), xsts_uhs))
 }
 
 /// Logs into Minecraft services with an XSTS token.
@@ -200,11 +228,21 @@ pub fn login_with_xbox(
         &body,
     )?;
 
+    // Always logged: this is the one call that reports app approval problems.
+    info!(
+        status = response.status,
+        client_id,
+        user_hash_len = user_hash.len(),
+        body = %snippet(&response.body),
+        "microsoft: minecraft login_with_xbox finished"
+    );
+
     if response.status == 403 {
         let detail = describe(&response.body);
         return Err(CoreError::Network(format!(
-            "Minecraft API 返回 403（应用未获授权）。客户端 ID：{client_id}；服务端返回：{detail}。\
-             若已通过审核，请确认提交审核的正是这个 ID，且审批生效可能需要数小时到一天"
+            "Minecraft API 返回 403（应用未获授权）。客户端 ID：{client_id}（可在设置页核对）；\
+             服务端返回：{detail}。若已通过审核，请确认提交审核的正是这个 ID，\
+             且审批生效可能需要数小时到一天；若官方启动器能登录而这里不能，问题在这个应用上"
         )));
     }
     if !response.is_ok() {
@@ -241,6 +279,10 @@ pub fn profile(minecraft_token: &str) -> Result<Profile, CoreError> {
         "https://api.minecraftservices.com/minecraft/profile",
         Some(minecraft_token),
     )?;
+    info!(
+        status = response.status,
+        "microsoft: minecraft profile finished"
+    );
 
     if response.status == 404 {
         return Err(CoreError::Network(
@@ -262,11 +304,56 @@ pub fn complete_login(
     msa: &MsaToken,
     client_id: &str,
 ) -> Result<(Profile, MinecraftSession), CoreError> {
-    let (xbl, _) = xbox_live(&msa.access_token)?;
-    let (xsts_token, uhs) = xsts(&xbl)?;
-    let session = login_with_xbox(&uhs, &xsts_token, client_id)?;
+    info!(client_id, "microsoft: starting xbox live chain");
+    let (xbl, xbl_uhs) = xbox_live(&msa.access_token)?;
+    let (xsts_token, xsts_uhs) = xsts(&xbl)?;
+    let uhs = pick_user_hash(&xsts_uhs, &xbl_uhs);
+    let session = login_with_xbox(uhs, &xsts_token, client_id)?;
     let profile = profile(&session.access_token)?;
+    info!(name = %profile.name, "microsoft: profile loaded");
     Ok((profile, session))
+}
+
+/// Prefers the XSTS user hash and falls back to the Xbox Live one.
+///
+/// Some responses omit `DisplayClaims` on the XSTS step; sending an empty
+/// `x=` makes `login_with_xbox` answer 403, which is otherwise indistinguishable
+/// from an unapproved application.
+fn pick_user_hash<'a>(xsts_uhs: &'a str, xbl_uhs: &'a str) -> &'a str {
+    if xsts_uhs.is_empty() {
+        warn!("microsoft: xsts response had no user hash, falling back to xbox live");
+        xbl_uhs
+    } else {
+        xsts_uhs
+    }
+}
+
+/// Short body preview for logs with token values removed.
+fn snippet(body: &serde_json::Value) -> String {
+    fn scrub(value: &serde_json::Value) -> serde_json::Value {
+        match value {
+            serde_json::Value::Object(map) => map
+                .iter()
+                .map(|(key, value)| {
+                    let lowered = key.to_ascii_lowercase();
+                    if lowered.contains("token") || lowered.contains("secret") {
+                        (key.clone(), serde_json::Value::String("<redacted>".into()))
+                    } else {
+                        (key.clone(), scrub(value))
+                    }
+                })
+                .collect(),
+            serde_json::Value::Array(items) => items.iter().map(scrub).collect(),
+            other => other.clone(),
+        }
+    }
+
+    let mut text = scrub(body).to_string();
+    if text.len() > 400 {
+        text.truncate(400);
+        text.push('…');
+    }
+    text
 }
 
 fn user_hash(body: &serde_json::Value) -> String {
@@ -336,6 +423,25 @@ mod tests {
         let text = describe(&body);
         assert!(text.contains("FORBIDDEN"));
         assert!(text.contains("Invalid app registration"));
+    }
+
+    #[test]
+    fn falls_back_to_xbox_hash() {
+        assert_eq!(pick_user_hash("xsts", "xbl"), "xsts");
+        assert_eq!(pick_user_hash("", "xbl"), "xbl");
+    }
+
+    #[test]
+    fn snippets_redact_tokens() {
+        let body = serde_json::json!({
+            "access_token": "secret-value",
+            "Token": "secret-value",
+            "XErr": 1
+        });
+        let text = snippet(&body);
+        assert!(!text.contains("secret-value"));
+        assert!(text.contains("<redacted>"));
+        assert!(text.contains("XErr"));
     }
 
     #[test]

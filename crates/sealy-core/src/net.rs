@@ -5,6 +5,11 @@ use std::time::Duration;
 
 use crate::error::CoreError;
 
+/// User agent sent with every request; some endpoints reject clients without one.
+pub fn user_agent() -> String {
+    format!("SealyLauncher/{}", crate::version())
+}
+
 /// Builds a `ureq` agent with the native TLS backend and sane timeouts.
 pub fn agent() -> Result<ureq::Agent, CoreError> {
     let connector = ureq::native_tls::TlsConnector::new()
@@ -22,6 +27,7 @@ pub fn get_text(url: &str) -> Result<String, CoreError> {
     let agent = agent()?;
     agent
         .get(url)
+        .set("User-Agent", &user_agent())
         .call()
         .map_err(|err| CoreError::Network(format!("{url}: {err}")))?
         .into_string()
@@ -37,6 +43,7 @@ pub fn download_to<W: std::io::Write>(
 ) -> Result<u64, CoreError> {
     let response = agent
         .get(url)
+        .set("User-Agent", &user_agent())
         .call()
         .map_err(|err| CoreError::Network(format!("{url}: {err}")))?;
 
@@ -63,6 +70,7 @@ pub fn get_bytes(url: &str) -> Result<Vec<u8>, CoreError> {
     let agent = agent()?;
     let response = agent
         .get(url)
+        .set("User-Agent", &user_agent())
         .call()
         .map_err(|err| CoreError::Network(format!("{url}: {err}")))?;
     let mut bytes = Vec::new();
@@ -92,7 +100,10 @@ impl JsonResponse {
 /// Posts a form body and returns JSON.
 pub fn post_form(url: &str, form: &[(&str, &str)]) -> Result<JsonResponse, CoreError> {
     let agent = agent()?;
-    let response = agent.post(url).send_form(form);
+    let response = agent
+        .post(url)
+        .set("User-Agent", &user_agent())
+        .send_form(form);
 
     read_json(url, response)
 }
@@ -102,6 +113,7 @@ pub fn post_json(url: &str, body: &serde_json::Value) -> Result<JsonResponse, Co
     let agent = agent()?;
     let response = agent
         .post(url)
+        .set("User-Agent", &user_agent())
         .set("Content-Type", "application/json")
         .set("Accept", "application/json")
         .send_json(body.clone());
@@ -112,7 +124,10 @@ pub fn post_json(url: &str, body: &serde_json::Value) -> Result<JsonResponse, Co
 /// Gets JSON, optionally with a bearer token.
 pub fn get_json(url: &str, bearer: Option<&str>) -> Result<JsonResponse, CoreError> {
     let agent = agent()?;
-    let mut request = agent.get(url).set("Accept", "application/json");
+    let mut request = agent
+        .get(url)
+        .set("User-Agent", &user_agent())
+        .set("Accept", "application/json");
     if let Some(token) = bearer {
         request = request.set("Authorization", &format!("Bearer {token}"));
     }

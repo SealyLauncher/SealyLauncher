@@ -188,6 +188,11 @@ pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyEle
                             format!("{} · portable", sealy_core::version()),
                             &t,
                         ))
+                        .child(field_row(
+                            tr(lang, "Microsoft 客户端 ID", "Microsoft client ID"),
+                            state.settings.auth.microsoft_client_id.clone(),
+                            &t,
+                        ))
                         .child(row(
                             tr(lang, "调试日志", "Debug logging"),
                             div()

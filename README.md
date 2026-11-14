@@ -61,13 +61,17 @@ cargo run -p sealy-app
 
 ## Microsoft 登录返回 403
 
-`api.minecraftservices.com` 只放行通过 Minecraft API 审核的 client id。收到 403 时服务端仍未认可当前应用：
+`api.minecraftservices.com` 只放行通过 Minecraft API 审核的 client id。收到 403 时服务端仍未认可当前应用。按顺序排查：
 
-1. 核对 ID：Azure → App registrations → 目标应用概览页的 **Application (client) ID** 应等于启动器使用的值（默认 `e95460ea-8dcc-4dbc-bc2c-b823b9035ccb`，可通过 `SealyData/settings.json` 的 `auth.microsoft_client_id` 覆盖）。
-2. 核对审核：https://aka.ms/mce-reviewappid 提交的是否就是这个 ID；审批生效通常需要数小时到一天。
-3. 重新登录：消息中心会显示服务端原始返回与正在使用的 client id，可直接复制对照。
+1. **确认启动器实际用的 ID**：设置页「Microsoft 客户端 ID」一行就是运行时真实值。若这里是别的值（例如旧版 `SealyData/settings.json` 里残留的自建应用 ID），改 `auth.microsoft_client_id` 或删掉 `auth` 块即可回到默认 `e95460ea-8dcc-4dbc-bc2c-b823b9035ccb`。
+2. **对照官方启动器**：用同一个微软账号登录官方启动器。
+   - 官方能登录、这里 403 → 问题在应用（ID 不对 / 审批未生效）。
+   - 官方也失败 → 问题在账号（封禁、地区、儿童账号等），与 client id 无关。
+3. **核对邮件措辞**：Mojang Enforcement 的「approved」邮件才会放行；「request received / under review」还不是通过。审批生效通常数小时到一天，偶尔更久。
+4. **看服务端原话**：登录失败会在消息中心留下一条记录，包含 `客户端 ID：…` 与 `服务端返回：FORBIDDEN: …`。把这一行发出来即可判断是应用还是账号。
+5. **日志**：设置页打开「调试日志」后重试，`SealyData/logs/launcher.log.*` 会记录每一步的 `microsoft: …` 行（状态码 + 脱敏后的响应体），其中 `microsoft: minecraft login_with_xbox finished` 的 `status` 就是 403 的来源。
 
-客户端其他环节（设备码、Xbox Live、XSTS）失败会给出各自的错误码，不会落到 403。
+请求本身已带 `User-Agent`、`Content-Type`、`Accept`；用无效 token 探测得到的是 401 而不是 403，所以 403 不是请求格式或网络层问题。客户端其他环节（设备码、Xbox Live、XSTS）失败会给出各自错误码，不会落到 403。
 ## 文档
 
 - [实施计划](docs/PLAN.md)
