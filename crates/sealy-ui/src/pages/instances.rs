@@ -20,7 +20,8 @@ pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyEle
         .instances
         .instances
         .iter()
-        .map(|instance| row(instance, state, &t, cx))
+        .enumerate()
+        .map(|(index, instance)| row(index, instance, state, &t, cx))
         .collect::<Vec<_>>();
 
     let body = if state.rename_draft.is_some() {
@@ -50,6 +51,7 @@ pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyEle
 
     div()
         .size_full()
+        .relative()
         .flex()
         .flex_col()
         .child(head_band_back(tr(lang, "实例", "Instances"), &t, cx))
@@ -97,6 +99,26 @@ pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyEle
                         .aria_label("copy-instance")
                         .on_click(cx.listener(|shell, _, _, cx| {
                             shell.state.duplicate_instance();
+                            cx.notify();
+                        })),
+                )
+                .child(
+                    icon_button(IconName::Logs, &t)
+                        .id("instance-logs")
+                        .role(Role::Button)
+                        .aria_label("open-instance-logs")
+                        .on_click(cx.listener(|shell, _, _, cx| {
+                            shell.state.open_logs();
+                            cx.notify();
+                        })),
+                )
+                .child(
+                    icon_button(IconName::Settings2, &t)
+                        .id("instance-settings")
+                        .role(Role::Button)
+                        .aria_label("instance-launch-settings")
+                        .on_click(cx.listener(|shell, _, _, cx| {
+                            shell.state.begin_instance_settings();
                             cx.notify();
                         })),
                 )
@@ -160,6 +182,326 @@ pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyEle
                         .when(!has_selection, |this| this.opacity(0.4))
                         .on_click(cx.listener(|shell, _, _, cx| {
                             launch_flow::start_selected(&mut shell.state, cx);
+                        })),
+                ),
+        )
+        .children(
+            state
+                .instance_settings_open
+                .then(|| launch_settings_panel(state, &t, lang, cx)),
+        )
+        .children(state.logs_open.then(|| log_panel(state, &t, lang, cx)))
+        .into_any_element()
+}
+
+/// Per-instance launch settings editor (window size, memory, JVM args).
+fn launch_settings_panel(
+    state: &ShellState,
+    t: &ThemeTokens,
+    lang: sealy_core::config::Language,
+    cx: &mut Context<SealyShell>,
+) -> AnyElement {
+    let Some(draft) = &state.inst_launch_draft else {
+        return div().into_any_element();
+    };
+
+    let values = [&draft.width, &draft.height, &draft.max_mb, &draft.jvm_args];
+    let placeholders = [
+        format!("{}", state.settings.launch.width),
+        format!("{}", state.settings.launch.height),
+        format!("{}", state.settings.java.memory.max_mb),
+        tr(
+            lang,
+            "可选，例如 -XX:+UseG1GC",
+            "optional, e.g. -XX:+UseG1GC",
+        )
+        .to_owned(),
+    ];
+
+    let fields = (0..4)
+        .map(|index| {
+            let active = draft.field == index;
+            let value = values[index].clone();
+            let shown = if value.is_empty() {
+                placeholders[index].clone()
+            } else {
+                value.clone()
+            };
+            div()
+                .h(px(46.0))
+                .flex()
+                .items_center()
+                .gap(px(12.0))
+                .border_b_1()
+                .border_color(rgb(t.line_soft))
+                .child(
+                    div()
+                        .w(px(120.0))
+                        .text_size(px(12.0))
+                        .text_color(rgb(t.muted))
+                        .child(crate::state::InstanceLaunchDraft::FIELDS[index]),
+                )
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w(px(0.0))
+                        .h(px(30.0))
+                        .px(px(10.0))
+                        .flex()
+                        .items_center()
+                        .rounded(px(theme::RADIUS_TILE))
+                        .border_1()
+                        .border_color(rgb(if active { t.text } else { t.line }))
+                        .text_size(px(12.0))
+                        .text_color(rgb(if value.is_empty() { t.faint } else { t.text }))
+                        .child(shown),
+                )
+        })
+        .collect::<Vec<_>>();
+
+    div()
+        .absolute()
+        .occlude()
+        .top(px(0.0))
+        .right(px(0.0))
+        .bottom(px(0.0))
+        .w(px(560.0))
+        .flex()
+        .flex_col()
+        .bg(rgb(t.surface))
+        .border_l_1()
+        .border_color(rgb(t.line))
+        .child(
+            div()
+                .h(px(56.0))
+                .flex_shrink_0()
+                .px(px(20.0))
+                .flex()
+                .items_center()
+                .gap(px(10.0))
+                .border_b_1()
+                .border_color(rgb(t.line))
+                .child(
+                    div()
+                        .flex_1()
+                        .text_size(px(14.0))
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_color(rgb(t.text))
+                        .child(tr(lang, "实例启动设置", "Instance launch settings")),
+                )
+                .child(
+                    div()
+                        .id("instance-settings-close")
+                        .role(Role::Button)
+                        .aria_label("close-instance-settings")
+                        .w(px(28.0))
+                        .h(px(28.0))
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .rounded(px(theme::RADIUS_TILE))
+                        .cursor_pointer()
+                        .hover(move |style| style.bg(rgb(t.line_soft)))
+                        .child(
+                            Icon::new(IconName::X)
+                                .w(px(15.0))
+                                .h(px(15.0))
+                                .text_color(rgb(t.muted)),
+                        )
+                        .on_click(cx.listener(|shell, _, _, cx| {
+                            shell.state.inst_launch_draft = None;
+                            shell.state.instance_settings_open = false;
+                            cx.notify();
+                        })),
+                ),
+        )
+        .child(
+            div()
+                .px(px(20.0))
+                .py(px(6.0))
+                .text_size(px(11.0))
+                .text_color(rgb(t.faint))
+                .child(tr(
+                    lang,
+                    "留空则跟随全局设置 · Tab 切换字段 · Enter 保存 · Esc 取消",
+                    "Empty follows global settings · Tab next · Enter save · Esc cancel",
+                )),
+        )
+        .child(div().flex_1().min_h(px(0.0)).px(px(20.0)).children(fields))
+        .child(
+            action_bar(t)
+                .child(div().flex_1())
+                .child(
+                    quiet_button(tr(lang, "取消", "Cancel"), t)
+                        .id("instance-settings-cancel")
+                        .role(Role::Button)
+                        .aria_label("cancel-instance-settings")
+                        .on_click(cx.listener(|shell, _, _, cx| {
+                            shell.state.inst_launch_draft = None;
+                            shell.state.instance_settings_open = false;
+                            cx.notify();
+                        })),
+                )
+                .child(
+                    primary_button(tr(lang, "保存", "Save"), t)
+                        .id("instance-settings-save")
+                        .role(Role::Button)
+                        .aria_label("save-instance-settings")
+                        .on_click(cx.listener(|shell, _, _, cx| {
+                            if let Err(err) = shell.state.commit_instance_settings() {
+                                shell.state.notify(err);
+                            }
+                            cx.notify();
+                        })),
+                ),
+        )
+        .into_any_element()
+}
+
+/// Read-only viewer for the selected instance's latest game log.
+fn log_panel(
+    state: &ShellState,
+    t: &ThemeTokens,
+    lang: sealy_core::config::Language,
+    cx: &mut Context<SealyShell>,
+) -> AnyElement {
+    let lines = state
+        .logs_lines
+        .iter()
+        .map(|line| {
+            div()
+                .flex_shrink_0()
+                .text_size(px(10.5))
+                .line_height(relative(1.35))
+                .text_color(rgb(t.muted))
+                .child(line.clone())
+        })
+        .collect::<Vec<_>>();
+
+    let body = if lines.is_empty() {
+        div()
+            .flex_1()
+            .flex()
+            .flex_col()
+            .items_center()
+            .justify_center()
+            .gap(px(8.0))
+            .child(
+                Icon::new(IconName::ScrollText)
+                    .w(px(24.0))
+                    .h(px(24.0))
+                    .text_color(rgb(t.faint)),
+            )
+            .child(div().text_size(px(12.0)).text_color(rgb(t.muted)).child(tr(
+                lang,
+                "还没有日志，启动一次游戏后再来看",
+                "No log yet — launch the game once",
+            )))
+            .into_any_element()
+    } else {
+        div()
+            .id("instance-log-lines")
+            .flex_1()
+            .min_h(px(0.0))
+            .overflow_y_scroll()
+            .px(px(14.0))
+            .py(px(10.0))
+            .flex()
+            .flex_col()
+            .gap(px(1.0))
+            .children(lines)
+            .into_any_element()
+    };
+
+    div()
+        .absolute()
+        .occlude()
+        .top(px(0.0))
+        .right(px(0.0))
+        .bottom(px(0.0))
+        .w(px(720.0))
+        .flex()
+        .flex_col()
+        .bg(rgb(t.surface))
+        .border_l_1()
+        .border_color(rgb(t.line))
+        .child(
+            div()
+                .h(px(56.0))
+                .flex_shrink_0()
+                .px(px(20.0))
+                .flex()
+                .items_center()
+                .gap(px(10.0))
+                .border_b_1()
+                .border_color(rgb(t.line))
+                .child(
+                    div()
+                        .flex_1()
+                        .flex()
+                        .flex_col()
+                        .child(
+                            div()
+                                .text_size(px(14.0))
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .text_color(rgb(t.text))
+                                .child(tr(lang, "游戏日志", "Game log")),
+                        )
+                        .child(
+                            div()
+                                .text_size(px(11.0))
+                                .text_color(rgb(t.faint))
+                                .child(state.logs_title.clone()),
+                        ),
+                )
+                .child(mono(format!("{} 行", state.logs_lines.len()), t))
+                .child(
+                    div()
+                        .id("instance-logs-close")
+                        .role(Role::Button)
+                        .aria_label("close-instance-logs")
+                        .w(px(28.0))
+                        .h(px(28.0))
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .rounded(px(theme::RADIUS_TILE))
+                        .cursor_pointer()
+                        .hover(move |style| style.bg(rgb(t.line_soft)))
+                        .child(
+                            Icon::new(IconName::X)
+                                .w(px(15.0))
+                                .h(px(15.0))
+                                .text_color(rgb(t.muted)),
+                        )
+                        .on_click(cx.listener(|shell, _, _, cx| {
+                            shell.state.close_logs();
+                            cx.notify();
+                        })),
+                ),
+        )
+        .child(body)
+        .child(
+            action_bar(t)
+                .child(div().flex_1())
+                .child(
+                    quiet_button(tr(lang, "刷新", "Refresh"), t)
+                        .id("instance-logs-refresh")
+                        .role(Role::Button)
+                        .aria_label("refresh-instance-logs")
+                        .on_click(cx.listener(|shell, _, _, cx| {
+                            shell.state.refresh_logs();
+                            cx.notify();
+                        })),
+                )
+                .child(
+                    quiet_button(tr(lang, "打开日志目录", "Open log folder"), t)
+                        .id("instance-logs-folder")
+                        .role(Role::Button)
+                        .aria_label("open-log-folder")
+                        .on_click(cx.listener(|shell, _, _, cx| {
+                            shell.state.open_log_folder();
+                            cx.notify();
                         })),
                 ),
         )
@@ -490,6 +832,7 @@ fn empty(t: &ThemeTokens, lang: sealy_core::config::Language) -> AnyElement {
 }
 
 fn row(
+    index: usize,
     instance: &Instance,
     state: &ShellState,
     t: &ThemeTokens,
@@ -505,7 +848,7 @@ fn row(
         .unwrap_or_else(|| "—".to_owned());
 
     div()
-        .id(("instance", instance.name.len()))
+        .id(("instance", index))
         .role(Role::Button)
         .aria_label(instance.name.clone())
         .h(px(72.0))
@@ -516,8 +859,22 @@ fn row(
         .border_b_1()
         .border_color(rgb(t.line_soft))
         .cursor_pointer()
-        .when(selected, |this| this.bg(rgb(t.surface)))
+        .when(selected, |this| {
+            let accent = t.accent;
+            this.bg(rgb(t.surface)).border_1().border_color(rgb(accent))
+        })
         .hover(move |this| this.bg(rgb(t.surface)))
+        .when(selected, |this| {
+            let accent = t.accent;
+            this.child(
+                div()
+                    .w(px(3.0))
+                    .h(px(44.0))
+                    .flex_shrink_0()
+                    .rounded(px(2.0))
+                    .bg(rgb(accent)),
+            )
+        })
         .child(
             div()
                 .w(px(40.0))
@@ -546,7 +903,7 @@ fn row(
                     div()
                         .text_size(px(15.0))
                         .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(rgb(t.text))
+                        .text_color(rgb(if selected { t.accent } else { t.text }))
                         .child(shown_name),
                 )
                 .child(

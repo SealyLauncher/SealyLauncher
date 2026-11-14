@@ -106,6 +106,25 @@ impl SealyShell {
         })
         .detach();
 
+        // The log viewer follows the file while it is open.
+        cx.spawn(async move |this, cx| {
+            loop {
+                cx.background_executor()
+                    .timer(std::time::Duration::from_millis(1200))
+                    .await;
+                let updated = this.update(cx, |shell, cx| {
+                    if shell.state.logs_open {
+                        shell.state.refresh_logs();
+                        cx.notify();
+                    }
+                });
+                if updated.is_err() {
+                    return;
+                }
+            }
+        })
+        .detach();
+
         shell
     }
 }
@@ -242,6 +261,38 @@ impl SealyShell {
         // Escape also leaves the new-instance picker.
         if keystroke.key == "escape" && self.state.new_instance_open {
             self.state.new_instance_open = false;
+            cx.notify();
+            return;
+        }
+
+        // The instance launch-settings panel captures typing while it is open.
+        if self.state.inst_launch_draft.is_some() {
+            match keystroke.key.as_str() {
+                "escape" => {
+                    self.state.inst_launch_draft = None;
+                    self.state.instance_settings_open = false;
+                }
+                "tab" => self.state.inst_draft_next_field(),
+                "enter" => {
+                    if let Err(err) = self.state.commit_instance_settings() {
+                        self.state.notify(err);
+                    }
+                }
+                "backspace" => self.state.inst_draft_pop_char(),
+                key if key.chars().count() == 1 => {
+                    if let Some(ch) = key.chars().next() {
+                        self.state.inst_draft_push_char(ch);
+                    }
+                }
+                _ => {}
+            }
+            cx.notify();
+            return;
+        }
+
+        // The log viewer closes on Escape.
+        if keystroke.key == "escape" && self.state.logs_open {
+            self.state.close_logs();
             cx.notify();
             return;
         }

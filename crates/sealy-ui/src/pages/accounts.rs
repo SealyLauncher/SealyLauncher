@@ -18,7 +18,8 @@ pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyEle
         .accounts
         .accounts
         .iter()
-        .map(|account| row(account, state, &t, cx))
+        .enumerate()
+        .map(|(index, account)| row(index, account, state, &t, cx))
         .collect::<Vec<_>>();
 
     let draft = state.account_draft.clone();
@@ -435,6 +436,7 @@ fn login_card(
 
 /// Starts the device-code flow and mirrors it into the message center.
 fn row(
+    index: usize,
     account: &Account,
     state: &ShellState,
     t: &ThemeTokens,
@@ -456,7 +458,7 @@ fn row(
     let name = account.name.clone();
 
     div()
-        .id(("account", account.name.len()))
+        .id(("account", index))
         .role(Role::Button)
         .aria_label(account.name.clone())
         .h(px(72.0))

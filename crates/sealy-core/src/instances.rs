@@ -17,6 +17,26 @@ pub struct Instance {
     /// Last launch time, seconds since the Unix epoch.
     #[serde(default)]
     pub last_played: Option<u64>,
+    /// Per-instance launch overrides; empty fields fall back to global settings.
+    #[serde(default)]
+    pub launch: LaunchOverrides,
+}
+
+/// Launch overrides stored in `instances.json` for one instance.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LaunchOverrides {
+    /// Window width, `None` follows the global setting.
+    #[serde(default)]
+    pub width: Option<u32>,
+    /// Window height, `None` follows the global setting.
+    #[serde(default)]
+    pub height: Option<u32>,
+    /// Maximum heap in MiB, `None` follows the global setting.
+    #[serde(default)]
+    pub max_mb: Option<u32>,
+    /// Extra JVM arguments appended after the launcher-generated ones.
+    #[serde(default)]
+    pub jvm_args: String,
 }
 
 /// `SealyData/instances.json`.
@@ -56,10 +76,18 @@ impl InstanceBook {
             name: name.clone(),
             version_id: version_id.to_owned(),
             last_played: None,
+            launch: LaunchOverrides::default(),
         };
         self.instances.push(instance.clone());
         self.selected = Some(name);
         instance
+    }
+
+    /// Replaces the launch overrides of one instance.
+    pub fn set_launch(&mut self, name: &str, launch: LaunchOverrides) {
+        if let Some(instance) = self.instances.iter_mut().find(|item| item.name == name) {
+            instance.launch = launch;
+        }
     }
 
     /// Removes an instance by name.
@@ -119,6 +147,7 @@ impl InstanceBook {
             name: copy_name.clone(),
             version_id: source.version_id,
             last_played: None,
+            launch: source.launch,
         };
         self.instances.push(copy.clone());
         self.selected = Some(copy_name);
@@ -224,6 +253,22 @@ mod tests {
         assert_eq!(book.create("1.21.11").name, "1.21.11 (2)");
         assert_eq!(book.instances.len(), 2);
         assert_eq!(book.selected.as_deref(), Some("1.21.11 (2)"));
+    }
+
+    #[test]
+    fn launch_overrides_round_trip() {
+        let overrides = LaunchOverrides {
+            width: Some(1280),
+            height: None,
+            max_mb: Some(8192),
+            jvm_args: "-XX:+UseG1GC".to_owned(),
+        };
+        let json = serde_json::to_string(&overrides).unwrap();
+        let parsed: LaunchOverrides = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed, overrides);
+
+        let empty: LaunchOverrides = serde_json::from_str("{}").unwrap();
+        assert_eq!(empty, LaunchOverrides::default());
     }
 
     #[test]

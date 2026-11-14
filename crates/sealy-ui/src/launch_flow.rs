@@ -45,9 +45,17 @@ pub(crate) fn start(state: &mut ShellState, instance: Instance, cx: &mut Context
         .default_path
         .clone()
         .map(std::path::PathBuf::from);
-    let memory = state.settings.java.memory.max_mb;
-    let width = state.settings.launch.width;
-    let height = state.settings.launch.height;
+    let overrides = instance.launch.clone();
+    let memory = overrides
+        .max_mb
+        .unwrap_or(state.settings.java.memory.max_mb);
+    let width = overrides.width.unwrap_or(state.settings.launch.width);
+    let height = overrides.height.unwrap_or(state.settings.launch.height);
+    let user_jvm: Vec<String> = overrides
+        .jvm_args
+        .split_whitespace()
+        .map(str::to_owned)
+        .collect();
     let account = state
         .accounts
         .current()
@@ -69,6 +77,7 @@ pub(crate) fn start(state: &mut ShellState, instance: Instance, cx: &mut Context
                 memory,
                 width,
                 height,
+                user_jvm,
                 account,
                 client_id,
                 tokens,
@@ -116,6 +125,7 @@ fn launch_blocking(
     memory: u32,
     width: u32,
     height: u32,
+    user_jvm: Vec<String>,
     account: sealy_core::accounts::Account,
     client_id: String,
     mut tokens: sealy_core::auth::TokenStore,
@@ -155,6 +165,8 @@ fn launch_blocking(
         }
         sealy_core::accounts::AccountKind::Offline => ("legacy", Vec::new()),
     };
+    let mut jvm_extra = jvm_extra;
+    jvm_extra.extend(user_jvm.iter().cloned());
 
     let spec = sealy_core::launch::LaunchSpec {
         root: &root,

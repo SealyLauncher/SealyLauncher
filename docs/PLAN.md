@@ -836,7 +836,7 @@ pub trait SkinProvider: Send + Sync;
 | Phase 1 壳层/设计 | ~90% | paths/config/logging/events/单实例、kit 封装、主题 token、组件、页面骨架、i18n、键盘导航、便携目录回退、**Java 管理页（选择/添加/重新检测）** | UI 缩放（`ui_scale`） |
 | Phase 2 启动核心 | ~92% | 版本安装、assets、libraries、natives、Java 自动下载、参数生成、进程/日志、取消、版本继承（inheritsFrom 合并）、Fabric/Quilt 安装并启动、**macOS/Linux Java 运行时修复**、**系统 JDK 探测（macOS JDK 包 / Homebrew / Linux jvm / SDKMAN）** | 整合包导入、CLI 启动参数、Forge/NeoForge 安装（v1.1） |
 | Phase 3 认证 | ~90% | 离线账号、Microsoft 设备码全链路 + 逐步日志、authlib-injector 登录 + `-javaagent` 注入 + jar 自动下载 | 头像、账户流三屏（当前为单页）、authlib 真实账号端到端；**Microsoft 受外部白名单阻塞** |
-| Phase 4 UI 产品化 | ~88% | 首页/实例/下载/设置/账号、OOBE 四步（含账号强制）、实例重命名/复制/开目录、消息中心、toast 自动消失 + 删除撤销、新建实例列表化并内置 Fabric/Quilt、去角标、调试日志开关、**消息中心与 toast 长文本换行**、**macOS 启动提示**、**设置页显示 Microsoft client id** | OEM.conf 解析、`ui_scale`、OOBE 第五步（计划中已合并） |
+| Phase 4 UI 产品化 | ~90% | 首页/实例/下载/设置/账号、OOBE 四步（含账号强制）、实例重命名/复制/开目录、消息中心、toast 自动消失 + 删除撤销、新建实例列表化并内置 Fabric/Quilt、去角标、调试日志开关、**消息中心与 toast 长文本换行**、**macOS 启动提示**、**设置页显示 Microsoft client id**、**实例日志查看器 + 实例启动设置面板 + 选中实例强调边框** | OEM.conf 解析、`ui_scale`、OOBE 第五步（计划中已合并） |
 | Phase 5 打包发布 | ~82% | 三平台产物、SHA256SUMS、自动升版本发版、exe/macOS/Linux 图标、portable 目录、**tag 由 release action 创建**、**CI apt/DNS 规避**、**macOS zip + tar.gz、ad-hoc 签名与 `codesign --verify`**、**macOS Gatekeeper 文档** | notarization（需 Apple 证书）、xtask、诊断页、只读/多副本手工矩阵 |
 | Phase 6/7 | 0% | — | OEM 远程、Node 管理端、Forge 安装、自更新 |
 
@@ -1011,13 +1011,13 @@ pub trait SkinProvider: Send + Sync;
 | Java 管理页（列出、添加、设为默认） | `java/JavaManager`、`ui/java/JavaManagementPage` | ✅ 设置页：检测列表 + 默认选择 + 自动 + 手动输入路径 + 重新检测（2026-11-14） | **P0** | M |
 | 按平台/架构下载不同 Java 版本 | `MojangJavaDownloads` | ◐ 只按版本要求自动取一个 | P1 | M |
 | 内存自动建议（按机器/版本） | `GameSettings.autoMemory` | ◐ 固定 4096 默认 | P1 | S |
-| 高级 JVM/游戏参数覆盖 | `GameSettings.jvmOptions/gameArguments` | ◐ 仅内存/窗口 | P1 | M |
+| 高级 JVM/游戏参数覆盖 | `GameSettings.jvmOptions/gameArguments` | ◐ 实例级窗口尺寸/内存/JVM 参数已可编辑（2026-11-15），无启动前后钩子 | P1 | M |
 
 ### 20.8 启动器体验
 
 | 功能 | HMCL 参考 | 我们 | 优先级 | 量 |
 | --- | --- | --- | --- | --- |
-| 游戏日志查看器（实时/导出） | `game/Log.java`、`LogExporter` | ❌ | **P0** | M |
+| 游戏日志查看器（实时/导出） | `game/Log.java`、`LogExporter` | ✅ 实例页「日志」：尾部 400 行、1.2s 自动跟随、刷新、打开目录（2026-11-15） | **P0** | M |
 | 崩溃报告分析 | `game/CrashReportAnalyzer` | ❌ | P1 | L |
 | 启动器自更新 | `upgrade/**` | ❌ | P1 | M |
 | 主题包 / 背景图 / 透明度 / 字体 | `theme/**`、`setting/FontManager` | ◐ 4 套固定主题 | P2 | L |
@@ -1040,7 +1040,7 @@ pub trait SkinProvider: Send + Sync;
 
 | 批次 | 内容 | 依赖 | 完成标志 |
 | --- | --- | --- | --- |
-| **B1（进行中）** | ~~Java 管理页~~ ✅ → 游戏日志查看器 → 实例启动设置（窗口/JVM 参数） | — | 可在 UI 里选 Java、看日志、改参数并启动 |
+| **B1（已完成）** | ~~Java 管理页~~ ✅ → ~~游戏日志查看器~~ ✅ → ~~实例启动设置~~ ✅ | — | 可在 UI 里选 Java、看日志、改参数并启动 |
 | B2 | 模组/资源包/光影列表（启用禁用、拖入、删除）+ 实例图标/删除文件 | B1 的实例目录抽象 | 实例页出现「模组/资源包」入口 |
 | B3 | Forge / NeoForge / OptiFine 安装 + 加载器版本列表 | 版本继承（已完成） | 能装 Forge 并启动 |
 | B4 | 整合包导入（mrpack/zip/curse）与导出 | B3 的加载器安装 | 导入整合包即得可玩实例 |

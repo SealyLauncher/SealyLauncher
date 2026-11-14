@@ -49,6 +49,8 @@ pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyEle
 
     let t_instances = medium_tile(IconName::Layers, tr(lang, "实例", "Instances"), &t)
         .id("tile-instances")
+        .role(Role::Button)
+        .aria_label("nav-instances")
         .on_click(cx.listener(|shell, _, _, cx| {
             shell.state.route = Route::Instances;
             cx.notify();

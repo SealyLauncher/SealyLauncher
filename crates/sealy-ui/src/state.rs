@@ -292,6 +292,38 @@ pub struct ShellState {
     pub tokens: sealy_core::auth::TokenStore,
     /// Pending Microsoft device-code sign-in.
     pub microsoft_login: Option<MicrosoftLogin>,
+    /// Whether the per-instance launch settings panel is open.
+    pub instance_settings_open: bool,
+    /// Draft values while editing the selected instance's launch settings.
+    pub inst_launch_draft: Option<InstanceLaunchDraft>,
+    /// Whether the game-log viewer is open.
+    pub logs_open: bool,
+    /// Header of the log viewer.
+    pub logs_title: String,
+    /// File currently shown by the log viewer.
+    pub logs_path: Option<std::path::PathBuf>,
+    /// Last lines read from [`logs_path`](Self::logs_path).
+    pub logs_lines: Vec<String>,
+}
+
+/// Editable copy of one instance's launch overrides.
+#[derive(Debug, Clone, Default)]
+pub struct InstanceLaunchDraft {
+    /// Window width in pixels.
+    pub width: String,
+    /// Window height in pixels.
+    pub height: String,
+    /// Maximum heap in MiB.
+    pub max_mb: String,
+    /// Extra JVM arguments.
+    pub jvm_args: String,
+    /// Field currently receiving keystrokes.
+    pub field: usize,
+}
+
+impl InstanceLaunchDraft {
+    /// Labels of the editable fields, in order.
+    pub const FIELDS: [&'static str; 4] = ["窗口宽度", "窗口高度", "最大内存 (MB)", "JVM 参数"];
 }
 
 /// authlib-injector login form state.
@@ -366,6 +398,12 @@ impl ShellState {
             java_path_draft: None,
             tokens,
             microsoft_login: None,
+            instance_settings_open: false,
+            inst_launch_draft: None,
+            logs_open: false,
+            logs_title: String::new(),
+            logs_path: None,
+            logs_lines: Vec::new(),
         }
     }
 
@@ -567,6 +605,167 @@ impl ShellState {
     /// Opens the inline "add Java" input.
     pub fn begin_add_java(&mut self) {
         self.java_path_draft = Some(String::new());
+    }
+
+    /// Opens the launch settings of the selected instance.
+    pub fn begin_instance_settings(&mut self) {
+        let Some(instance) = self.instances.current() else {
+            return;
+        };
+        let launch = instance.launch.clone();
+        self.inst_launch_draft = Some(InstanceLaunchDraft {
+            width: launch
+                .width
+                .map(|value| value.to_string())
+                .unwrap_or_default(),
+            height: launch
+                .height
+                .map(|value| value.to_string())
+                .unwrap_or_default(),
+            max_mb: launch
+                .max_mb
+                .map(|value| value.to_string())
+                .unwrap_or_default(),
+            jvm_args: launch.jvm_args,
+            field: 0,
+        });
+        self.instance_settings_open = true;
+    }
+
+    /// Appends a character to the focused instance-settings field.
+    pub fn inst_draft_push_char(&mut self, ch: char) {
+        let Some(draft) = &mut self.inst_launch_draft else {
+            return;
+        };
+        let field = match draft.field {
+            0 => &mut draft.width,
+            1 => &mut draft.height,
+            2 => &mut draft.max_mb,
+            _ => &mut draft.jvm_args,
+        };
+        if field.chars().count() < 400 {
+            field.push(ch);
+        }
+    }
+
+    /// Removes the last character from the focused field.
+    pub fn inst_draft_pop_char(&mut self) {
+        let Some(draft) = &mut self.inst_launch_draft else {
+            return;
+        };
+        let field = match draft.field {
+            0 => &mut draft.width,
+            1 => &mut draft.height,
+            2 => &mut draft.max_mb,
+            _ => &mut draft.jvm_args,
+        };
+        field.pop();
+    }
+
+    /// Moves to the next instance-settings field.
+    pub fn inst_draft_next_field(&mut self) {
+        if let Some(draft) = &mut self.inst_launch_draft {
+            draft.field = (draft.field + 1) % InstanceLaunchDraft::FIELDS.len();
+        }
+    }
+
+    /// Validates and stores the edited launch settings.
+    pub fn commit_instance_settings(&mut self) -> Result<(), String> {
+        let Some(draft) = self.inst_launch_draft.take() else {
+            return Ok(());
+        };
+        self.instance_settings_open = false;
+
+        let parse = |raw: &str, label: &str| -> Result<Option<u32>, String> {
+            let text = raw.trim();
+            if text.is_empty() {
+                return Ok(None);
+            }
+            text.parse::<u32>()
+                .map(Some)
+                .map_err(|_| format!("{label}不是有效数字"))
+        };
+        let width = parse(&draft.width, "窗口宽度")?;
+        let height = parse(&draft.height, "窗口高度")?;
+        let max_mb = parse(&draft.max_mb, "最大内存")?;
+
+        if let Some(value) = width
+            && !(320..=7680).contains(&value)
+        {
+            return Err("窗口宽度需在 320–7680 之间".to_owned());
+        }
+        if let Some(value) = height
+            && !(240..=4320).contains(&value)
+        {
+            return Err("窗口高度需在 240–4320 之间".to_owned());
+        }
+        if let Some(value) = max_mb
+            && !(256..=65536).contains(&value)
+        {
+            return Err("最大内存需在 256–65536 MB 之间".to_owned());
+        }
+
+        let Some(name) = self
+            .instances
+            .current()
+            .map(|instance| instance.name.clone())
+        else {
+            return Ok(());
+        };
+        self.instances.set_launch(
+            &name,
+            sealy_core::instances::LaunchOverrides {
+                width,
+                height,
+                max_mb,
+                jvm_args: draft.jvm_args.trim().to_owned(),
+            },
+        );
+        self.save_instances();
+        self.show_toast("实例启动设置已保存", None);
+        Ok(())
+    }
+
+    /// Opens the log viewer for the selected instance.
+    pub fn open_logs(&mut self) {
+        let Some(instance) = self.instances.current() else {
+            return;
+        };
+        self.logs_title = format!("{} · {}", instance.name, instance.version_id);
+        self.logs_path = Some(sealy_core::launch::log_path(
+            &self.paths.game,
+            &instance.version_id,
+        ));
+        self.logs_open = true;
+        self.refresh_logs();
+    }
+
+    /// Re-reads the tail of the log file.
+    pub fn refresh_logs(&mut self) {
+        let Some(path) = &self.logs_path else {
+            return;
+        };
+        let text = std::fs::read_to_string(path).unwrap_or_default();
+        let mut lines: Vec<String> = text
+            .lines()
+            .rev()
+            .take(400)
+            .map(str::to_owned)
+            .collect::<Vec<_>>();
+        lines.reverse();
+        self.logs_lines = lines;
+    }
+
+    /// Closes the log viewer.
+    pub fn close_logs(&mut self) {
+        self.logs_open = false;
+    }
+
+    /// Reveals the game log directory in the platform file manager.
+    pub fn open_log_folder(&mut self) {
+        let dir = self.paths.game.join("logs");
+        let _ = std::fs::create_dir_all(&dir);
+        reveal(&dir);
     }
 
     /// Appends a character to the Java path input.
