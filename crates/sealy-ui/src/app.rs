@@ -246,6 +246,47 @@ impl SealyShell {
             return;
         }
 
+        // The "add Java" input captures typing while it is open.
+        if self.state.java_path_draft.is_some() {
+            match keystroke.key.as_str() {
+                "escape" => self.state.java_path_draft = None,
+                "enter" => {
+                    if let Some(path) = self.state.take_java_path() {
+                        cx.spawn(async move |this, cx| {
+                            let probed = cx
+                                .background_executor()
+                                .spawn(async move { sealy_core::java::probe(&path) })
+                                .await;
+                            let _ = this.update(cx, |shell, cx| {
+                                match probed {
+                                    Some(found) => {
+                                        let version = found.version.clone();
+                                        shell.state.add_java(found.clone());
+                                        shell.state.set_default_java(Some(&found.path));
+                                        shell
+                                            .state
+                                            .notify(format!("已添加 Java {version} 并设为默认"));
+                                    }
+                                    None => shell.state.notify("该路径不是可用的 Java 可执行文件"),
+                                }
+                                cx.notify();
+                            });
+                        })
+                        .detach();
+                    }
+                }
+                "backspace" => self.state.java_path_pop_char(),
+                key if key.chars().count() == 1 => {
+                    if let Some(ch) = key.chars().next() {
+                        self.state.java_path_push_char(ch);
+                    }
+                }
+                _ => {}
+            }
+            cx.notify();
+            return;
+        }
+
         // The authlib form captures typing while it is open.
         if self.state.authlib_draft.is_some() {
             match keystroke.key.as_str() {

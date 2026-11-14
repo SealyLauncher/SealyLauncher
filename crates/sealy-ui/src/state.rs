@@ -286,6 +286,8 @@ pub struct ShellState {
     pub rename_draft: Option<RenameDraft>,
     /// authlib-injector login form.
     pub authlib_draft: Option<AuthlibDraft>,
+    /// Inline input for adding a Java executable.
+    pub java_path_draft: Option<String>,
     /// Cached authentication tokens.
     pub tokens: sealy_core::auth::TokenStore,
     /// Pending Microsoft device-code sign-in.
@@ -361,6 +363,7 @@ impl ShellState {
             new_instance_open: false,
             rename_draft: None,
             authlib_draft: None,
+            java_path_draft: None,
             tokens,
             microsoft_login: None,
         }
@@ -548,6 +551,51 @@ impl ShellState {
     }
 
     /// Feeds one character into the focused authlib field.
+    /// Adds a probed Java install, replacing an entry with the same path.
+    pub fn add_java(&mut self, install: sealy_core::java::JavaInstall) {
+        self.java.retain(|existing| existing.path != install.path);
+        self.java.push(install);
+        self.java.sort_by_key(|java| std::cmp::Reverse(java.major));
+    }
+
+    /// Sets (or clears) the user-selected default Java.
+    pub fn set_default_java(&mut self, path: Option<&std::path::Path>) {
+        self.settings.java.default_path = path.map(|path| path.display().to_string());
+        self.persist();
+    }
+
+    /// Opens the inline "add Java" input.
+    pub fn begin_add_java(&mut self) {
+        self.java_path_draft = Some(String::new());
+    }
+
+    /// Appends a character to the Java path input.
+    pub fn java_path_push_char(&mut self, ch: char) {
+        if let Some(draft) = &mut self.java_path_draft
+            && draft.chars().count() < 300
+        {
+            draft.push(ch);
+        }
+    }
+
+    /// Removes the last character from the Java path input.
+    pub fn java_path_pop_char(&mut self) {
+        if let Some(draft) = &mut self.java_path_draft {
+            draft.pop();
+        }
+    }
+
+    /// Takes the typed path, closing the input.
+    pub fn take_java_path(&mut self) -> Option<std::path::PathBuf> {
+        let raw = self.java_path_draft.take()?;
+        let trimmed = raw.trim();
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(std::path::PathBuf::from(trimmed))
+        }
+    }
+
     pub fn authlib_push_char(&mut self, ch: char) {
         if let Some(draft) = &mut self.authlib_draft {
             let field = match draft.field {

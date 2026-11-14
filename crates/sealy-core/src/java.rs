@@ -165,6 +165,30 @@ pub fn detect(game_dir: &Path) -> Vec<JavaInstall> {
     found
 }
 
+/// Chooses the Java binary to launch with.
+///
+/// Order: the user's configured binary when it satisfies `required`, then any
+/// detected runtime that matches, then the configured one anyway, then the
+/// first detected runtime.
+pub fn pick_java(
+    detected: &[JavaInstall],
+    preferred: Option<&Path>,
+    required: u32,
+) -> Option<JavaInstall> {
+    let preferred_install = preferred.and_then(probe);
+
+    if let Some(install) = preferred_install.as_ref()
+        && install.satisfies(required)
+    {
+        return Some(install.clone());
+    }
+    if let Some(install) = detected.iter().find(|install| install.satisfies(required)) {
+        return Some(install.clone());
+    }
+
+    preferred_install.or_else(|| detected.first().cloned())
+}
+
 /// Name of the Java executable on this platform.
 pub fn java_exe() -> &'static str {
     if cfg!(windows) { "java.exe" } else { "java" }
@@ -562,6 +586,27 @@ mod tests {
         let bundle = format!("jre.bundle/Contents/Home/bin/{}", java_exe());
         assert!(candidates.iter().any(|path| path.ends_with(&bundle)));
         assert!(candidates.iter().any(|path| path.ends_with(java_exe())));
+    }
+
+    #[test]
+    fn picks_java_by_preference_and_requirement() {
+        let install = |path: &str, major: u32| JavaInstall {
+            path: PathBuf::from(path),
+            version: format!("{major}.0.1"),
+            major,
+        };
+        let detected = vec![
+            install("/detected/java8", 8),
+            install("/detected/java21", 21),
+        ];
+
+        let picked = pick_java(&detected, None, 21).unwrap();
+        assert_eq!(picked.major, 21);
+
+        let picked = pick_java(&detected, None, 17).unwrap();
+        assert_eq!(picked.major, 8);
+
+        assert!(pick_java(&[], None, 21).is_none());
     }
 
     #[test]

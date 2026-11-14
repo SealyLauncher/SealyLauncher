@@ -833,7 +833,7 @@ pub trait SkinProvider: Send + Sync;
 | 阶段 | 完成度 | 已完成 | 未完成 / 缺口 |
 | --- | --- | --- | --- |
 | Phase 0 工具链 | 100% | workspace、GPUI 窗口、标题栏、CI 三平台骨架 | — |
-| Phase 1 壳层/设计 | ~90% | paths/config/logging/events/单实例、kit 封装、主题 token、组件、页面骨架、i18n、键盘导航、**便携目录回退（只读时不崩溃）** | UI 缩放（`ui_scale`） |
+| Phase 1 壳层/设计 | ~90% | paths/config/logging/events/单实例、kit 封装、主题 token、组件、页面骨架、i18n、键盘导航、便携目录回退、**Java 管理页（选择/添加/重新检测）** | UI 缩放（`ui_scale`） |
 | Phase 2 启动核心 | ~92% | 版本安装、assets、libraries、natives、Java 自动下载、参数生成、进程/日志、取消、版本继承（inheritsFrom 合并）、Fabric/Quilt 安装并启动、**macOS/Linux Java 运行时修复**、**系统 JDK 探测（macOS JDK 包 / Homebrew / Linux jvm / SDKMAN）** | 整合包导入、CLI 启动参数、Forge/NeoForge 安装（v1.1） |
 | Phase 3 认证 | ~90% | 离线账号、Microsoft 设备码全链路 + 逐步日志、authlib-injector 登录 + `-javaagent` 注入 + jar 自动下载 | 头像、账户流三屏（当前为单页）、authlib 真实账号端到端；**Microsoft 受外部白名单阻塞** |
 | Phase 4 UI 产品化 | ~88% | 首页/实例/下载/设置/账号、OOBE 四步（含账号强制）、实例重命名/复制/开目录、消息中心、toast 自动消失 + 删除撤销、新建实例列表化并内置 Fabric/Quilt、去角标、调试日志开关、**消息中心与 toast 长文本换行**、**macOS 启动提示**、**设置页显示 Microsoft client id** | OEM.conf 解析、`ui_scale`、OOBE 第五步（计划中已合并） |
@@ -927,3 +927,127 @@ pub trait SkinProvider: Send + Sync;
 4. 等你说“执行第一步”，再开始 Phase 0 Step 1（工具链 + workspace + hello window + CI + 动效验证）。
 
 **CHANGELOG 从 Step 0 起生效；此后每个代码步骤都必须先写 CHANGELOG 再提交。**
+---
+
+## 20. HMCL 功能对照与 v1.1+ 路线（2026-11-14）
+
+对照对象：`C:\Users\Haikuorenyuyue\Desktop\HMCL` 源码（GPL-3.0）。**仅参考功能行为与协议，不复制其源码**。
+
+对照方法：按 HMCL 的模块/包与页面清单逐项核对本仓库实现。状态：✅ 已有 · ◐ 部分 · ❌ 缺失。
+
+优先级：**P0** 影响"能玩/能修" · **P1** 对标 HMCL 主干功能 · **P2** 增强 · **P3** 可延后。
+工作量：**S** ≤1 天 · **M** 2–4 天 · **L** ≥1 周。
+
+### 20.1 账户与皮肤
+
+| 功能 | HMCL 参考 | 我们 | 优先级 | 量 |
+| --- | --- | --- | --- | --- |
+| 多账户列表（卡片、切换、删除、重命名） | `auth/Account*.java`、`ui/account/AccountListPage` | ◐ 单页列表 | P1 | M |
+| 账户头像与皮肤 3D 预览 | `ui/skin/SkinCanvas`、`auth/Skin.java` | ❌ | P3 | L |
+| 一账户多角色选择 | `auth/CharacterSelector.java` | ❌ | P2 | M |
+| Mojang 旧版（classic）登录 | `auth/ClassicAccount*.java` | ❌ | P3 | S |
+| 第三方 OAuth 登录 | `auth/OAuth*.java` | ❌ | P3 | M |
+| authlib 服务器列表管理（多服、metadata 缓存） | `setting/AuthlibInjectorServers.java` | ◐ 单一 server 字段 | P2 | M |
+| 令牌过期/刷新错误提示与重登引导 | `auth/CredentialExpiredException` 等 | ◐ 有刷新，无引导 UI | P2 | S |
+
+### 20.2 实例与版本
+
+| 功能 | HMCL 参考 | 我们 | 优先级 | 量 |
+| --- | --- | --- | --- | --- |
+| 实例图标自定义 | `setting/GameInstanceIconType.java`、`GameInstanceIconDialog` | ❌ | P2 | S |
+| 版本/实例隔离策略（global/version/modded） | `setting/DefaultIsolationType.java` | ◐ 每实例独立目录，无策略选择 | P2 | M |
+| 手动导入本地版本（jar+json） | `game/ManuallyCreatedModpack*` | ❌ | P2 | M |
+| 版本复制到新实例（复制 jar/资源） | `GameRepositoryDraft` | ◐ 只复制书签 | P2 | S |
+| 删除实例时可选删除文件 | — | ◐ 仅删记录 | P1 | S |
+| 多游戏目录管理（切换 `.minecraft`） | `setting/GameDirectoryManager.java` | ❌ | P2 | M |
+
+### 20.3 加载器安装
+
+| 功能 | HMCL 参考 | 我们 | 优先级 | 量 |
+| --- | --- | --- | --- | --- |
+| Forge（新/旧两类安装器） | `download/forge/*` | ❌ | **P0** | L |
+| NeoForge | `download/NeoForgeInstallTask` | ❌ | P1 | M |
+| OptiFine | `download/OptiFineInstallTask` | ❌ | P1 | M |
+| LiteLoader | `download/LiteLoaderInstallTask` | ❌ | P3 | M |
+| Fabric API / Quilt API 一键装 | `download/fabric/FabricAPIInstallTask` | ❌ | P2 | S |
+| 加载器版本下拉列表（按 MC 版本） | `*RemoteVersion` | ◐ 只取 latest | P1 | M |
+| Fabric/Quilt 安装进度细化与失败重试 | `GameInstallTask` | ◐ 有进度/取消 | P2 | S |
+
+### 20.4 模组、资源包、光影、数据包、世界
+
+| 功能 | HMCL 参考 | 我们 | 优先级 | 量 |
+| --- | --- | --- | --- | --- |
+| 模组列表（启用/禁用、删除、拖入安装） | `ui/instances/ModListPage`、`addon/*` | ❌ | **P0** | M |
+| 模组在线下载（CurseForge/Modrinth 搜索） | `LocalizedRemoteAddonRepository` | ❌ | P1 | L |
+| 模组更新检查 | `addon/update/AddonCheckUpdatesTask` | ❌ | P2 | L |
+| 资源包管理 | `ui/instances/ResourcePackListPage` | ❌ | P1 | M |
+| 光影包管理 | — | ❌ | P2 | M |
+| 数据包管理 | `ui/instances/DataPackListPage` | ❌ | P2 | M |
+| 世界列表 / 备份 / 导出 | `ui/instances/World*` | ❌ | P2 | L |
+| NBT 编辑器 | `ui/nbt/NBTEditorPage` | ❌ | P3 | L |
+
+### 20.5 整合包
+
+| 功能 | HMCL 参考 | 我们 | 优先级 | 量 |
+| --- | --- | --- | --- | --- |
+| 本地整合包导入（zip / mrpack / CurseForge 包） | `modpack/**`、`ui/download/LocalModpackPage` | ❌ | **P0** | L |
+| 服务器整合包 / 手动整合包识别 | `HMCLModpackProvider`、`ManuallyCreatedModpack` | ❌ | P2 | M |
+| 整合包导出（含可选文件） | `export/**` | ❌ | P3 | L |
+| 整合包更新 | `ModpackUpdateTask` | ❌ | P3 | L |
+
+### 20.6 下载与镜像
+
+| 功能 | HMCL 参考 | 我们 | 优先级 | 量 |
+| --- | --- | --- | --- | --- |
+| 版本列表筛选（类型/时间/搜索） | `ui/download/RemoteVersionListPage` | ◐ 有搜索与 source | P1 | S |
+| 自定义下载源 / 镜像优先级 | `setting/DownloadProviders` | ◐ 内置两源自动回退 | P2 | M |
+| 下载断点续传 / 限速 / 并发配置 | `download/**` | ◐ 4 并发，无续传/限速 | P2 | M |
+| 缓存清理 | — | ❌ | P2 | S |
+
+### 20.7 Java
+
+| 功能 | HMCL 参考 | 我们 | 优先级 | 量 |
+| --- | --- | --- | --- | --- |
+| Java 管理页（列出、添加、设为默认） | `java/JavaManager`、`ui/java/JavaManagementPage` | ✅ 设置页：检测列表 + 默认选择 + 自动 + 手动输入路径 + 重新检测（2026-11-14） | **P0** | M |
+| 按平台/架构下载不同 Java 版本 | `MojangJavaDownloads` | ◐ 只按版本要求自动取一个 | P1 | M |
+| 内存自动建议（按机器/版本） | `GameSettings.autoMemory` | ◐ 固定 4096 默认 | P1 | S |
+| 高级 JVM/游戏参数覆盖 | `GameSettings.jvmOptions/gameArguments` | ◐ 仅内存/窗口 | P1 | M |
+
+### 20.8 启动器体验
+
+| 功能 | HMCL 参考 | 我们 | 优先级 | 量 |
+| --- | --- | --- | --- | --- |
+| 游戏日志查看器（实时/导出） | `game/Log.java`、`LogExporter` | ❌ | **P0** | M |
+| 崩溃报告分析 | `game/CrashReportAnalyzer` | ❌ | P1 | L |
+| 启动器自更新 | `upgrade/**` | ❌ | P1 | M |
+| 主题包 / 背景图 / 透明度 / 字体 | `theme/**`、`setting/FontManager` | ◐ 4 套固定主题 | P2 | L |
+| HTTP/SOCKS 代理设置 | `setting/ProxySettings` | ❌ | P1 | S |
+| 界面缩放 `ui_scale` | — | ❌ | P1 | S |
+| 多语言扩充 | `SupportedLocale` | ◐ zh/en | P2 | M |
+| 反馈 / 关于 / 帮助页 | `FeedbackPage`、`HelpPage`、`AboutPage` | ◐ 设置页内有版本信息 | P3 | S |
+| 快捷进入服务器/世界（Quick Play） | `game/Arguments` | ❌ | P3 | M |
+| 服务器列表管理 | — | ❌ | P3 | M |
+
+### 20.9 联机与生态
+
+| 功能 | HMCL 参考 | 我们 | 优先级 | 量 |
+| --- | --- | --- | --- | --- |
+| 内置联机（Terracotta） | `terracotta/**` | ❌ | P3（不做） | XL |
+| 皮肤上传/管理 | `ui/skin/**` | ❌ | P3 | L |
+| Mod 平台账号绑定 | CurseForge/Modrinth | ❌ | P3 | M |
+
+### 20.10 实施批次（一个一个做）
+
+| 批次 | 内容 | 依赖 | 完成标志 |
+| --- | --- | --- | --- |
+| **B1（进行中）** | ~~Java 管理页~~ ✅ → 游戏日志查看器 → 实例启动设置（窗口/JVM 参数） | — | 可在 UI 里选 Java、看日志、改参数并启动 |
+| B2 | 模组/资源包/光影列表（启用禁用、拖入、删除）+ 实例图标/删除文件 | B1 的实例目录抽象 | 实例页出现「模组/资源包」入口 |
+| B3 | Forge / NeoForge / OptiFine 安装 + 加载器版本列表 | 版本继承（已完成） | 能装 Forge 并启动 |
+| B4 | 整合包导入（mrpack/zip/curse）与导出 | B3 的加载器安装 | 导入整合包即得可玩实例 |
+| B5 | 自更新、崩溃分析、代理、`ui_scale`、多游戏目录 | — | 设置页功能齐 |
+| B6 | 主题包/背景、皮肤、Quick Play、世界管理 | B5 | 对标 HMCL 体验 |
+| 不做 | Terracotta 联机、NBT 编辑器、整合包在线更新 | — | 记录在案 |
+
+### 20.11 与 v1 的关系
+
+§2.3 的 v1 验收标准**不包含**上表的 `P1` 及以下项；v1 仍以「三种登录 + 原版/Fabric/Quilt + 三平台便携包」为准。本节的 `P0` 三项（Java 管理、日志查看器、整合包导入）建议在 v1.1 补齐，因为它们直接决定「装不上/玩不了/查不了」。

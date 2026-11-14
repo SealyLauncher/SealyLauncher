@@ -23,11 +23,40 @@ pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyEle
     let source = state.settings.download.metadata_source;
     let memory = state.settings.java.memory.max_mb;
     let motion = state.settings.motion;
-    let java_line = state
+    let java_default = state.settings.java.default_path.clone();
+    let default_java = state
         .java
-        .first()
+        .iter()
+        .find(|java| Some(java.path.display().to_string()) == java_default)
+        .or_else(|| state.java.first());
+    let java_line = default_java
         .map(|java| format!("Java {} · {}", java.version, java.path.display()))
         .unwrap_or_else(|| tr(lang, "未检测到", "Not found").to_owned());
+    let java_choices = state
+        .java
+        .iter()
+        .take(4)
+        .enumerate()
+        .map(|(index, java)| {
+            let path = java.path.display().to_string();
+            let selected = Some(path.clone()) == java_default;
+            choice_button(
+                tr(lang, "Java ", "Java ").to_owned() + &java.major.to_string(),
+                selected,
+                &t,
+            )
+            .id(("java-choice", index))
+            .role(Role::Button)
+            .aria_label(format!("java {}", java.major))
+            .on_click(cx.listener(move |shell, _, _, cx| {
+                shell
+                    .state
+                    .set_default_java(Some(std::path::Path::new(&path)));
+                cx.notify();
+            }))
+        })
+        .collect::<Vec<_>>();
+    let java_path_draft = state.java_path_draft.clone();
 
     div()
         .size_full()
@@ -177,7 +206,118 @@ pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyEle
                                 )),
                             &t,
                         ))
-                        .child(field_row(tr(lang, "Java", "Java"), java_line, &t))
+                        .child(row(
+                            tr(lang, "Java", "Java"),
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap(px(8.0))
+                                .children(java_choices)
+                                .child(
+                                    choice_button(
+                                        tr(lang, "自动", "Auto"),
+                                        java_default.is_none(),
+                                        &t,
+                                    )
+                                    .id("java-auto")
+                                    .role(Role::Button)
+                                    .aria_label("java-auto")
+                                    .on_click(cx.listener(
+                                        |shell, _, _, cx| {
+                                            shell.state.set_default_java(None);
+                                            cx.notify();
+                                        },
+                                    )),
+                                )
+                                .child(
+                                    quiet_button(tr(lang, "重新检测", "Rescan"), &t)
+                                        .id("java-rescan")
+                                        .role(Role::Button)
+                                        .aria_label("java-rescan")
+                                        .on_click(cx.listener(|shell, _, _, cx| {
+                                            let game = shell.state.paths.game.clone();
+                                            cx.spawn(async move |this, cx| {
+                                                let found = cx
+                                                    .background_executor()
+                                                    .spawn(async move {
+                                                        sealy_core::java::detect(&game)
+                                                    })
+                                                    .await;
+                                                let _ = this.update(cx, |shell, cx| {
+                                                    let count = found.len();
+                                                    shell.state.java = found;
+                                                    shell.state.notify(format!(
+                                                        "已检测到 {count} 个 Java"
+                                                    ));
+                                                    cx.notify();
+                                                });
+                                            })
+                                            .detach();
+                                        })),
+                                ),
+                            &t,
+                        ))
+                        .child(field_row(
+                            tr(lang, "当前 Java", "Selected Java"),
+                            java_line,
+                            &t,
+                        ))
+                        .child(if let Some(draft) = java_path_draft {
+                            row(
+                                tr(lang, "添加 Java", "Add Java"),
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(8.0))
+                                    .child(
+                                        div()
+                                            .w(px(420.0))
+                                            .h(px(28.0))
+                                            .px(px(8.0))
+                                            .flex()
+                                            .items_center()
+                                            .rounded(px(theme::RADIUS_TILE))
+                                            .border_1()
+                                            .border_color(rgb(t.text))
+                                            .text_size(px(12.0))
+                                            .text_color(rgb(t.text))
+                                            .child(if draft.is_empty() {
+                                                tr(
+                                                    lang,
+                                                    "/path/to/java 然后回车",
+                                                    "/path/to/java, then Enter",
+                                                )
+                                                .to_owned()
+                                            } else {
+                                                draft
+                                            }),
+                                    )
+                                    .child(
+                                        quiet_button(tr(lang, "取消", "Cancel"), &t)
+                                            .id("java-cancel")
+                                            .role(Role::Button)
+                                            .aria_label("java-cancel")
+                                            .on_click(cx.listener(|shell, _, _, cx| {
+                                                shell.state.java_path_draft = None;
+                                                cx.notify();
+                                            })),
+                                    ),
+                                &t,
+                            )
+                        } else {
+                            row(
+                                tr(lang, "添加 Java", "Add Java"),
+                                quiet_button(tr(lang, "输入路径", "Enter path"), &t)
+                                    .id("java-add")
+                                    .role(Role::Button)
+                                    .aria_label("java-add")
+                                    .on_click(cx.listener(|shell, _, _, cx| {
+                                        shell.state.begin_add_java();
+                                        cx.notify();
+                                    })),
+                                &t,
+                            )
+                        })
                         .child(field_row(
                             tr(lang, "数据目录", "Data directory"),
                             data_dir,

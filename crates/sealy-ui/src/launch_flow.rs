@@ -39,6 +39,12 @@ pub(crate) fn start(state: &mut ShellState, instance: Instance, cx: &mut Context
     let _ = std::fs::create_dir_all(&instance_dir);
 
     let java_list = state.java.clone();
+    let preferred_java = state
+        .settings
+        .java
+        .default_path
+        .clone()
+        .map(std::path::PathBuf::from);
     let memory = state.settings.java.memory.max_mb;
     let width = state.settings.launch.width;
     let height = state.settings.launch.height;
@@ -59,6 +65,7 @@ pub(crate) fn start(state: &mut ShellState, instance: Instance, cx: &mut Context
                 instance_dir,
                 version_id,
                 java_list,
+                preferred_java,
                 memory,
                 width,
                 height,
@@ -105,6 +112,7 @@ fn launch_blocking(
     instance_dir: PathBuf,
     version_id: String,
     java_list: Vec<JavaInstall>,
+    preferred_java: Option<PathBuf>,
     memory: u32,
     width: u32,
     height: u32,
@@ -125,11 +133,10 @@ fn launch_blocking(
         .as_ref()
         .map(|java| java.major_version)
         .unwrap_or(0);
-    let java = java_list
-        .iter()
-        .find(|install| install.satisfies(required))
-        .or_else(|| java_list.first())
-        .ok_or_else(|| "没有可用的 Java，请先在下载页安装该版本".to_owned())?;
+    let preferred = preferred_java.as_deref();
+    let java = sealy_core::java::pick_java(&java_list, preferred, required).ok_or_else(|| {
+        "没有可用的 Java，请先在设置页选择 Java 或安装该版本所需的 Java".to_owned()
+    })?;
 
     let access_token = sealy_core::auth::ensure_minecraft_token(&mut tokens, &account, &client_id)
         .map_err(|err| err.to_string())?;
