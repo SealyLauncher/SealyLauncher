@@ -125,8 +125,7 @@ pub fn detect(game_dir: &Path) -> Vec<JavaInstall> {
     let runtime_dir = game_dir.join("runtime");
     if let Ok(entries) = std::fs::read_dir(&runtime_dir) {
         for entry in entries.flatten() {
-            let java = entry.path().join("bin").join(java_exe());
-            candidates.push(java);
+            candidates.extend(runtime_java_candidates(&entry.path()));
         }
     }
 
@@ -167,6 +166,25 @@ pub fn detect(game_dir: &Path) -> Vec<JavaInstall> {
 /// Name of the Java executable on this platform.
 pub fn java_exe() -> &'static str {
     if cfg!(windows) { "java.exe" } else { "java" }
+}
+
+/// Every place a Mojang runtime may hide its `java` binary.
+///
+/// Linux and Windows runtimes expose `bin/java`; macOS ships a `jre.bundle`
+/// whose real home is `jre.bundle/Contents/Home/bin/java`.
+pub fn runtime_java_candidates(root: &Path) -> Vec<PathBuf> {
+    let exe = java_exe();
+    [
+        root.join("bin").join(exe),
+        root.join("jre.bundle")
+            .join("Contents")
+            .join("Home")
+            .join("bin")
+            .join(exe),
+        root.join("Contents").join("Home").join("bin").join(exe),
+    ]
+    .into_iter()
+    .collect()
 }
 
 fn child_dirs(root: &Path) -> Vec<PathBuf> {
@@ -342,6 +360,12 @@ pub fn install_runtime(
         kind: String,
         #[serde(default)]
         downloads: Option<Downloads>,
+        /// Relative target of a `link` entry.
+        #[serde(default)]
+        target: Option<String>,
+        /// Whether the file must keep its executable bit (Unix runtimes).
+        #[serde(default)]
+        executable: bool,
     }
     #[derive(Deserialize)]
     struct Downloads {
@@ -361,20 +385,38 @@ pub fn install_runtime(
     let index: FileIndex = serde_json::from_str(&text)?;
 
     let root = game_dir.join("runtime").join(&entry.component);
+    std::fs::create_dir_all(&root)?;
+
     let mut tasks = Vec::new();
+    let mut links = Vec::new();
+    let mut executables = Vec::new();
+
     for (relative, file) in index.files {
-        if file.kind != "file" {
-            continue;
+        match file.kind.as_str() {
+            "directory" => {
+                let _ = std::fs::create_dir_all(root.join(&relative));
+            }
+            "link" => {
+                if let Some(target) = file.target {
+                    links.push((relative, target));
+                }
+            }
+            "file" => {
+                let Some(raw) = file.downloads.and_then(|downloads| downloads.raw) else {
+                    continue;
+                };
+                if file.executable {
+                    executables.push(relative.clone());
+                }
+                tasks.push(Task {
+                    url: raw.url,
+                    path: format!("runtime/{}/{relative}", entry.component),
+                    sha1: raw.sha1,
+                    size: raw.size,
+                });
+            }
+            _ => {}
         }
-        let Some(raw) = file.downloads.and_then(|downloads| downloads.raw) else {
-            continue;
-        };
-        tasks.push(Task {
-            url: raw.url,
-            path: format!("runtime/{}/{relative}", entry.component),
-            sha1: raw.sha1,
-            size: raw.size,
-        });
     }
 
     {
@@ -385,20 +427,94 @@ pub fn install_runtime(
 
     install::run_tasks(game_dir, tasks, 4, progress, cancel)?;
 
-    let executable = root.join("bin").join(java_exe());
-    let install = probe(&executable).ok_or_else(|| {
-        CoreError::Network(format!(
-            "downloaded runtime is missing {}",
-            executable.display()
-        ))
-    })?;
+    create_links(&root, &links);
+    mark_executables(&root, &executables);
 
-    Ok(install)
+    let candidates = runtime_java_candidates(&root);
+    for candidate in &candidates {
+        if let Some(install) = probe(candidate) {
+            return Ok(install);
+        }
+    }
+
+    Err(CoreError::Network(format!(
+        "下载的 Java 运行时没有可执行的 {}（检查过：{}）",
+        java_exe(),
+        candidates
+            .iter()
+            .map(|path| path.display().to_string())
+            .collect::<Vec<_>>()
+            .join("、")
+    )))
+}
+
+/// Recreates the symlinks that Unix runtimes use inside `legal/`.
+fn create_links(root: &Path, links: &[(String, String)]) {
+    #[cfg(unix)]
+    {
+        for (relative, target) in links {
+            let path = root.join(relative);
+            if let Some(parent) = path.parent() {
+                let _ = std::fs::create_dir_all(parent);
+            }
+            let _ = std::fs::remove_file(&path);
+            if let Err(err) = std::os::unix::fs::symlink(target, &path) {
+                tracing::debug!(
+                    path = %path.display(),
+                    error = %err,
+                    "could not create runtime symlink"
+                );
+            }
+        }
+    }
+
+    #[cfg(not(unix))]
+    {
+        let _ = (root, links);
+    }
+}
+
+/// Restores the executable bit for files the manifest marked as executable.
+fn mark_executables(root: &Path, files: &[String]) {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+
+        for relative in files {
+            let path = root.join(relative);
+            let Ok(metadata) = std::fs::metadata(&path) else {
+                continue;
+            };
+            let mut permissions = metadata.permissions();
+            permissions.set_mode(permissions.mode() | 0o755);
+            if let Err(err) = std::fs::set_permissions(&path, permissions) {
+                tracing::debug!(
+                    path = %path.display(),
+                    error = %err,
+                    "could not mark runtime file executable"
+                );
+            }
+        }
+    }
+
+    #[cfg(not(unix))]
+    {
+        let _ = (root, files);
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn finds_java_inside_macos_bundle() {
+        let root = Path::new("/tmp/runtime/java-runtime-delta");
+        let candidates = runtime_java_candidates(root);
+        let bundle = format!("jre.bundle/Contents/Home/bin/{}", java_exe());
+        assert!(candidates.iter().any(|path| path.ends_with(&bundle)));
+        assert!(candidates.iter().any(|path| path.ends_with(java_exe())));
+    }
 
     #[test]
     fn parses_openjdk_banner() {

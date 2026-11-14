@@ -42,14 +42,23 @@ pub struct Bootstrap {
     pub paths: LauncherPaths,
     /// Loaded settings.
     pub settings: Settings,
+    /// True when the portable directory was read-only and per-user data is in use.
+    pub data_fallback: bool,
+    /// True when macOS is running the bundle from an App Translocation path.
+    pub translocated: bool,
 }
 
-/// Resolves portable paths, ensures directories, and loads settings.
+/// Resolves usable paths (falling back to per-user data), then loads settings.
 pub fn bootstrap() -> Result<Bootstrap, CoreError> {
-    let paths = LauncherPaths::discover()?;
-    paths.ensure()?;
+    let exe = std::env::current_exe().ok();
+    let (paths, data_fallback) = LauncherPaths::prepare()?;
     let settings = Settings::load_or_default(&paths.settings_file());
-    Ok(Bootstrap { paths, settings })
+    Ok(Bootstrap {
+        paths,
+        settings,
+        data_fallback,
+        translocated: exe.as_deref().is_some_and(LauncherPaths::is_translocated),
+    })
 }
 
 #[cfg(test)]

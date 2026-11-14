@@ -54,6 +54,45 @@ impl LauncherPaths {
         Ok(Self::from_root(root_from_exe(&exe)))
     }
 
+    /// Discovers a usable root, falling back to a per-user directory.
+    ///
+    /// macOS runs quarantined apps from a randomised, read-only
+    /// `AppTranslocation` path, and `.app` bundles usually live in
+    /// `/Applications`; both make `<bundle>/SealyData` impossible to create.
+    /// Instead of exiting silently the launcher then keeps its data under the
+    /// user's data directory.
+    pub fn prepare() -> Result<(Self, bool), CoreError> {
+        let exe = std::env::current_exe()
+            .map_err(|err| CoreError::RootUnavailable(format!("current_exe: {err}")))?;
+        let portable = Self::from_root(root_from_exe(&exe));
+
+        match portable.ensure() {
+            Ok(()) => Ok((portable, false)),
+            Err(err) => {
+                let root = user_data_root()?;
+                let fallback = Self::from_root(&root);
+                fallback.ensure()?;
+                tracing::warn!(
+                    error = %err,
+                    portable = %portable.root.display(),
+                    fallback = %fallback.root.display(),
+                    "portable data directory is not writable; using per-user data"
+                );
+                Ok((fallback, true))
+            }
+        }
+    }
+
+    /// Whether the executable path sits in a macOS App Translocation directory.
+    pub fn is_translocated(exe: &Path) -> bool {
+        exe.components().any(|component| {
+            component
+                .as_os_str()
+                .to_str()
+                .is_some_and(|part| part == "AppTranslocation")
+        })
+    }
+
     /// Creates all directories required for the launcher shell.
     pub fn ensure(&self) -> Result<(), CoreError> {
         for dir in [
@@ -104,6 +143,53 @@ impl LauncherPaths {
     pub fn lock_file(&self) -> PathBuf {
         self.data.join(".lock")
     }
+}
+
+/// Per-user data root used when the portable directory is read-only.
+pub fn user_data_root() -> Result<PathBuf, CoreError> {
+    #[cfg(target_os = "macos")]
+    {
+        let home = std::env::var_os("HOME").ok_or_else(|| {
+            CoreError::RootUnavailable(
+                "HOME is not set; cannot find Application Support".to_owned(),
+            )
+        })?;
+        return Ok(Path::new(&home)
+            .join("Library")
+            .join("Application Support")
+            .join("SealyLauncher"));
+    }
+
+    #[cfg(windows)]
+    {
+        let base = std::env::var_os("APPDATA")
+            .or_else(|| std::env::var_os("LOCALAPPDATA"))
+            .ok_or_else(|| {
+                CoreError::RootUnavailable(
+                    "APPDATA is not set; cannot find a data directory".to_owned(),
+                )
+            })?;
+        return Ok(Path::new(&base).join("SealyLauncher"));
+    }
+
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        if let Some(data_home) = std::env::var_os("XDG_DATA_HOME") {
+            return Ok(Path::new(&data_home).join("sealy-launcher"));
+        }
+        let home = std::env::var_os("HOME").ok_or_else(|| {
+            CoreError::RootUnavailable("HOME is not set; cannot find a data directory".to_owned())
+        })?;
+        return Ok(Path::new(&home)
+            .join(".local")
+            .join("share")
+            .join("sealy-launcher"));
+    }
+
+    #[allow(unreachable_code)]
+    Err(CoreError::RootUnavailable(
+        "no per-user data directory for this platform".to_owned(),
+    ))
 }
 
 /// Returns the launcher root for an executable path.

@@ -51,13 +51,31 @@ cargo run -p sealy-app
 - [CI](.github/workflows/ci.yml)：Windows 运行 fmt/clippy/test/build；macOS/Linux 只构建。
 - [Release](.github/workflows/release.yml)：**每次推送到 `main` 自动发版**
   1. 读取 `Cargo.toml` 里的版本号，patch +1，提交 `chore(release): vX.Y.Z [skip ci]` 并打 tag；
-  2. 三平台并行构建：Windows x64 `.zip`、macOS universal `.zip`（含 `.app`）、Linux x86_64 `.tar.zst`；
+  2. 三平台并行构建：Windows x64 `.zip`、macOS universal `.zip` + `.tar.gz`（含 `.app`）、Linux x86_64 `.tar.zst`；
   3. 生成 `SHA256SUMS` 并发布到 GitHub Release。
 - 也可以手动触发，`bump` 可选 `patch` / `minor` / `major` / `none`。
 - 图标：`packaging/windows/sealy.ico` 由 `crates/sealy-app/build.rs` 在检测到 `rc.exe` 时嵌入 exe；
   macOS 用 `SealyLauncher.icns`，Linux 附带 `sealy-launcher.png`。
 - 产物包含 `README.md`、`LICENSE`、`THIRD_PARTY_NOTICES.md`、`OEM.conf.example`。
 - 不产出 MSI/DMG/DEB/RPM/AppImage 安装包。
+
+## macOS 首次打开
+
+`.app` 未使用 Apple 开发者证书签名，下载后 macOS 会给它打上 quarantine 标记，表现为「双击没反应」或「已损坏」。任选一种：
+
+1. **推荐**：下载 `SealyLauncher-<版本>-macos-universal.tar.gz`，解压后把 `SealyLauncher.app` 放进「应用程序」：
+   ```bash
+   tar -xzf SealyLauncher-<版本>-macos-universal.tar.gz -C /Applications
+   ```
+   用 `tar` 解压不会继承 quarantine，双击即可启动。
+2. 用 zip 包时，解压后右键点 `.app` → **打开** → 在弹窗里再点「打开」，只需一次。
+3. 或者手动清除标记：
+   ```bash
+   xattr -dr com.apple.quarantine /Applications/SealyLauncher.app
+   ```
+
+数据目录：默认放在 `.app` 同级目录（真正便携）。如果 `.app` 位于 `/Applications` 等不可写位置，或被 macOS 放进只读的 App Translocation 临时目录，启动器会自动改用
+`~/Library/Application Support/SealyLauncher`，并在消息中心提示；日志、实例、游戏文件都在该目录下。
 
 ## Microsoft 登录返回 403
 

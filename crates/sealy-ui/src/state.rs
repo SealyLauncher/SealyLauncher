@@ -246,6 +246,10 @@ pub struct ShellState {
     pub settings: Settings,
     /// Portable paths.
     pub paths: LauncherPaths,
+    /// Data lives under the per-user directory because the portable one failed.
+    pub data_fallback: bool,
+    /// macOS is running the bundle from an App Translocation path.
+    pub translocated: bool,
     /// Optional toast with an optional undo action.
     pub toast: Option<Toast>,
     /// Id source for toasts.
@@ -327,6 +331,8 @@ impl ShellState {
     /// Builds shell state from core bootstrap data.
     pub fn from_bootstrap(bootstrap: Bootstrap) -> Self {
         let first_run = !bootstrap.paths.settings_file().exists();
+        let data_fallback = bootstrap.data_fallback;
+        let translocated = bootstrap.translocated;
         let instances =
             sealy_core::instances::InstanceBook::load(&bootstrap.paths.instances_file());
         let accounts = sealy_core::accounts::AccountBook::load(&bootstrap.paths.accounts_file());
@@ -335,6 +341,8 @@ impl ShellState {
             route: Route::Home,
             settings: bootstrap.settings,
             paths: bootstrap.paths,
+            data_fallback,
+            translocated,
             toast: None,
             next_toast_id: 1,
             toast_deadline: None,

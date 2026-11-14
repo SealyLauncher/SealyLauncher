@@ -151,16 +151,31 @@ jobs:
           cp packaging/macos/SealyLauncher.icns "dist/SealyLauncher.app/Contents/Resources/"
           cp README.md LICENSE THIRD_PARTY_NOTICES.md OEM.conf.example \
             "dist/SealyLauncher.app/Contents/Resources/"
+          # Finder refuses to launch a bundle whose main executable is not
+          # executable; make the permission explicit instead of relying on
+          # whatever cargo/lipo left behind.
+          chmod +x "dist/SealyLauncher.app/Contents/MacOS/sealy-launcher"
+          # Resource forks and extended attributes invalidate the ad-hoc
+          # signature, which makes LaunchServices report the app as damaged.
+          xattr -cr "dist/SealyLauncher.app"
           codesign --force --deep --sign - "dist/SealyLauncher.app"
+          codesign --verify --deep --strict --verbose=2 "dist/SealyLauncher.app"
           ditto -c -k --sequesterRsrc --keepParent \
             "dist/SealyLauncher.app" \
             "dist/SealyLauncher-${version}-macos-universal.zip"
+          # A tarball is offered as well: extracting it with `tar` does not
+          # inherit the quarantine flag, so Gatekeeper does not translocate
+          # the bundle into a read-only temporary directory.
+          tar -czf "dist/SealyLauncher-${version}-macos-universal.tar.gz" \
+            -C dist "SealyLauncher.app"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: macos-universal
-          path: dist/*.zip
+          path: |
+            dist/*.zip
+            dist/*.tar.gz
           if-no-files-found: error
 
   linux:

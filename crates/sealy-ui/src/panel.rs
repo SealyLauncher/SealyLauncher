@@ -56,7 +56,7 @@ pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyEle
         .top(px(0.0))
         .right(px(0.0))
         .bottom(px(0.0))
-        .w(px(380.0))
+        .w(px(420.0))
         .flex()
         .flex_col()
         .bg(rgb(t.surface))
@@ -132,10 +132,12 @@ fn row(
         .child(
             div()
                 .flex()
-                .items_center()
+                .items_start()
                 .gap(px(8.0))
                 .child(
                     Icon::new(icon)
+                        .mt(px(2.0))
+                        .flex_shrink_0()
                         .w(px(14.0))
                         .h(px(14.0))
                         .text_color(rgb(tone_color)),
@@ -143,11 +145,12 @@ fn row(
                 .child(
                     div()
                         .flex_1()
-                        .overflow_hidden()
+                        .min_w(px(0.0))
                         .text_size(px(13.0))
+                        .line_height(relative(1.4))
                         .font_weight(FontWeight::MEDIUM)
                         .text_color(rgb(t.text))
-                        .child(message.title.clone()),
+                        .child(soft_wrap(&message.title)),
                 )
                 .when(message.cancel.is_some(), |this| {
                     let cancel = message.cancel.clone();
@@ -182,15 +185,16 @@ fn row(
         .child(
             div()
                 .flex()
-                .items_center()
+                .items_start()
                 .gap(px(8.0))
                 .child(
                     div()
                         .flex_1()
+                        .min_w(px(0.0))
                         .text_size(px(11.0))
                         .line_height(relative(1.5))
                         .text_color(rgb(t.muted))
-                        .child(message.detail.clone()),
+                        .child(soft_wrap(&message.detail)),
                 )
                 .when(
                     message.tone == MessageTone::Failed && message.retry.is_some(),
@@ -239,4 +243,49 @@ fn row(
     }
 
     card.into_any_element()
+}
+
+/// Inserts zero-width spaces so long tokens (paths, JSON, URLs) can wrap.
+///
+/// Without this a single unbroken token forces the text box wider than the
+/// panel and the tail of the line is simply clipped.
+pub(crate) fn soft_wrap(text: &str) -> String {
+    let mut out = String::with_capacity(text.len() + text.len() / 8);
+    let mut run = 0;
+
+    for ch in text.chars() {
+        out.push(ch);
+        let breaks = matches!(
+            ch,
+            '/' | '\\' | ':' | ';' | ',' | '=' | '&' | '?' | '|' | '_' | '-' | ' ' | '\n'
+        );
+        if breaks {
+            out.push('\u{200B}');
+            run = 0;
+        } else {
+            run += 1;
+            if run >= 12 {
+                out.push('\u{200B}');
+                run = 0;
+            }
+        }
+    }
+
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::soft_wrap;
+
+    #[test]
+    fn wraps_long_tokens() {
+        let long = "C:\\Users\\someone\\very\\long\\path\\to\\java.exe";
+        let wrapped = soft_wrap(long);
+        assert!(wrapped.contains('\u{200B}'));
+        assert!(wrapped.chars().filter(|ch| *ch != '\u{200B}').count() == long.chars().count());
+
+        let token = "a".repeat(40);
+        assert!(soft_wrap(&token).contains('\u{200B}'));
+    }
 }

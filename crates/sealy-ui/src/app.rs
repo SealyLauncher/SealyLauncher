@@ -44,6 +44,29 @@ impl SealyShell {
             focus: cx.focus_handle(),
         };
 
+        // macOS sandboxing of downloaded bundles is invisible otherwise.
+        let mut shell = shell;
+        if shell.state.translocated {
+            shell.state.push_message(
+                "macOS 正在隔离运行".to_owned(),
+                "请把 SealyLauncher.app 拖到「应用程序」文件夹后重新打开；\
+                 从下载目录直接双击时 macOS 会把它放进只读的临时路径，数据无法保存在旁边。"
+                    .to_owned(),
+                crate::state::MessageTone::Failed,
+            );
+        }
+        if shell.state.data_fallback {
+            shell.state.push_message(
+                "数据目录已回退".to_owned(),
+                format!(
+                    "程序所在目录不可写，已改用 {}；游戏目录为 {}。",
+                    shell.state.paths.data.display(),
+                    shell.state.paths.game.display()
+                ),
+                crate::state::MessageTone::Failed,
+            );
+        }
+
         // Java probing spawns processes, so it happens after the first frame.
         let game = shell.state.paths.game.clone();
         let installed_game = game.clone();
@@ -374,19 +397,23 @@ fn toast_element(
         .absolute()
         .bottom(px(theme::ACTION_BAR_HEIGHT + 16.0))
         .right(px(24.0))
+        .max_w(px(420.0))
         .px(px(14.0))
         .py(px(10.0))
         .flex()
-        .items_center()
+        .items_start()
         .gap(px(12.0))
         .rounded(px(theme::RADIUS_TILE))
         .bg(rgb(tokens.block))
         .cursor_pointer()
         .child(
             div()
+                .flex_1()
+                .min_w(px(0.0))
                 .text_size(px(12.0))
+                .line_height(relative(1.4))
                 .text_color(rgb(tokens.block_text))
-                .child(toast.message.clone()),
+                .child(crate::panel::soft_wrap(&toast.message)),
         )
         .on_click(cx.listener(|shell, _, _, cx| {
             shell.state.dismiss_toast();
