@@ -238,11 +238,9 @@ pub fn login_with_xbox(
     );
 
     if response.status == 403 {
-        let detail = describe(&response.body);
-        return Err(CoreError::Network(format!(
-            "Minecraft API 返回 403（应用未获授权）。客户端 ID：{client_id}（可在设置页核对）；\
-             服务端返回：{detail}。若已通过审核，请确认提交审核的正是这个 ID，\
-             且审批生效可能需要数小时到一天；若官方启动器能登录而这里不能，问题在这个应用上"
+        return Err(CoreError::Network(forbidden_message(
+            &response.body,
+            client_id,
         )));
     }
     if !response.is_ok() {
@@ -253,6 +251,32 @@ pub fn login_with_xbox(
         access_token: string_field(&response.body, "access_token"),
         expires_in: response.body["expires_in"].as_u64().unwrap_or(86_400),
     })
+}
+
+/// Builds the user-facing message for a 403 from `login_with_xbox`.
+fn forbidden_message(body: &serde_json::Value, client_id: &str) -> String {
+    let detail = describe(body);
+    let invalid_app = body["errorMessage"]
+        .as_str()
+        .is_some_and(|text| text.contains("Invalid app registration"));
+
+    if invalid_app {
+        return format!(
+            "Mojang 判定「应用注册无效」（Invalid app registration）。客户端 ID：{client_id}。\
+             你的 Microsoft 账号本身没有问题（Xbox Live 与 XSTS 都已通过），问题只在这个应用：\
+             ① 审核通过邮件里的 ID 必须与上面这串完全一致；\
+             ② Azure 里这个应用不能已删除，「支持的帐户类型」需包含个人 Microsoft 帐户，\
+             「允许公共客户端流」需为「是」；\
+             ③ 审批生效有时需要 1–2 天。\
+             若三项都确认无误，请把这一整行连同时间发回 Mojang 审核邮箱。参考：https://aka.ms/AppRegInfo"
+        );
+    }
+
+    format!(
+        "Minecraft API 返回 403（应用未获授权）。客户端 ID：{client_id}（可在设置页核对）；\
+         服务端返回：{detail}。若已通过审核，请确认提交审核的正是这个 ID，\
+         且审批生效可能需要数小时到一天；若官方启动器能登录而这里不能，问题在这个应用上"
+    )
 }
 
 /// Compact description of an error body for messages.
@@ -442,6 +466,26 @@ mod tests {
         assert!(!text.contains("secret-value"));
         assert!(text.contains("<redacted>"));
         assert!(text.contains("XErr"));
+    }
+
+    #[test]
+    fn explains_invalid_app_registration() {
+        let body = serde_json::json!({
+            "path": "/authentication/login_with_xbox",
+            "errorMessage": "Invalid app registration, see https://aka.ms/AppRegInfo for more information"
+        });
+        let text = forbidden_message(&body, "e95460ea-8dcc-4dbc-bc2c-b823b9035ccb");
+        assert!(text.contains("Invalid app registration"));
+        assert!(text.contains("e95460ea-8dcc-4dbc-bc2c-b823b9035ccb"));
+        assert!(text.contains("XSTS"));
+    }
+
+    #[test]
+    fn explains_generic_forbidden() {
+        let body = serde_json::json!({ "error": "FORBIDDEN", "errorMessage": "Nope" });
+        let text = forbidden_message(&body, "abc");
+        assert!(text.contains("403"));
+        assert!(text.contains("FORBIDDEN"));
     }
 
     #[test]
