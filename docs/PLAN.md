@@ -826,21 +826,53 @@ pub trait SkinProvider: Send + Sync;
 
 总估算 5–7 周；GPUI 回退 +1–2 周；Forge 提前 +1–2 周。Phase 6 若依赖 Forge，先补 v1.1。
 
-### 16.1 实施状态（2026-11-10 快照）
+### 16.1 实施状态（2026-11-14 快照）
 
 > 这一节是唯一的状态来源；每完成一项就改这里，避免"跳着做没人记得"。
 
-| 阶段 | 完成度 | 已完成 | 未完成 |
+| 阶段 | 完成度 | 已完成 | 未完成 / 缺口 |
 | --- | --- | --- | --- |
 | Phase 0 工具链 | 100% | workspace、GPUI 窗口、标题栏、CI 三平台骨架 | — |
-| Phase 1 壳层/设计 | ~90% | paths/config/logging/events/单实例、kit 封装、主题 token、组件、页面骨架、i18n、键盘导航 | UI 缩放（`ui_scale`） |
-| Phase 2 启动核心 | ~90% | 版本安装、assets、libraries、natives、Java 自动下载、参数生成、进程/日志、取消、**版本继承（inheritsFrom 合并）**、**Fabric/Quilt 安装并启动** | 整合包导入、CLI 启动参数、Forge/NeoForge 安装（v1.1） |
-| Phase 3 认证 | ~90% | 离线账号、Microsoft 设备码全链路、**authlib-injector 登录 + `-javaagent` 注入 + jar 自动下载** | 头像、账户流三屏（当前为单页）；外置登录尚无真实账号端到端验证 |
-| Phase 4 UI 产品化 | ~85% | 首页/实例/下载/设置/账号、OOBE 四步（含账号强制）、实例重命名/复制/开目录、消息中心、**toast 自动消失 + 删除撤销**、**新建实例列表化并内置 Fabric/Quilt**、**去角标**、**调试日志开关** | OEM.conf 解析、`ui_scale`、OOBE 第五步（计划中已合并） |
-| Phase 5 打包发布 | ~70% | 三平台产物、SHA256SUMS、自动升版本发版、exe/macOS/Linux 图标、portable 目录 | xtask、诊断页、只读/多副本手工矩阵 |
+| Phase 1 壳层/设计 | ~90% | paths/config/logging/events/单实例、kit 封装、主题 token、组件、页面骨架、i18n、键盘导航、**便携目录回退（只读时不崩溃）** | UI 缩放（`ui_scale`） |
+| Phase 2 启动核心 | ~92% | 版本安装、assets、libraries、natives、Java 自动下载、参数生成、进程/日志、取消、版本继承（inheritsFrom 合并）、Fabric/Quilt 安装并启动、**macOS/Linux Java 运行时修复**、**系统 JDK 探测（macOS JDK 包 / Homebrew / Linux jvm / SDKMAN）** | 整合包导入、CLI 启动参数、Forge/NeoForge 安装（v1.1） |
+| Phase 3 认证 | ~90% | 离线账号、Microsoft 设备码全链路 + 逐步日志、authlib-injector 登录 + `-javaagent` 注入 + jar 自动下载 | 头像、账户流三屏（当前为单页）、authlib 真实账号端到端；**Microsoft 受外部白名单阻塞** |
+| Phase 4 UI 产品化 | ~88% | 首页/实例/下载/设置/账号、OOBE 四步（含账号强制）、实例重命名/复制/开目录、消息中心、toast 自动消失 + 删除撤销、新建实例列表化并内置 Fabric/Quilt、去角标、调试日志开关、**消息中心与 toast 长文本换行**、**macOS 启动提示**、**设置页显示 Microsoft client id** | OEM.conf 解析、`ui_scale`、OOBE 第五步（计划中已合并） |
+| Phase 5 打包发布 | ~82% | 三平台产物、SHA256SUMS、自动升版本发版、exe/macOS/Linux 图标、portable 目录、**tag 由 release action 创建**、**CI apt/DNS 规避**、**macOS zip + tar.gz、ad-hoc 签名与 `codesign --verify`**、**macOS Gatekeeper 文档** | notarization（需 Apple 证书）、xtask、诊断页、只读/多副本手工矩阵 |
 | Phase 6/7 | 0% | — | OEM 远程、Node 管理端、Forge 安装、自更新 |
 
-整体 v1 约 **78%**。验证记录：\n\n- Fabric 0.20.1 + 26.4-snapshot-7：安装后启动成功，日志 Loading Minecraft 26.4-snapshot-7 with Fabric Loader 0.20.1。\n- Quilt 0.20.0-beta.9 + 同版本：安装与启动链路正常，Quilt Loader 自身报 UNABLE TO NORMALIZE MINECRAFT VERSION 26.4 Snapshot 7（加载器不支持该快照的版本号格式），与本项目无关。\n- authlib-injector：UI 表单、Yggdrasil 请求与错误透传、jar 下载均通过（cargo test -- --ignored 两项网络用例）；尚无真实第三方账号做端到端登录。\n\n已知与计划的偏差：
+整体 v1 约 **82%**（按阶段工作量加权；两位数的缺口集中在 Phase 6/7 与三个外部依赖项）。
+
+**2026-11-12 → 11-14 完成**
+
+- 启动核心：版本继承合并、Fabric/Quilt 安装并启动、macOS `jre.bundle` 运行时定位与 Unix 可执行位/符号链接修复、系统 JDK 探测。
+- 认证：authlib-injector 全链路、Microsoft 设备码全链路 + 每步状态码日志、设置页展示运行时 client id、403 分类提示（`Invalid app registration`）。
+- UI：toast 5 秒自动消失、删除撤销、新建实例列表化、去角标、调试日志开关、消息中心/toast 长文本换行。
+- 平台与发布：macOS `.app` 数据目录回退与启动提示、启动致命错误弹窗；CI apt 镜像/DNS 规避；release tag 改由 action 创建；macOS 产物 zip + tar.gz。
+
+**当前阻塞**
+
+1. **Microsoft 登录**：Mojang 返回 403 `Invalid app registration`。日志已证明设备码 200、Xbox Live 200、XSTS 200（`user_hash_len=20`、`xerr=0`），账号侧正常，问题仅在该 AppID 未被认可；需要重新提交审核（外部依赖），表单填写见 `docs/APPID-REVIEW.md`。
+2. **macOS 首次打开**：无 Apple 开发者证书，无法 notarize；已用 tar.gz + 文档缓解（右键打开 / `xattr -dr`）。
+3. **authlib-injector**：缺真实第三方账号端到端验证。
+4. **Linux/macOS 运行时行为**：CI 覆盖三平台构建，实机行为依赖用户环境反馈。
+
+**建议下一步（按价值排序）**
+
+1. AppID 重新提交并跟踪（外部，不阻塞代码）。
+2. `ui_scale` + `OEM.conf` 解析，收尾 Phase 1/4。
+3. 整合包导入 + CLI 启动参数，收尾 Phase 2。
+4. 诊断页（导出日志与环境信息），配合 Phase 5。
+5. notarization 流程预留（有证书时启用）。
+
+验证记录：
+
+- Fabric 0.20.1 + 26.4-snapshot-7：安装后启动成功，日志 `Loading Minecraft 26.4-snapshot-7 with Fabric Loader 0.20.1`。
+- Quilt 0.20.0-beta.9 + 同版本：安装与启动链路正常，Quilt Loader 自身报 `UNABLE TO NORMALIZE MINECRAFT VERSION 26.4 Snapshot 7`（加载器不支持该快照版本号格式），与本项目无关。
+- authlib-injector：UI 表单、Yggdrasil 请求与错误透传、jar 下载均通过（`cargo test -- --ignored` 两项网络用例）。
+- Windows：`cargo fmt` / `clippy -D warnings` / `test`（47 通过 / 2 ignored）与 UI 冒烟通过；Linux/macOS 由 CI 构建验证。
+- 发布链路：v0.1.23 三平台产物 + SHA256SUMS 自动发布成功。
+
+已知与计划的偏差：
 
 1. 账户是单页而不是「三屏」，属于设计阶段调整（见 §9），功能等价。
 2. OOBE 由计划的五步合并为四步，账号步骤为强制项。
