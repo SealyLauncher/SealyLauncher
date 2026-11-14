@@ -141,11 +141,13 @@ pub fn detect(game_dir: &Path) -> Vec<JavaInstall> {
         }
     }
 
-    // 4. Well-known install roots on Windows.
+    // 4. Well-known install roots (Windows vendor folders, macOS JDK bundles,
+    //    Linux `/usr/lib/jvm`).
     for root in known_roots() {
         for dir in child_dirs(&root) {
-            candidates.push(dir.join("bin").join(java_exe()));
+            candidates.extend(expanded_java_paths(&dir));
         }
+        candidates.extend(expanded_java_paths(&root));
     }
 
     let mut found: Vec<JavaInstall> = Vec::new();
@@ -187,6 +189,25 @@ pub fn runtime_java_candidates(root: &Path) -> Vec<PathBuf> {
     .collect()
 }
 
+/// Java executable locations inside a JDK directory on this platform.
+fn expanded_java_paths(dir: &Path) -> Vec<PathBuf> {
+    let exe = java_exe();
+    let mut paths = vec![
+        dir.join("bin").join(exe),
+        dir.join("Contents").join("Home").join("bin").join(exe),
+    ];
+    // Homebrew's `openjdk` formula keeps the bundle under `libexec`.
+    paths.push(
+        dir.join("libexec")
+            .join("openjdk.jdk")
+            .join("Contents")
+            .join("Home")
+            .join("bin")
+            .join(exe),
+    );
+    paths
+}
+
 fn child_dirs(root: &Path) -> Vec<PathBuf> {
     let Ok(entries) = std::fs::read_dir(root) else {
         return Vec::new();
@@ -201,24 +222,51 @@ fn child_dirs(root: &Path) -> Vec<PathBuf> {
 fn known_roots() -> Vec<PathBuf> {
     let mut roots = Vec::new();
 
-    if let Ok(program_files) = std::env::var("ProgramFiles") {
-        for vendor in [
-            "Java",
-            "Eclipse Adoptium",
-            "Eclipse Foundation",
-            "Microsoft",
-            "Zulu",
-            "Amazon Corretto",
-            "BellSoft",
-        ] {
-            roots.push(Path::new(&program_files).join(vendor));
+    if cfg!(windows) {
+        if let Ok(program_files) = std::env::var("ProgramFiles") {
+            for vendor in [
+                "Java",
+                "Eclipse Adoptium",
+                "Eclipse Foundation",
+                "Microsoft",
+                "Zulu",
+                "Amazon Corretto",
+                "BellSoft",
+            ] {
+                roots.push(Path::new(&program_files).join(vendor));
+            }
         }
-    }
-    if let Ok(program_files) = std::env::var("ProgramFiles(x86)") {
-        roots.push(Path::new(&program_files).join("Java"));
-    }
-    if let Ok(local) = std::env::var("LOCALAPPDATA") {
-        roots.push(Path::new(&local).join("Programs").join("Eclipse Adoptium"));
+        if let Ok(program_files) = std::env::var("ProgramFiles(x86)") {
+            roots.push(Path::new(&program_files).join("Java"));
+        }
+        if let Ok(local) = std::env::var("LOCALAPPDATA") {
+            roots.push(Path::new(&local).join("Programs").join("Eclipse Adoptium"));
+        }
+    } else if cfg!(target_os = "macos") {
+        // Homebrew and the Apple/Zulu/Adoptium JavaVirtualMachines layout.
+        if let Some(home) = std::env::var_os("HOME") {
+            roots.push(
+                Path::new(&home)
+                    .join(".sdkman")
+                    .join("candidates")
+                    .join("java"),
+            );
+        }
+        roots.push(PathBuf::from("/Library/Java/JavaVirtualMachines"));
+        roots.push(PathBuf::from("/opt/homebrew/opt"));
+        roots.push(PathBuf::from("/usr/local/opt"));
+    } else {
+        // Linux distributions and SDKMAN.
+        if let Some(home) = std::env::var_os("HOME") {
+            roots.push(
+                Path::new(&home)
+                    .join(".sdkman")
+                    .join("candidates")
+                    .join("java"),
+            );
+        }
+        roots.push(PathBuf::from("/usr/lib/jvm"));
+        roots.push(PathBuf::from("/usr/java"));
     }
 
     roots
@@ -514,6 +562,14 @@ mod tests {
         let bundle = format!("jre.bundle/Contents/Home/bin/{}", java_exe());
         assert!(candidates.iter().any(|path| path.ends_with(&bundle)));
         assert!(candidates.iter().any(|path| path.ends_with(java_exe())));
+    }
+
+    #[test]
+    fn expands_jdk_bundle_paths() {
+        let paths = expanded_java_paths(Path::new("/Library/Java/JavaVirtualMachines/zulu-21.jdk"));
+        let bundle = format!("Contents/Home/bin/{}", java_exe());
+        assert!(paths.iter().any(|path| path.ends_with(&bundle)));
+        assert!(paths.iter().any(|path| path.ends_with(java_exe())));
     }
 
     #[test]
