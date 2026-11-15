@@ -1,11 +1,11 @@
 //! UI shell state and navigation routes.
 
 use sealy_core::Bootstrap;
-use sealy_core::config::{Language, MemoryMode, Settings, ThemeName, save_settings};
+use sealy_core::config::{Language, MemoryMode, Settings, SourcePolicy, ThemeName, save_settings};
 use sealy_core::paths::LauncherPaths;
 
 use crate::i18n;
-use crate::kit::{Entity, IconName, SliderState};
+use crate::kit::{Entity, IconName, SearchableVec, SelectState, SharedString, SliderState};
 use crate::theme::ThemeTokens;
 
 /// Number of first-run wizard steps.
@@ -328,6 +328,8 @@ pub struct ShellState {
     pub total_ram_mb: Option<u64>,
     /// Text fields shared by every page.
     pub inputs: crate::inputs::InputMap,
+    /// Download-source dropdown shared by the settings page.
+    pub source_select: Option<Entity<SelectState<SearchableVec<SharedString>>>>,
     /// Inline proxy editor in the settings page.
     pub proxy_draft: Option<String>,
     /// Inline game-directory editor in the settings page.
@@ -576,6 +578,7 @@ impl ShellState {
             memory_draft: None,
             total_ram_mb: sealy_core::system::total_memory_mb(),
             inputs: crate::inputs::InputMap::new(),
+            source_select: None,
             proxy_draft: None,
             game_dir_draft: None,
             crash_open: false,
@@ -1435,6 +1438,16 @@ impl ShellState {
         self.settings.download.metadata_source = policy;
         self.settings.download.file_source = policy;
         self.persist();
+    }
+
+    /// Maps a localized download-source label back to its policy.
+    pub fn set_source_from_label(&mut self, label: &str) {
+        let policy = match label {
+            "自动" | "Auto" => SourcePolicy::Auto,
+            "官方" | "Official" => SourcePolicy::Official,
+            _ => SourcePolicy::Bmclapi,
+        };
+        self.set_source(policy);
     }
 
     /// Whether any text field is currently being edited.

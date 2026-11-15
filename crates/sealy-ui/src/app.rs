@@ -73,6 +73,8 @@ pub(crate) struct SealyShell {
     focus: FocusHandle,
     _memory_subscription: Subscription,
     _input_subscriptions: Vec<Subscription>,
+    /// Download-source dropdown selection.
+    _source_subscription: Subscription,
     /// Set when the slider value changed without a window at hand.
     memory_sync_pending: bool,
     /// Input that should receive focus on the next frame.
@@ -96,6 +98,27 @@ impl SealyShell {
                 .default_value(state.effective_memory_mb() as f32)
         });
         state.memory_slider = Some(memory_slider.clone());
+        let source_select = cx.new(|cx| {
+            SelectState::new(
+                source_options(state.language()),
+                Some(IndexPath::new(source_index(
+                    state.settings.download.metadata_source,
+                ))),
+                window,
+                cx,
+            )
+        });
+        state.source_select = Some(source_select.clone());
+        let source_subscription = cx.subscribe(
+            &source_select,
+            |shell, _, event: &SelectEvent<SearchableVec<SharedString>>, cx| {
+                if let SelectEvent::Confirm(Some(label)) = event {
+                    shell.state.set_source_from_label(label);
+                    cx.notify();
+                }
+            },
+        );
+
         let memory_subscription =
             cx.subscribe(&memory_slider, |shell, _, event: &SliderEvent, cx| {
                 let (value, commit) = match event {
@@ -129,6 +152,7 @@ impl SealyShell {
             focus: cx.focus_handle(),
             _memory_subscription: memory_subscription,
             _input_subscriptions: input_subscriptions,
+            _source_subscription: source_subscription,
             memory_sync_pending: false,
             pending_focus: None,
             refocus_pending: false,
@@ -336,6 +360,24 @@ impl Render for SealyShell {
             .on_key_down(cx.listener(|shell, event: &KeyDownEvent, _, cx| {
                 shell.handle_key(&event.keystroke, cx);
             }))
+    }
+}
+
+/// Localized labels for the download-source dropdown, in policy order.
+fn source_options(lang: sealy_core::config::Language) -> SearchableVec<SharedString> {
+    SearchableVec::new(vec![
+        SharedString::from(tr(lang, "自动", "Auto")),
+        SharedString::from(tr(lang, "官方", "Official")),
+        SharedString::from("BMCLAPI"),
+    ])
+}
+
+/// Index of a download policy in [`source_options`].
+fn source_index(policy: sealy_core::config::SourcePolicy) -> usize {
+    match policy {
+        sealy_core::config::SourcePolicy::Auto => 0,
+        sealy_core::config::SourcePolicy::Official => 1,
+        sealy_core::config::SourcePolicy::Bmclapi => 2,
     }
 }
 
@@ -712,6 +754,19 @@ impl SealyShell {
             return true;
         }
         false
+    }
+
+    /// Rebuilds the download-source dropdown after a language switch.
+    pub(crate) fn refresh_source_select(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(select) = self.state.source_select.clone() else {
+            return;
+        };
+        let items = source_options(self.state.language());
+        let index = source_index(self.state.settings.download.metadata_source);
+        select.update(cx, |select, cx| {
+            select.set_items(items, window, cx);
+            select.set_selected_index(Some(IndexPath::new(index)), window, cx);
+        });
     }
 
     /// Opens the component dialog that confirms deleting the selected instance.

@@ -16,6 +16,15 @@
 
 ## [Unreleased]
 
+- 2026-11-15 — 下载源改用组件 Select：
+  - 设置页「下载源」从三个按钮改为 gpui-component `Select` 下拉（自动 / 官方 / BMCLAPI）；`SelectState<SearchableVec<SharedString>>` 在窗口创建时建立并订阅 `SelectEvent`，确认后调用 `set_source` 写回 `metadata_source` 与 `file_source` 并持久化。
+  - 切换语言时重建下拉选项并恢复当前选中项（中文 Auto/官方、英文 Auto/Official），已验证中英文两种标签。
+  - 修复 Select 在设置表单行里占满整行的问题：右侧容器 `w_full().justify_end()`，触发器固定 240px。
+  - 验证：中文下拉展开、键盘选择「官方」后 `settings.json` 的 `metadata_source`/`file_source` 均为 `official`，切回中文并恢复「自动」；`cargo fmt`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace` 全绿（80 通过 / 2 忽略）；截图 design/preview/gpui-components-select.png。
+  - 待办：OOBE 步骤卡片可换 `RadioGroup`/`Radio`；通知可评估组件 `Notification`。
+
+
+
 - 2026-11-15 — 消息中心/删除确认改用 Sheet/Dialog，实例详情改用 Tabs：
   - 消息中心由自定义右侧浮层改为 gpui-component `Sheet`：组件标题栏与关闭按钮、遮罩、Esc/点击遮罩关闭；`message_open` 与 Sheet 双向同步（打开用 defer 注入，关闭回写状态），消息行内容保持原样。
   - 删除实例确认由页面内浮层改为 gpui-component `Dialog`：标题、说明、自定义三按钮 footer（取消 / 连同文件删除 / 仅移除记录），按钮执行删除并关闭对话框；实测删除后实例从 instances.json 消失，Esc 可关闭。

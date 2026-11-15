@@ -1064,6 +1064,13 @@ pub trait SkinProvider: Send + Sync;
 - 失败恢复与清理：`write_pending`/`reconcile_pending`/`clear_update_cache`；更新脚本删除安装包与暂存目录。
 - 启动检查：`update.auto_check`（默认开）+ 设置页开关；发现新版本用 toast 提示并预填更新卡片。
 - 签名：新增 `docs/SIGNING.md`（Windows OV/EV、Azure Trusted Signing、SignPath/Certum；macOS Developer ID + notarytool；Linux GPG 校验）。当前发布仍未做商业签名。
+### 20.22 下载源 Select 与语言联动（2026-11-15）
+
+- 设置页「下载源」由三个 `choice_button` 换成组件 `Select`：`SelectState<SearchableVec<SharedString>>` 在 `SealyShell::new` 中创建并存进 `ShellState.source_select`，订阅 `SelectEvent::Confirm` 后调用 `ShellState::set_source`（同时写 `metadata_source` 与 `file_source` 并持久化）。
+- 语言联动：`set_language` 之后调用 `refresh_source_select`，用新语言的标签重建 items 并把当前策略对应的索引恢复为选中；设置页与 OOBE 的四个语言按钮都已接线。
+- 布局：Select 根节点是 `size_full()`，直接放到 `justify_between` 表单行会吞掉整行；现在包一层 `w_full().flex().justify_end()`，触发器固定 240px。
+- 验证：中文/英文下拉均能展开，选项标签随语言变化；键盘选中「官方」后 `settings.json` 两个 source 字段均为 `official`，切回中文并恢复「自动」；fmt/clippy/test 全绿（80 通过）；截图 `design/preview/gpui-components-select.png`。
+- 待办：OOBE 卡片换 `RadioGroup`/`Radio`；通知可评估组件 `Notification`。
 ### 20.21 Sheet、Dialog 与 Tabs 迁移（2026-11-15）
 
 - 消息中心：改为 `gpui-component` 的 `Sheet`（右侧滑入、组件标题栏/关闭按钮、遮罩、Esc 与遮罩关闭）。`message_open` 与 Sheet 双向同步：渲染帧用 `window.defer` + `open_sheet` 打开，`on_close` 回写状态；面板内容复用原消息行。

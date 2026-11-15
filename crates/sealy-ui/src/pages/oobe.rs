@@ -129,6 +129,7 @@ fn step_language(state: &ShellState, t: &ThemeTokens, cx: &mut Context<SealyShel
                                 window,
                                 cx,
                             );
+                            shell.refresh_source_select(window, cx);
                             cx.notify();
                         })),
                 )
@@ -145,6 +146,7 @@ fn step_language(state: &ShellState, t: &ThemeTokens, cx: &mut Context<SealyShel
                                 window,
                                 cx,
                             );
+                            shell.refresh_source_select(window, cx);
                             cx.notify();
                         })),
                 ),

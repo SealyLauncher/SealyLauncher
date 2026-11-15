@@ -1,7 +1,7 @@
 //! Settings: a sidebar with categories, and the controls for each category.
 
 use gpui_kit::component::slider::Slider;
-use sealy_core::config::{Language, MemoryMode, MotionSetting, SourcePolicy, ThemeName};
+use sealy_core::config::{Language, MemoryMode, MotionSetting, ThemeName};
 
 use crate::app::SealyShell;
 use crate::components::{
@@ -181,6 +181,7 @@ fn appearance_section(
                                 window,
                                 cx,
                             );
+                            shell.refresh_source_select(window, cx);
                             cx.notify();
                         })),
                 )
@@ -197,6 +198,7 @@ fn appearance_section(
                                 window,
                                 cx,
                             );
+                            shell.refresh_source_select(window, cx);
                             cx.notify();
                         })),
                 ),
@@ -250,36 +252,26 @@ fn downloads_section(
     state: &ShellState,
     t: &ThemeTokens,
     lang: Language,
-    cx: &mut Context<SealyShell>,
+    _cx: &mut Context<SealyShell>,
 ) -> AnyElement {
-    let source = state.settings.download.metadata_source;
+    let source_control: AnyElement = match &state.source_select {
+        Some(select) => div()
+            .w_full()
+            .flex()
+            .justify_end()
+            .child(
+                Select::new(select)
+                    .accessibility_label("download-source")
+                    .placeholder(tr(lang, "选择下载源", "Choose a source"))
+                    .w(px(240.0)),
+            )
+            .into_any_element(),
+        None => div().into_any_element(),
+    };
     form(t)
         .child(row(
             tr(lang, "下载源", "Download source"),
-            div()
-                .flex()
-                .gap(px(8.0))
-                .child(source_button(
-                    tr(lang, "自动", "Auto"),
-                    SourcePolicy::Auto,
-                    source,
-                    t,
-                    cx,
-                ))
-                .child(source_button(
-                    tr(lang, "官方", "Official"),
-                    SourcePolicy::Official,
-                    source,
-                    t,
-                    cx,
-                ))
-                .child(source_button(
-                    "BMCLAPI",
-                    SourcePolicy::Bmclapi,
-                    source,
-                    t,
-                    cx,
-                )),
+            source_control,
             t,
         ))
         .child(field_row(
@@ -864,26 +856,6 @@ fn row(label: &'static str, control: impl IntoElement, t: &ThemeTokens) -> Div {
                 .child(label),
         )
         .child(control)
-}
-
-fn source_button(
-    label: &'static str,
-    value: SourcePolicy,
-    current: SourcePolicy,
-    t: &ThemeTokens,
-    cx: &mut Context<SealyShell>,
-) -> AnyElement {
-    choice_button(label, value == current, t)
-        .id(match value {
-            SourcePolicy::Auto => "source-auto",
-            SourcePolicy::Official => "source-official",
-            SourcePolicy::Bmclapi => "source-bmclapi",
-        })
-        .on_click(cx.listener(move |shell, _, _, cx| {
-            shell.state.set_source(value);
-            cx.notify();
-        }))
-        .into_any_element()
 }
 
 fn motion_button(
