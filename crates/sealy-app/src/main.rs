@@ -48,6 +48,10 @@ fn main() {
             }
         };
 
+    if let Some(path) = modpack_argument() {
+        let code = import_modpack_headless(&bootstrap, std::path::Path::new(&path));
+        std::process::exit(code);
+    }
     let _lock = match sealy_core::single_instance::acquire(&bootstrap.paths.lock_file()) {
         Ok(lock) => lock,
         Err(err) => {
@@ -62,6 +66,107 @@ fn main() {
     sealy_ui::app::run(bootstrap);
 }
 
+/// Reads the `--import-modpack <path>` headless import invocation.
+fn modpack_argument() -> Option<String> {
+    argument_after("--import-modpack")
+}
+
+/// Imports a modpack without opening the window; used by automation and CI.
+fn import_modpack_headless(bootstrap: &sealy_core::Bootstrap, archive: &std::path::Path) -> i32 {
+    let root = bootstrap.paths.game.clone();
+    let plan = match sealy_core::modpack::inspect(archive) {
+        Ok(plan) => plan,
+        Err(err) => {
+            eprintln!("{err}");
+            return 1;
+        }
+    };
+    println!(
+        "pack: {} {} · {} · {:?}",
+        plan.name, plan.version, plan.game_version, plan.format
+    );
+
+    let policy = bootstrap.settings.download.metadata_source;
+    let concurrency = usize::from(bootstrap.settings.download.concurrency).max(1);
+    let progress = std::sync::Arc::new(std::sync::Mutex::new(
+        sealy_core::install::Progress::default(),
+    ));
+    let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+
+    let version_id = match &plan.loader {
+        Some(spec) => {
+            let java = sealy_core::java::runtime_java_candidates(&root)
+                .into_iter()
+                .next();
+            let loader = match sealy_core::loader::install(
+                &root,
+                spec.kind,
+                &plan.game_version,
+                spec.version.as_deref(),
+                java.as_deref(),
+            ) {
+                Ok(loader) => loader,
+                Err(err) => {
+                    eprintln!("{err}");
+                    return 1;
+                }
+            };
+            println!("loader: {} {}", spec.kind.label(), loader.id);
+            if let Err(err) = sealy_core::install::install(
+                &root,
+                &loader.id,
+                policy,
+                concurrency,
+                progress.clone(),
+                cancel.clone(),
+            ) {
+                eprintln!("{err}");
+                return 1;
+            }
+            loader.id
+        }
+        None => {
+            if let Err(err) = sealy_core::install::install(
+                &root,
+                &plan.game_version,
+                policy,
+                concurrency,
+                progress.clone(),
+                cancel.clone(),
+            ) {
+                eprintln!("{err}");
+                return 1;
+            }
+            plan.game_version.clone()
+        }
+    };
+
+    let mut book = sealy_core::instances::InstanceBook::load(&bootstrap.paths.instances_file());
+    let instance = book.create_named(&plan.name, &version_id);
+    if let Err(err) = book.save(&bootstrap.paths.instances_file()) {
+        eprintln!("{err}");
+        return 1;
+    }
+    let instance_dir = sealy_core::instances::directory(&root, &instance.name);
+    let summary = match sealy_core::modpack::import_files(
+        &instance_dir,
+        archive,
+        &plan,
+        &progress,
+        &cancel,
+    ) {
+        Ok(summary) => summary,
+        Err(err) => {
+            eprintln!("{err}");
+            return 1;
+        }
+    };
+    println!(
+        "instance: {} · {} files · {} overrides · {} skipped",
+        instance.name, summary.files, summary.overrides, summary.skipped
+    );
+    0
+}
 /// Reads the --open-folder <path> helper invocation, if any.
 fn open_folder_argument() -> Option<String> {
     argument_after(sealy_core::shell::OPEN_FOLDER_FLAG)

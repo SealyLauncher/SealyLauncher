@@ -143,6 +143,47 @@ pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyEle
                         })),
                 )
                 .child(
+                    quiet_button(tr(lang, "导入整合包", "Import modpack"), &t)
+                        .id("import-modpack")
+                        .role(Role::Button)
+                        .aria_label("import-modpack")
+                        .on_click(cx.listener(|shell, _, _, cx| {
+                            // Debug builds accept a pack path from the environment
+                            // so the import flow can be tested without the native
+                            // file dialog.
+                            #[cfg(debug_assertions)]
+                            if let Ok(path) = std::env::var("SEALY_DEBUG_IMPORT_PACK") {
+                                crate::install_flow::start_modpack(
+                                    &mut shell.state,
+                                    std::path::PathBuf::from(path),
+                                    cx,
+                                );
+                                return;
+                            }
+                            let receiver = cx.prompt_for_paths(PathPromptOptions {
+                                files: true,
+                                directories: false,
+                                multiple: false,
+                                prompt: Some("选择整合包（.mrpack / .zip）".into()),
+                            });
+                            cx.spawn(async move |this, cx| {
+                                let Ok(Ok(Some(paths))) = receiver.await else {
+                                    return;
+                                };
+                                if let Some(path) = paths.into_iter().next() {
+                                    let _ = this.update(cx, |shell, cx| {
+                                        crate::install_flow::start_modpack(
+                                            &mut shell.state,
+                                            path,
+                                            cx,
+                                        );
+                                    });
+                                }
+                            })
+                            .detach();
+                        })),
+                )
+                .child(
                     quiet_button(tr(lang, "新建实例", "New instance"), &t)
                         .id("instance-new")
                         .role(Role::Button)

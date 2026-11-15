@@ -209,6 +209,78 @@ pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyEle
                 .child(mono(instance.version_id.clone(), &t))
                 .child(div().flex_1())
                 .child(
+                    quiet_button(tr(lang, "导出整合包", "Export pack"), &t)
+                        .id("detail-export")
+                        .role(Role::Button)
+                        .aria_label("export-modpack")
+                        .on_click(cx.listener(|shell, _, _, cx| {
+                            let exports = shell.state.paths.data.join("exports");
+                            let _ = std::fs::create_dir_all(&exports);
+                            // Debug builds accept an export path from the
+                            // environment so the flow can run without the save
+                            // dialog.
+                            #[cfg(debug_assertions)]
+                            let debug_path = std::env::var("SEALY_DEBUG_EXPORT_PACK")
+                                .ok()
+                                .map(std::path::PathBuf::from);
+                            #[cfg(not(debug_assertions))]
+                            let debug_path: Option<std::path::PathBuf> = None;
+                            let receiver = if debug_path.is_some() {
+                                None
+                            } else {
+                                Some(cx.prompt_for_new_path(&exports, Some("modpack.mrpack")))
+                            };
+                            cx.spawn(async move |this, cx| {
+                                let path = match debug_path {
+                                    Some(path) => path,
+                                    None => {
+                                        let Some(receiver) = receiver else {
+                                            return;
+                                        };
+                                        let Ok(Ok(Some(path))) = receiver.await else {
+                                            return;
+                                        };
+                                        path
+                                    }
+                                };
+                                let Some((dir, name, game)) = this
+                                    .update(cx, |shell, _| {
+                                        let instance = shell.state.instances.current()?.clone();
+                                        let dir = sealy_core::instances::directory(
+                                            &shell.state.paths.game,
+                                            &instance.name,
+                                        );
+                                        let game =
+                                            shell.state.version_game_version(&instance.version_id);
+                                        Some((dir, instance.name, game))
+                                    })
+                                    .ok()
+                                    .flatten()
+                                else {
+                                    return;
+                                };
+                                let task = cx.background_executor().spawn(async move {
+                                    sealy_core::modpack::export(&dir, &path, &name, "1.0", &game)
+                                });
+                                let result = task.await;
+                                let _ = this.update(cx, |shell, cx| {
+                                    match result {
+                                        Ok(count) => {
+                                            let lang = shell.state.language();
+                                            shell.state.notify(format!(
+                                                "{} {count}",
+                                                tr(lang, "已导出", "Exported")
+                                            ));
+                                        }
+                                        Err(err) => shell.state.notify(err.to_string()),
+                                    }
+                                    cx.notify();
+                                });
+                            })
+                            .detach();
+                        })),
+                )
+                .child(
                     quiet_button(tr(lang, "日志", "Logs"), &t)
                         .id("detail-logs")
                         .role(Role::Button)

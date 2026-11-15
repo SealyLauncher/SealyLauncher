@@ -16,6 +16,13 @@
 
 ## [Unreleased]
 
+- 2026-11-15 — B4 整合包导入与导出：
+  - 新增 sealy-core::modpack：解析 Modrinth .mrpack（modrinth.index.json + files/hashes/dependencies）与 CurseForge 包（manifest.json，读取 Minecraft 版本、modLoaders[0].id 与 overrides 目录）；路径安全校验拒绝 ../绝对路径；按 SHA-1 校验下载并支持已存在文件跳过；解压 overrides/、client-overrides/。
+  - 整合包导出：把实例的 mods/config/resourcepacks/shaderpacks/scripts 写成合法 .mrpack（files 为空、内容放在 overrides），可直接再导入。
+  - 导入流程接入安装任务：按包内依赖安装 Fabric/Quilt/Forge/NeoForge 与对应版本（或原版），自动创建实例并下载包内文件，最终在实例页显示与打开；CurseForge 包里无法解析下载地址的条目会统计并以提示告知。
+  - 实例页新增「导入整合包」按钮（import-modpack），实例详情页新增「导出整合包」按钮（export-modpack）；新增 headless 导入：sealy-launcher --import-modpack <路径>。
+  - 实测：本地 HTTP 搭建的 .mrpack（1 个模组 + overrides/config）导入后实例目录文件 SHA-1 与包内一致、override 正确解压；导出的 .mrpack 结构与 modrinth.index.json 正确。另加调试钩子 SEALY_DEBUG_IMPORT_PACK / SEALY_DEBUG_EXPORT_PACK（仅 debug 构建）用于无文件对话框时跑通流程。
+
 - 2026-11-15 — B3 收尾：OptiFine 安装器改为以游戏目录为参数启动官方安装窗口（实测窗口标题「OptiFine Installer」正常弹出），完成后可直接在版本列表里创建实例；删除过期的下载页旧截图。
 - 2026-11-15 — B3 加载器安装与交互改版：
   - sealy-core::loader 支持 Forge / NeoForge（自动）与 OptiFine（启动官方安装器窗口，按提示完成）：下载官方 installer jar，准备 launcher_profiles.json 与可写 java.io.tmpdir，以 --installClient <game> 静默安装，随后定位版本文档；Fabric/Quilt 支持指定构建；新增每个加载器的版本列表（Forge promotions、NeoForge Maven 元数据、Fabric/Quilt 构建列表）。

@@ -990,9 +990,9 @@ pub trait SkinProvider: Send + Sync;
 
 | 功能 | HMCL 参考 | 我们 | 优先级 | 量 |
 | --- | --- | --- | --- | --- |
-| 本地整合包导入（zip / mrpack / CurseForge 包） | `modpack/**`、`ui/download/LocalModpackPage` | ❌ | **P0** | L |
+| 本地整合包导入（zip / mrpack / CurseForge 包） | `modpack/**`、`ui/download/LocalModpackPage` | ✅ B4（mrpack 完整，CurseForge 元数据+overrides） | **P0** | L |
 | 服务器整合包 / 手动整合包识别 | `HMCLModpackProvider`、`ManuallyCreatedModpack` | ❌ | P2 | M |
-| 整合包导出（含可选文件） | `export/**` | ❌ | P3 | L |
+| 整合包导出（含可选文件） | `export/**` | ✅ B4（mrpack 导出） | P3 | L |
 | 整合包更新 | `ModpackUpdateTask` | ❌ | P3 | L |
 
 ### 20.6 下载与镜像
@@ -1043,11 +1043,18 @@ pub trait SkinProvider: Send + Sync;
 | **B1（已完成）** | ~~Java 管理页~~ ✅ → ~~游戏日志查看器~~ ✅ → ~~实例启动设置~~ ✅ | — | 可在 UI 里选 Java、看日志、改参数并启动 |
 | B2 | 模组/资源包/光影列表（启用禁用、拖入、删除）+ 实例图标/删除文件 | B1 的实例目录抽象 | 已完成：详情页三个分区、图标选择、删除确认面板（见 20.12） |
 | B3 | Forge / NeoForge / OptiFine 安装 + 加载器版本列表 | 版本继承（已完成） | 已完成：安装器 jar 静默安装 + 版本列表 + 自动建实例（见 20.13） |
-| B4 | 整合包导入（mrpack/zip/curse）与导出 | B3 的加载器安装 | 导入整合包即得可玩实例 |
+| B4 | 整合包导入（mrpack/zip/curse）与导出 | B3 的加载器安装 | 已完成：mrpack 导入/导出 + 自动装依赖并建实例（见 20.14） |
 | B5 | 自更新、崩溃分析、代理、`ui_scale`、多游戏目录 | — | 设置页功能齐 |
 | B6 | 主题包/背景、皮肤、Quick Play、世界管理 | B5 | 对标 HMCL 体验 |
 | 不做 | Terracotta 联机、NBT 编辑器、整合包在线更新 | — | 记录在案 |
 
+### 20.14 B4 交付记录（2026-11-15）
+
+- `sealy-core::modpack`：`inspect` 解析 Modrinth `.mrpack`（dependencies/files/hashes/env）与 CurseForge `manifest.json`（Minecraft 版本、`modLoaders[0].id`、overrides 目录）；`import_files` 校验 SHA-1、跳过已存在文件、解压 overrides；`export` 生成可再次导入的 `.mrpack`。
+- 安装流程：`install_flow::start_modpack` 复用安装任务，先按包内依赖安装加载器/版本（Forge/NeoForge 走安装器），再创建实例并下载包文件；完成后自动进入实例详情页。
+- UI：实例页「导入整合包」、实例详情页「导出整合包」；headless：`sealy-launcher --import-modpack <path>`（供自动化/CI 使用）。
+- 实测：本地 HTTP 服务的 `.mrpack` 导入得到 1 个模组 + 1 个 override，SHA-1 与包内声明一致；导出的 `.mrpack` 含 `modrinth.index.json` 与 `overrides/mods/testmod.jar`。
+- 已知限制：CurseForge 包的远端文件需要 CurseForge API key，当前只导入元数据与 overrides，缺失条目在结果里提示数量；通用 zip（无 index/manifest）会被拒绝并提示。
 ### 20.13 B3 交付记录（2026-11-15）
 
 - `sealy-core::loader`：`LoaderKind` 扩到 Fabric / Quilt / Forge / NeoForge / OptiFine；`versions()` 拉取 Forge promotions、NeoForge Maven 元数据（含 1.20.1 的 `net.neoforged.forge` 旧坐标）、Fabric/Quilt 构建列表。

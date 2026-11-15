@@ -19,6 +19,7 @@ pub mod loader;
 pub mod logging;
 pub mod manifest;
 pub mod microsoft;
+pub mod modpack;
 pub mod net;
 pub mod paths;
 pub mod shell;

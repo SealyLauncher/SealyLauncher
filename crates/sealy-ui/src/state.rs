@@ -936,6 +936,25 @@ impl ShellState {
         sealy_core::addons::remove(&dir, kind, name).map_err(|err| err.to_string())
     }
 
+    /// Minecraft version an installed version id resolves to.
+    pub fn version_game_version(&self, version_id: &str) -> String {
+        let document = self
+            .paths
+            .game
+            .join("versions")
+            .join(version_id)
+            .join(format!("{version_id}.json"));
+        let Ok(text) = std::fs::read_to_string(document) else {
+            return version_id.to_owned();
+        };
+        let Ok(json) = serde_json::from_str::<serde_json::Value>(&text) else {
+            return version_id.to_owned();
+        };
+        json["inheritsFrom"]
+            .as_str()
+            .map(str::to_owned)
+            .unwrap_or_else(|| version_id.to_owned())
+    }
     /// Opens the detail page for the selected instance.
     pub fn open_instance_detail(&mut self) {
         if self.instances.current().is_some() {

@@ -75,6 +75,27 @@ impl InstanceBook {
         Ok(())
     }
 
+    /// Creates an instance with a preferred name, keeping it unique.
+    pub fn create_named(&mut self, name: &str, version_id: &str) -> Instance {
+        let base = sanitize(name);
+        let mut candidate = base.clone();
+        let mut index = 2;
+        while self.instances.iter().any(|item| item.name == candidate) {
+            candidate = format!("{base} ({index})");
+            index += 1;
+        }
+        let instance = Instance {
+            name: candidate.clone(),
+            version_id: version_id.to_owned(),
+            last_played: None,
+            launch: LaunchOverrides::default(),
+            icon: None,
+        };
+        self.instances.push(instance.clone());
+        self.selected = Some(candidate);
+        instance
+    }
+
     /// Creates an instance for `version_id` with an unused default name.
     pub fn create(&mut self, version_id: &str) -> Instance {
         let name = self.next_name(version_id);

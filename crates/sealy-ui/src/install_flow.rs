@@ -23,6 +23,8 @@ enum Job {
     Version(String),
     /// A loader install for `game`, optionally tied to a new instance.
     Loader(LoaderRequest),
+    /// A modpack archive whose instance still has to be created.
+    Modpack(std::path::PathBuf, sealy_core::modpack::ModpackPlan),
 }
 
 /// Everything needed to install a loader.
@@ -51,6 +53,23 @@ struct Opts {
 /// Installs `id`, reporting progress into the message center.
 pub(crate) fn start(state: &mut ShellState, id: String, cx: &mut Context<SealyShell>) {
     spawn(state, cx, format!("安装 {id}"), vec![Job::Version(id)]);
+}
+
+/// Imports a modpack archive as a new instance.
+pub(crate) fn start_modpack(
+    state: &mut ShellState,
+    archive: std::path::PathBuf,
+    cx: &mut Context<SealyShell>,
+) {
+    let plan = match sealy_core::modpack::inspect(&archive) {
+        Ok(plan) => plan,
+        Err(err) => {
+            state.notify(err.to_string());
+            return;
+        }
+    };
+    let title = format!("导入整合包 · {}", plan.name);
+    spawn(state, cx, title, vec![Job::Modpack(archive, plan)]);
 }
 
 /// Runs one loader install and, when asked, creates its instance afterwards.
@@ -115,6 +134,9 @@ fn spawn(state: &mut ShellState, cx: &mut Context<SealyShell>, title: String, jo
     cx.spawn(async move |this, cx| {
         // Instance created by this flow, once every phase succeeded.
         let mut created: Option<(String, String)> = None;
+        // Modpack flows create their instance themselves and only need a
+        // different completion label.
+        let mut modpack_imported = false;
 
         for job in jobs {
             let outcome = match job {
@@ -174,6 +196,20 @@ fn spawn(state: &mut ShellState, cx: &mut Context<SealyShell>, title: String, jo
                         Err(err) => Err(err.to_string()),
                     }
                 }
+                Job::Modpack(archive, plan) => {
+                    modpack_imported = true;
+                    run_modpack(
+                        &this,
+                        cx,
+                        message_id,
+                        &root,
+                        archive,
+                        plan,
+                        cancel.clone(),
+                        opts,
+                    )
+                    .await
+                }
             };
 
             if let Err(err) = outcome {
@@ -207,7 +243,11 @@ fn spawn(state: &mut ShellState, cx: &mut Context<SealyShell>, title: String, jo
             cx,
             message_id,
             MessageTone::Done,
-            "安装完成",
+            if modpack_imported {
+                "整合包已导入"
+            } else {
+                "安装完成"
+            },
             &root,
             created,
         );
@@ -239,6 +279,160 @@ fn run_loader(
         ),
     }
 }
+/// Installs the pack's loader (if any), creates its instance and downloads the
+/// pack files into it.
+#[allow(clippy::too_many_arguments)]
+async fn run_modpack(
+    this: &gpui_kit::WeakEntity<SealyShell>,
+    cx: &mut gpui_kit::AsyncApp,
+    message_id: u64,
+    root: &Path,
+    archive: std::path::PathBuf,
+    plan: sealy_core::modpack::ModpackPlan,
+    cancel: Arc<AtomicBool>,
+    opts: Opts,
+) -> Result<(), String> {
+    // Phase one: the version the pack runs on.
+    let _ = this.update(cx, |shell, cx| {
+        shell.state.update_message(message_id, |row| {
+            row.detail = format!("准备 {} · {}", plan.game_version, plan.format.label());
+        });
+        cx.notify();
+    });
+
+    let version_id = match &plan.loader {
+        Some(spec) => {
+            let java = {
+                let mut found = None;
+                let _ = this.update(cx, |shell, _| {
+                    found = shell
+                        .state
+                        .java
+                        .first()
+                        .map(|install| install.path.clone())
+                        .or_else(|| {
+                            sealy_core::java::runtime_java_candidates(&shell.state.paths.game)
+                                .into_iter()
+                                .next()
+                        });
+                });
+                found
+            };
+            let spec = spec.clone();
+            let game = plan.game_version.clone();
+            let root_buf = root.to_path_buf();
+            let loader = cx
+                .background_executor()
+                .spawn(async move {
+                    sealy_core::loader::install(
+                        &root_buf,
+                        spec.kind,
+                        &game,
+                        spec.version.as_deref(),
+                        java.as_deref(),
+                    )
+                })
+                .await
+                .map_err(|err| err.to_string())?;
+
+            let loader_id = loader.id.clone();
+            let _ = this.update(cx, |shell, cx| {
+                shell.state.update_message(message_id, |row| {
+                    row.detail = format!("加载器已就绪 · {loader_id}");
+                });
+                cx.notify();
+            });
+            run_version(
+                this,
+                cx,
+                message_id,
+                root,
+                loader_id.clone(),
+                cancel.clone(),
+                opts,
+            )
+            .await?;
+            loader_id
+        }
+        None => {
+            let game = plan.game_version.clone();
+            run_version(
+                this,
+                cx,
+                message_id,
+                root,
+                game.clone(),
+                cancel.clone(),
+                opts,
+            )
+            .await?;
+            game
+        }
+    };
+
+    // Phase two: create the instance the pack lives in.
+    let mut instance_name = String::new();
+    let _ = this.update(cx, |shell, cx| {
+        let instance = shell.state.instances.create_named(&plan.name, &version_id);
+        instance_name = instance.name.clone();
+        shell.state.save_instances();
+        let directory = sealy_core::instances::directory(&shell.state.paths.game, &instance_name);
+        let _ = std::fs::create_dir_all(&directory);
+        shell.state.instance_section = crate::state::InstanceSection::Overview;
+        shell.state.route = crate::state::Route::Instance;
+        cx.notify();
+    });
+    if instance_name.is_empty() {
+        return Err("无法创建整合包实例".to_owned());
+    }
+
+    // Phase three: files and overrides.
+    let instance_dir = sealy_core::instances::directory(root, &instance_name);
+    let progress = Arc::new(Mutex::new(sealy_core::install::Progress::default()));
+    let task = cx.background_executor().spawn({
+        let progress = progress.clone();
+        let flag = cancel.clone();
+        let archive = archive.clone();
+        let plan = plan.clone();
+        let instance_dir = instance_dir.clone();
+        async move {
+            sealy_core::modpack::import_files(&instance_dir, &archive, &plan, &progress, &flag)
+        }
+    });
+
+    poll(
+        this,
+        cx,
+        message_id,
+        "整合包文件",
+        &progress,
+        cancel.clone(),
+    )
+    .await?;
+    let summary = task.await.map_err(|err| err.to_string())?;
+
+    let title = format!("整合包 · {}", plan.name);
+    let detail = if summary.skipped > 0 {
+        format!(
+            "已导入 {} 个文件、{} 个覆盖文件；{} 个条目无法自动下载，请手动处理",
+            summary.files, summary.overrides, summary.skipped
+        )
+    } else {
+        format!(
+            "已导入 {} 个文件、{} 个覆盖文件",
+            summary.files, summary.overrides
+        )
+    };
+    let _ = this.update(cx, |shell, cx| {
+        shell.state.update_message(message_id, |row| {
+            row.title = title;
+            row.detail = detail;
+        });
+        cx.notify();
+    });
+    Ok(())
+}
+
 /// Marker for a cancelled flow.
 const CANCELLED: &str = "\u{0}cancelled";
 
