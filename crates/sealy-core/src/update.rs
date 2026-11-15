@@ -863,6 +863,65 @@ mod tests {
     }
 
     #[test]
+    fn cancelled_download_removes_partial_file() {
+        use std::io::{Read, Write};
+        use std::net::TcpListener;
+        use std::sync::Arc;
+        use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+        use std::time::Duration;
+
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut request = [0_u8; 1024];
+            let _ = stream.read(&mut request);
+            let body = vec![b'x'; 256 * 1024];
+            let header = format!(
+                "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nContent-Type: application/octet-stream\r\n\r\n",
+                body.len()
+            );
+            let _ = stream.write_all(header.as_bytes());
+            for chunk in body.chunks(2048) {
+                if stream.write_all(chunk).is_err() {
+                    break;
+                }
+                std::thread::sleep(Duration::from_millis(1));
+            }
+        });
+
+        let root = temp_root("cancel");
+        let destination = root.join("partial.bin");
+        let asset = AssetInfo {
+            name: "partial.bin".to_owned(),
+            url: format!("http://{address}/partial.bin"),
+            size: 256 * 1024,
+        };
+        let downloaded = Arc::new(AtomicU64::new(0));
+        let cancel = Arc::new(AtomicBool::new(false));
+        let worker = {
+            let downloaded = downloaded.clone();
+            let cancel = cancel.clone();
+            let destination = destination.clone();
+            std::thread::spawn(move || {
+                download_with_progress(&asset, &destination, &downloaded, &cancel)
+            })
+        };
+
+        for _ in 0..400 {
+            if downloaded.load(Ordering::Relaxed) > 0 {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        cancel.store(true, Ordering::Relaxed);
+        let result = worker.join().unwrap();
+        assert!(matches!(result, Err(crate::error::CoreError::Cancelled)));
+        assert!(!destination.exists(), "partial file must be removed");
+        let _ = server.join();
+        let _ = fs::remove_dir_all(root);
+    }
+    #[test]
     fn caches_asset_under_data_dir() {
         let path = cache_path(
             Path::new("data"),
