@@ -1064,6 +1064,15 @@ pub trait SkinProvider: Send + Sync;
 - 失败恢复与清理：`write_pending`/`reconcile_pending`/`clear_update_cache`；更新脚本删除安装包与暂存目录。
 - 启动检查：`update.auto_check`（默认开）+ 设置页开关；发现新版本用 toast 提示并预填更新卡片。
 - 签名：新增 `docs/SIGNING.md`（Windows OV/EV、Azure Trusted Signing、SignPath/Certum；macOS Developer ID + notarytool；Linux GPG 校验）。当前发布仍未做商业签名。
+### 20.20 UI 组件化与列表滚动（2026-11-15）
+
+- 结论：`gpui-component` 已提供 button / switch / checkbox / radio / select / combobox / progress / spinner / avatar / tag / badge / list / scroll / tab / sidebar / dialog / sheet，经 `gpui-kit` 直接可用，不需要新增依赖。
+- 控件：新增 `sealy-ui::components::UiButton` 适配层，内部渲染组件 `Button` + `ButtonCustomVariant` 映射纸感配色，对外保留页面既有的 `.id/.aria_label/.role/.on_click/.child` 链；primary/quiet/choice/icon 以及新增的 chip/nav 按钮全部改由它渲染，悬停、焦点框与键盘激活来自组件。
+- 开关与状态：设置页背景音乐、启动检查更新、调试日志改为 `Switch`；更新进度与消息任务进度改为 `Progress`；运行中消息图标改为 `Spinner`；消息中心取消/重试改为 chip 按钮。
+- 导航与头像：设置页与实例详情页侧栏改为组件按钮（选中态、焦点态由组件提供）；账号头像改为 `Avatar`。
+- 滚动：所有列表/面板滚动区改用 `ScrollableElement::overflow_y_scrollbar()`（可见滚动条），列表行补 `flex_shrink_0`，解决实例/账号较多时行被压扁且无法滚动的问题；实测 14 个实例、10 个账号可滚轮滚动。
+- 验证：fmt/clippy/test 全绿（80 通过）；截图 `design/preview/gpui-components-{nav,switch,progress,scroll,avatar}.png`。
+- 待办：实例详情分区可换 `Tabs`；下载源/并发等下拉可换 `Select`/`Combobox`；消息中心与确认面板可换 `Dialog`/`Sheet`；OOBE 卡片和首页磁贴保留卡片布局。
 ### 20.19 B4 复核与导入失败回滚（2026-11-15）
 
 - 失败回滚：新增 `sealy_core::instances::discard`（删实例目录 + 从实例簿移除 + 持久化）；headless `--import-modpack` 和 UI `install_flow::run_modpack` 在文件下载失败或取消时调用，不再留下没有内容的“空实例”。`modpack` 导入会在下载前建实例，之前失败会残留条目，现补上回滚并有单测。

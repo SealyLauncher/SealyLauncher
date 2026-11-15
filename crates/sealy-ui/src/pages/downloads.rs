@@ -22,7 +22,7 @@ pub(crate) fn render(state: &mut ShellState, cx: &mut Context<SealyShell>) -> An
         .id("version-list")
         .flex_1()
         .min_h(px(0.0))
-        .overflow_y_scroll()
+        .overflow_y_scrollbar()
         .flex()
         .flex_col()
         .on_scroll(cx.listener(|shell, _, _, cx| {

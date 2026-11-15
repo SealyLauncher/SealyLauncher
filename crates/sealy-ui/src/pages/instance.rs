@@ -2,7 +2,8 @@
 
 use crate::app::SealyShell;
 use crate::components::{
-    action_bar, choice_button, field_row, head_band_back_to, mono, primary_button, quiet_button,
+    action_bar, choice_button, field_row, head_band_back_to, mono, nav_button, primary_button,
+    quiet_button,
 };
 use crate::i18n::tr;
 use crate::kit::*;
@@ -186,7 +187,7 @@ pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyEle
                 .flex_1()
                 .min_w(px(0.0))
                 .id("instance-detail-body")
-                .overflow_y_scroll()
+                .overflow_y_scrollbar()
                 .p(px(theme::PAGE_PADDING))
                 .child(content),
         )
@@ -456,7 +457,7 @@ fn crash_panel(
                 .flex_1()
                 .min_h(px(0.0))
                 .id("crash-body")
-                .overflow_y_scroll()
+                .overflow_y_scrollbar()
                 .p(px(20.0))
                 .flex()
                 .flex_col()
@@ -567,31 +568,13 @@ fn instance_sidebar(
         .enumerate()
         .map(|(index, section)| {
             let selected = section == current;
-            div()
+            nav_button(section.label(lang), None, selected, t)
                 .id(("instance-section", index))
-                .role(Role::Button)
                 .aria_label(format!("instance-section-{index}"))
-                .h(px(40.0))
-                .w_full()
-                .px(px(16.0))
-                .flex()
-                .items_center()
-                .gap(px(10.0))
-                .cursor_pointer()
-                .border_l_1()
-                .border_color(rgb(if selected { t.accent } else { t.surface }))
-                .bg(rgb(if selected { t.surface } else { t.bg }))
-                .hover({
-                    let hover = t.line_soft;
-                    move |this| this.bg(rgb(hover))
-                })
-                .text_size(px(12.0))
-                .text_color(rgb(if selected { t.accent } else { t.text }))
                 .on_click(cx.listener(move |shell, _, _, cx| {
                     shell.state.instance_section = section;
                     cx.notify();
                 }))
-                .child(section.label(lang))
         })
         .collect::<Vec<_>>();
 

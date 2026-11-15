@@ -1,11 +1,12 @@
 //! Global message center: background tasks and their outcome.
 
 use crate::app::SealyShell;
-use crate::components::mono;
+use crate::components::{chip_button, mono};
 use crate::i18n::tr;
 use crate::kit::*;
 use crate::state::{MessageTone, ShellState};
 use crate::theme::{self, ThemeTokens};
+use sealy_core::config::Language;
 
 /// Slide-over panel anchored to the right edge of the content area.
 pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyElement {
@@ -15,7 +16,7 @@ pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyEle
     let rows = state
         .messages
         .iter()
-        .map(|message| row(message, &t, cx))
+        .map(|message| row(message, &t, lang, cx))
         .collect::<Vec<_>>();
 
     let body = if rows.is_empty() {
@@ -43,7 +44,7 @@ pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyEle
             .id("message-list")
             .flex_1()
             .min_h(px(0.0))
-            .overflow_y_scroll()
+            .overflow_y_scrollbar()
             .flex()
             .flex_col()
             .children(rows)
@@ -113,6 +114,7 @@ pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyEle
 fn row(
     message: &crate::state::Message,
     t: &ThemeTokens,
+    lang: Language,
     cx: &mut Context<SealyShell>,
 ) -> AnyElement {
     let (icon, tone_color) = match message.tone {
@@ -134,14 +136,19 @@ fn row(
                 .flex()
                 .items_start()
                 .gap(px(8.0))
-                .child(
-                    Icon::new(icon)
+                .child(match message.tone {
+                    MessageTone::Running => Spinner::new()
+                        .small()
+                        .color(token_hsla(tone_color))
+                        .into_any_element(),
+                    _ => Icon::new(icon)
                         .mt(px(2.0))
                         .flex_shrink_0()
                         .w(px(14.0))
                         .h(px(14.0))
-                        .text_color(rgb(tone_color)),
-                )
+                        .text_color(rgb(tone_color))
+                        .into_any_element(),
+                })
                 .child(
                     div()
                         .flex_1()
@@ -155,21 +162,9 @@ fn row(
                 .when(message.cancel.is_some(), |this| {
                     let cancel = message.cancel.clone();
                     this.child(
-                        div()
+                        chip_button(tr(lang, "取消", "Cancel"), t)
                             .id(("cancel", message_id as usize))
-                            .role(Role::Button)
                             .aria_label(format!("cancel {message_id}"))
-                            .px(px(8.0))
-                            .h(px(22.0))
-                            .flex()
-                            .items_center()
-                            .rounded(px(theme::RADIUS_TILE))
-                            .border_1()
-                            .border_color(rgb(t.line))
-                            .cursor_pointer()
-                            .text_size(px(10.0))
-                            .text_color(rgb(t.muted))
-                            .child("取消")
                             .on_click(cx.listener(move |shell, _, _, cx| {
                                 if let Some(flag) = &cancel {
                                     flag.store(true, std::sync::atomic::Ordering::Relaxed);
@@ -201,21 +196,9 @@ fn row(
                     |this| {
                         let id = message.retry.clone().unwrap_or_default();
                         this.child(
-                            div()
+                            chip_button(tr(lang, "重试", "Retry"), t)
                                 .id(("retry", message_id as usize))
-                                .role(Role::Button)
                                 .aria_label(format!("retry {message_id}"))
-                                .px(px(8.0))
-                                .h(px(22.0))
-                                .flex()
-                                .items_center()
-                                .rounded(px(theme::RADIUS_TILE))
-                                .border_1()
-                                .border_color(rgb(t.line))
-                                .cursor_pointer()
-                                .text_size(px(10.0))
-                                .text_color(rgb(t.text))
-                                .child("重试")
                                 .on_click(cx.listener(move |shell, _, _, cx| {
                                     crate::install_flow::start(&mut shell.state, id.clone(), cx);
                                 })),
@@ -226,19 +209,11 @@ fn row(
 
     if let Some(progress) = message.progress {
         card = card.child(
-            div()
-                .mt(px(4.0))
+            Progress::new(("message-progress", message_id as usize))
+                .value(progress * 100.0)
                 .w_full()
-                .h(px(3.0))
-                .rounded(px(2.0))
-                .bg(rgb(t.line_soft))
-                .child(
-                    div()
-                        .w(relative(progress))
-                        .h_full()
-                        .rounded(px(2.0))
-                        .bg(rgb(t.text)),
-                ),
+                .mt(px(4.0))
+                .color(token_hsla(t.text)),
         );
     }
 

@@ -16,6 +16,18 @@
 
 ## [Unreleased]
 
+- 2026-11-15 — 全站 UI 组件化与列表滚动：
+  - 组件库存盘点：gpui-component 已内置 button / switch / checkbox / radio / select / combobox / progress / spinner / avatar / tag / badge / list / scroll / tab / sidebar / dialog / sheet 等，经 gpui-kit 直接可用，无需新增依赖。
+  - 按钮：新增 `components::UiButton` 适配层（内部渲染 gpui-component `Button` + `ButtonCustomVariant`，保留页面原有 `.id/.aria_label/.role/.on_click/.child` 链）；`primary_button` / `quiet_button` / `choice_button` / `icon_button` / 新增 `chip_button`、`nav_button` 全部切换，悬停、焦点框、键盘激活由组件提供。
+  - 开关：设置页「背景音乐」「启动时检查更新」「调试日志」从成对按钮改为 `Switch`（带 aria 标签、颜色使用主题强调色）。
+  - 进度与状态：更新下载进度条、消息中心任务进度改用 `Progress`；运行中消息图标改用 `Spinner` 动画；消息中心「取消 / 重试」改为 chip 按钮。
+  - 导航与头像：设置页、实例详情页侧栏改用组件按钮（选中态、焦点态、可点击区域来自组件）；账号列表头像改用 `Avatar` 组件。
+  - 滚动：账号列表、实例列表、下载列表、设置内容区、实例详情/日志面板、消息中心统一改用 `ScrollableElement::overflow_y_scrollbar()`（可见滚动条），列表行补 `flex_shrink_0`；修复实例/账号多时行被压缩、无法滚动的问题。
+  - 验证：`cargo fmt`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace` 全绿（80 通过 / 2 忽略）；Windows 实机验证：实例列表 14 行、账号列表 10 行可滚轮滚动且行高正常，开关点击后持久化，导入任务的 Spinner + Progress 正常，侧栏与账号头像截图见 design/preview/gpui-components-*.png。
+  - 已知：实例详情的分区仍用自定义侧栏而不是 Tabs，下拉类选项仍用组件按钮组而不是 Select/Combobox，消息中心/确认面板仍是自定义浮层而不是 Dialog/Sheet；这些留待下一批。
+
+
+
 - 2026-11-15 — B4 整合包导入/导出复核与失败回滚：
   - 修复失败导入留下空实例：新增 `instances::discard`（删实例目录 + 从实例簿移除 + 持久化），headless `--import-modpack` 与 UI 导入流程在下载失败或取消时回滚，并新增单测。
   - 修复导入失败时 UI 卡在“进行中”：`poll` 之前只等 `Progress.finished`，后台任务报错后永远不会结束；现在各阶段用 `done` 原子标志，任务返回即结束进度等待，错误正常上报到消息中心。

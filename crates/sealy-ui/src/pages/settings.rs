@@ -4,7 +4,9 @@ use gpui_kit::component::slider::Slider;
 use sealy_core::config::{Language, MemoryMode, MotionSetting, SourcePolicy, ThemeName};
 
 use crate::app::SealyShell;
-use crate::components::{action_bar, choice_button, field_row, head_band_back, mono, quiet_button};
+use crate::components::{
+    action_bar, choice_button, field_row, head_band_back, mono, nav_button, quiet_button,
+};
 use crate::i18n::tr;
 use crate::kit::*;
 use crate::state::{SettingsSection, ShellState};
@@ -44,7 +46,7 @@ pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyEle
                         .flex_1()
                         .min_h(px(0.0))
                         .id("settings-body")
-                        .overflow_y_scroll()
+                        .overflow_y_scrollbar()
                         .p(px(theme::PAGE_PADDING))
                         .child(content),
                 ),
@@ -72,48 +74,25 @@ fn sidebar(
     cx: &mut Context<SealyShell>,
 ) -> AnyElement {
     let current = state.settings_section;
-    let accent = t.accent;
-    let surface = t.surface;
-    let bg = t.bg;
     let line = t.line;
-    let line_soft = t.line_soft;
-    let text = t.text;
-    let muted = t.muted;
 
     let items = SettingsSection::ALL
         .into_iter()
         .enumerate()
         .map(|(index, section)| {
             let selected = section == current;
-            let icon_tone = if selected { accent } else { muted };
-            div()
-                .id(("settings-section", index))
-                .role(Role::Button)
-                .aria_label(format!("settings-section-{index}"))
-                .h(px(40.0))
-                .w_full()
-                .px(px(16.0))
-                .flex()
-                .items_center()
-                .gap(px(10.0))
-                .cursor_pointer()
-                .border_l_1()
-                .border_color(rgb(if selected { accent } else { surface }))
-                .bg(rgb(if selected { surface } else { bg }))
-                .hover(move |this| this.bg(rgb(line_soft)))
-                .text_size(px(12.0))
-                .text_color(rgb(if selected { accent } else { text }))
-                .on_click(cx.listener(move |shell, _, _, cx| {
-                    shell.state.settings_section = section;
-                    cx.notify();
-                }))
-                .child(
-                    Icon::new(section_icon(section))
-                        .w(px(15.0))
-                        .h(px(15.0))
-                        .text_color(rgb(icon_tone)),
-                )
-                .child(section.label(lang))
+            nav_button(
+                section.label(lang),
+                Some(section_icon(section)),
+                selected,
+                t,
+            )
+            .id(("settings-section", index))
+            .aria_label(format!("settings-section-{index}"))
+            .on_click(cx.listener(move |shell, _, _, cx| {
+                shell.state.settings_section = section;
+                cx.notify();
+            }))
         })
         .collect::<Vec<_>>();
 
@@ -225,25 +204,14 @@ fn appearance_section(
         ))
         .child(row(
             tr(lang, "背景音乐", "Background music"),
-            div()
-                .flex()
-                .gap(px(8.0))
-                .child(
-                    choice_button(tr(lang, "关", "Off"), !music, t)
-                        .id("audio-off")
-                        .on_click(cx.listener(|shell, _, _, cx| {
-                            shell.state.set_audio(false);
-                            cx.notify();
-                        })),
-                )
-                .child(
-                    choice_button(tr(lang, "开", "On"), music, t)
-                        .id("audio-on")
-                        .on_click(cx.listener(|shell, _, _, cx| {
-                            shell.state.set_audio(true);
-                            cx.notify();
-                        })),
-                ),
+            Switch::new("audio-setting")
+                .checked(music)
+                .accessibility_label("audio")
+                .color(token_hsla(t.accent))
+                .on_change(cx.listener(|shell, checked, _, cx| {
+                    shell.state.set_audio(*checked);
+                    cx.notify();
+                })),
             t,
         ))
         .child(row(
@@ -774,29 +742,14 @@ fn launcher_section(
     form(t)
         .child(row(
             tr(lang, "启动时检查更新", "Check on startup"),
-            div()
-                .flex()
-                .gap(px(8.0))
-                .child(
-                    choice_button(tr(lang, "开", "On"), state.settings.update.auto_check, t)
-                        .id("auto-update-on")
-                        .role(Role::Button)
-                        .aria_label("auto-update-on")
-                        .on_click(cx.listener(|shell, _, _, cx| {
-                            shell.state.set_auto_check_update(true);
-                            cx.notify();
-                        })),
-                )
-                .child(
-                    choice_button(tr(lang, "关", "Off"), !state.settings.update.auto_check, t)
-                        .id("auto-update-off")
-                        .role(Role::Button)
-                        .aria_label("auto-update-off")
-                        .on_click(cx.listener(|shell, _, _, cx| {
-                            shell.state.set_auto_check_update(false);
-                            cx.notify();
-                        })),
-                ),
+            Switch::new("auto-update-setting")
+                .checked(state.settings.update.auto_check)
+                .accessibility_label("auto-update")
+                .color(token_hsla(t.accent))
+                .on_change(cx.listener(|shell, checked, _, cx| {
+                    shell.state.set_auto_check_update(*checked);
+                    cx.notify();
+                })),
             t,
         ))
         .child(row(
@@ -851,32 +804,14 @@ fn launcher_section(
                         })),
                 )
                 .child(
-                    choice_button(
-                        tr(lang, "开", "On"),
-                        state.settings.debug.verbose_logging,
-                        t,
-                    )
-                    .id("debug-on")
-                    .role(Role::Button)
-                    .aria_label("debug-on")
-                    .on_click(cx.listener(|shell, _, _, cx| {
-                        shell.state.set_verbose_logging(true);
-                        cx.notify();
-                    })),
-                )
-                .child(
-                    choice_button(
-                        tr(lang, "关", "Off"),
-                        !state.settings.debug.verbose_logging,
-                        t,
-                    )
-                    .id("debug-off")
-                    .role(Role::Button)
-                    .aria_label("debug-off")
-                    .on_click(cx.listener(|shell, _, _, cx| {
-                        shell.state.set_verbose_logging(false);
-                        cx.notify();
-                    })),
+                    Switch::new("debug-logging-setting")
+                        .checked(state.settings.debug.verbose_logging)
+                        .accessibility_label("debug-logging")
+                        .color(token_hsla(t.accent))
+                        .on_change(cx.listener(|shell, checked, _, cx| {
+                            shell.state.set_verbose_logging(*checked);
+                            cx.notify();
+                        })),
                 ),
             t,
         ))
@@ -1079,18 +1014,10 @@ fn update_status(
             .items_center()
             .gap(px(10.0))
             .child(
-                div()
+                Progress::new("update-progress")
+                    .value(ratio * 100.0)
                     .w(px(150.0))
-                    .h(px(4.0))
-                    .rounded(px(2.0))
-                    .bg(rgb(t.line_soft))
-                    .child(
-                        div()
-                            .h(px(4.0))
-                            .w(px(150.0 * ratio))
-                            .rounded(px(2.0))
-                            .bg(rgb(t.text)),
-                    ),
+                    .color(token_hsla(t.text)),
             )
             .child(
                 div()
