@@ -16,6 +16,7 @@
 
 ## [Unreleased]
 
+- 2026-11-15 — B3 收尾：OptiFine 安装器改为以游戏目录为参数启动官方安装窗口（实测窗口标题「OptiFine Installer」正常弹出），完成后可直接在版本列表里创建实例；删除过期的下载页旧截图。
 - 2026-11-15 — B3 加载器安装与交互改版：
   - sealy-core::loader 支持 Forge / NeoForge（自动）与 OptiFine（启动官方安装器窗口，按提示完成）：下载官方 installer jar，准备 launcher_profiles.json 与可写 java.io.tmpdir，以 --installClient <game> 静默安装，随后定位版本文档；Fabric/Quilt 支持指定构建；新增每个加载器的版本列表（Forge promotions、NeoForge Maven 元数据、Fabric/Quilt 构建列表）。
   - 新增 cargo run -p sealy-core --example install_loader -- <root> <java> <kind> <game> [version] 便于手动验证安装器路径；实测 Forge 1.20.1-47.2.0 与 NeoForge 21.1.266 安装成功。

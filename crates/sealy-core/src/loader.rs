@@ -240,6 +240,7 @@ fn install_with_installer(
         std::process::Command::new(&java)
             .arg("-jar")
             .arg(&jar)
+            .arg(root)
             .current_dir(root)
             .spawn()
             .map_err(|err| CoreError::Invalid(format!("无法启动 OptiFine 安装器: {err}")))?;

@@ -14,7 +14,12 @@ fn main() {
     };
     let game = args.next().unwrap_or_else(|| "1.20.1".to_owned());
     let version = args.next();
-    match sealy_core::loader::install(&root, kind, &game, version.as_deref(), Some(&java)) {
+    let jar = args.next().map(std::path::PathBuf::from);
+    let outcome = match jar {
+        Some(jar) => sealy_core::loader::install_from_jar(&root, &game, kind, &jar, &java),
+        None => sealy_core::loader::install(&root, kind, &game, version.as_deref(), Some(&java)),
+    };
+    match outcome {
         Ok(installed) => println!(
             "ok id={} game={} loader={}",
             installed.id, installed.game_version, installed.loader_version
