@@ -94,10 +94,17 @@ pub struct AppearanceSettings {
     /// Whether the launcher may play background music and interface sound.
     #[serde(default = "default_true")]
     pub background_music: bool,
+    /// Interface scale in percent (100 = default).
+    #[serde(default = "default_ui_scale")]
+    pub ui_scale_pct: u16,
 }
 
 fn default_true() -> bool {
     true
+}
+
+fn default_ui_scale() -> u16 {
+    100
 }
 
 impl Default for AppearanceSettings {
@@ -105,6 +112,7 @@ impl Default for AppearanceSettings {
         Self {
             theme: ThemeName::Paper,
             background_music: true,
+            ui_scale_pct: 100,
         }
     }
 }

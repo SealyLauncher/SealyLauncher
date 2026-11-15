@@ -326,6 +326,10 @@ pub struct ShellState {
     pub crash_open: bool,
     /// Latest crash analysis, when one was requested.
     pub crash_view: Option<sealy_core::crash::CrashReport>,
+    /// Result of the last self-update check.
+    pub update_check: Option<Result<Option<sealy_core::update::ReleaseInfo>, String>>,
+    /// Whether the update archive is being downloaded.
+    pub update_downloading: bool,
 }
 
 /// Sidebar sections of the instance detail page.
@@ -503,6 +507,8 @@ impl ShellState {
             game_dir_draft: None,
             crash_open: false,
             crash_view: None,
+            update_check: None,
+            update_downloading: false,
         }
     }
 
@@ -948,6 +954,87 @@ impl ShellState {
         sealy_core::addons::remove(&dir, kind, name).map_err(|err| err.to_string())
     }
 
+    /// Downloads the release archive and hands it to the updater.
+    pub(crate) fn download_update(
+        &mut self,
+        release: &sealy_core::update::ReleaseInfo,
+        cx: &mut crate::kit::Context<crate::app::SealyShell>,
+    ) {
+        let Some(asset) = release.asset.clone() else {
+            let lang = self.language();
+            self.notify(crate::i18n::tr(
+                lang,
+                "这个版本没有适合本平台的安装包",
+                "No asset for this platform",
+            ));
+            return;
+        };
+        self.update_downloading = true;
+        let destination = sealy_core::update::cache_path(&self.paths.data, &asset);
+        let install_dir = self.paths.root.clone();
+        let executable = std::env::current_exe().ok();
+
+        cx.spawn(async move |this, cx| {
+            let result = cx
+                .background_executor()
+                .spawn({
+                    let asset = asset.clone();
+                    let destination = destination.clone();
+                    async move {
+                        sealy_core::update::download(&asset, &destination).map(|_| destination)
+                    }
+                })
+                .await;
+
+            let mut restart = false;
+            let mut downloaded = false;
+            let mut error: Option<String> = None;
+            match result {
+                Ok(path) => {
+                    downloaded = true;
+                    #[cfg(target_os = "windows")]
+                    if let Some(exe) = executable.as_deref() {
+                        restart =
+                            sealy_core::update::apply_windows(&path, &install_dir, exe).is_ok();
+                    }
+                    let _ = path;
+                }
+                Err(err) => error = Some(err.to_string()),
+            }
+            let _ = &install_dir;
+
+            let _ = this.update(cx, |shell, cx| {
+                shell.state.update_downloading = false;
+                let lang = shell.state.language();
+                match (downloaded, restart) {
+                    (true, true) => shell.state.notify(crate::i18n::tr(
+                        lang,
+                        "更新已下载，正在重启完成安装",
+                        "Update downloaded; restarting to finish",
+                    )),
+                    (true, false) => shell.state.notify(crate::i18n::tr(
+                        lang,
+                        "更新已下载，重启后生效",
+                        "Update downloaded; restart to apply",
+                    )),
+                    (false, _) => {
+                        if let Some(err) = error {
+                            shell.state.notify(err);
+                        }
+                    }
+                }
+                cx.notify();
+            });
+
+            if restart {
+                cx.background_executor()
+                    .timer(std::time::Duration::from_millis(1200))
+                    .await;
+                std::process::exit(0);
+            }
+        })
+        .detach();
+    }
     /// Analyses the newest crash report and opens the panel.
     pub fn open_crash_report(&mut self) {
         self.crash_view = Some(sealy_core::crash::analyze(&self.paths.game));
@@ -963,6 +1050,13 @@ impl ShellState {
     pub fn close_crash_report(&mut self) {
         self.crash_open = false;
         self.crash_view = None;
+    }
+    /// Changes the interface scale and persists it.
+    pub fn set_ui_scale_pct(&mut self, pct: u16) {
+        let clamped = pct.clamp(70, 160);
+        self.settings.appearance.ui_scale_pct = clamped;
+        crate::kit::set_ui_scale(f32::from(clamped) / 100.0);
+        self.persist();
     }
     /// Saves the HTTP proxy address and applies it to new requests.
     pub fn commit_proxy(&mut self, value: String) {

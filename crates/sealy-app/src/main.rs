@@ -25,6 +25,25 @@ fn main() {
         }
     }
 
+    if std::env::args().any(|arg| arg == "--check-update") {
+        match sealy_core::update::check(sealy_core::version()) {
+            Ok(Some(release)) => println!(
+                "update {}{}",
+                release.version,
+                release
+                    .asset
+                    .map(|asset| format!(" · {}", asset.name))
+                    .unwrap_or_default()
+            ),
+            Ok(None) => println!("up-to-date {}", sealy_core::version()),
+            Err(err) => {
+                eprintln!("{err}");
+                std::process::exit(1);
+            }
+        }
+        return;
+    }
+
     if std::env::args().any(|arg| arg == "--version") {
         println!("SealyLauncher {}", sealy_core::version());
         return;

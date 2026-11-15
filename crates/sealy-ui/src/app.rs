@@ -13,6 +13,7 @@ pub fn run(bootstrap: sealy_core::Bootstrap) {
         .with_assets(crate::assets::SealyAssets)
         .run(|cx| {
             gpui_kit::init(cx);
+            crate::kit::set_ui_scale(bootstrap.settings.appearance.ui_scale_pct as f32 / 100.0);
 
             let bounds = Bounds::centered(
                 None,

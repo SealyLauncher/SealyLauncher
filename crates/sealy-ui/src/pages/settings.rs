@@ -3,7 +3,7 @@
 use sealy_core::config::{Language, MotionSetting, SourcePolicy, ThemeName};
 
 use crate::app::SealyShell;
-use crate::components::{action_bar, choice_button, field_row, head_band_back, quiet_button};
+use crate::components::{action_bar, choice_button, field_row, head_band_back, mono, quiet_button};
 use crate::i18n::tr;
 use crate::kit::*;
 use crate::state::ShellState;
@@ -16,6 +16,21 @@ pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyEle
     let swatches = ThemeName::ALL
         .into_iter()
         .map(|name| swatch(name, state.theme_name(), lang, &t, cx))
+        .collect::<Vec<_>>();
+
+    let ui_scale_pct = state.settings.appearance.ui_scale_pct;
+    let scale_buttons = [90_u16, 100, 115, 130]
+        .into_iter()
+        .map(|pct| {
+            choice_button(format!("{pct}%"), ui_scale_pct == pct, &t)
+                .id(("ui-scale", usize::from(pct)))
+                .role(Role::Button)
+                .aria_label(format!("ui-scale-{pct}"))
+                .on_click(cx.listener(move |shell, _, _, cx| {
+                    shell.state.set_ui_scale_pct(pct);
+                    cx.notify();
+                }))
+        })
         .collect::<Vec<_>>();
 
     let data_dir = state.paths.root.display().to_string();
@@ -91,6 +106,15 @@ pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyEle
                         .w(px(760.0))
                         .flex()
                         .flex_col()
+                        .child(row(
+                            tr(lang, "界面缩放", "Interface scale"),
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap(px(8.0))
+                                .children(scale_buttons),
+                            &t,
+                        ))
                         .child(row(
                             tr(lang, "语言", "Language"),
                             div()
@@ -442,6 +466,41 @@ pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyEle
                                 ),
                             &t,
                         ))
+                        .child(row(
+                            tr(lang, "启动器更新", "Launcher update"),
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap(px(8.0))
+                                .child(mono(format!("v{}", sealy_core::version()), &t))
+                                .child(
+                                    quiet_button(tr(lang, "检查更新", "Check"), &t)
+                                        .id("check-update")
+                                        .role(Role::Button)
+                                        .aria_label("check-update")
+                                        .on_click(cx.listener(|shell, _, _, cx| {
+                                            shell.state.update_check = None;
+                                            cx.spawn(async move |this, cx| {
+                                                let result = cx
+                                                    .background_executor()
+                                                    .spawn(async move {
+                                                        sealy_core::update::check(
+                                                            sealy_core::version(),
+                                                        )
+                                                    })
+                                                    .await
+                                                    .map_err(|err| err.to_string());
+                                                let _ = this.update(cx, |shell, cx| {
+                                                    shell.state.update_check = Some(result);
+                                                    cx.notify();
+                                                });
+                                            })
+                                            .detach();
+                                        })),
+                                )
+                                .child(update_status(state, lang, &t, cx)),
+                            &t,
+                        ))
                         .child(field_row(
                             tr(lang, "数据目录", "Data directory"),
                             data_dir,
@@ -691,4 +750,59 @@ fn swatch(
             cx.notify();
         }))
         .into_any_element()
+}
+
+/// Status text and download button for the self-update row.
+fn update_status(
+    state: &ShellState,
+    lang: Language,
+    t: &ThemeTokens,
+    cx: &mut Context<SealyShell>,
+) -> AnyElement {
+    match &state.update_check {
+        None => div().into_any_element(),
+        Some(Err(err)) => div()
+            .text_size(px(11.0))
+            .text_color(rgb(t.muted))
+            .child(err.clone())
+            .into_any_element(),
+        Some(Ok(None)) => div()
+            .text_size(px(11.0))
+            .text_color(rgb(t.muted))
+            .child(tr(lang, "已是最新版本", "Up to date"))
+            .into_any_element(),
+        Some(Ok(Some(release))) => {
+            let release = release.clone();
+            let has_asset = release.asset.is_some();
+            if state.update_downloading {
+                return div()
+                    .text_size(px(11.0))
+                    .text_color(rgb(t.muted))
+                    .child(tr(lang, "下载中…", "Downloading…"))
+                    .into_any_element();
+            }
+            div()
+                .flex()
+                .items_center()
+                .gap(px(8.0))
+                .child(
+                    div()
+                        .text_size(px(11.0))
+                        .text_color(rgb(t.text))
+                        .child(format!("→ v{}", release.version)),
+                )
+                .child(
+                    quiet_button(tr(lang, "下载并安装", "Download and install"), t)
+                        .id("download-update")
+                        .role(Role::Button)
+                        .aria_label("download-update")
+                        .when(!has_asset, |this| this.opacity(0.5))
+                        .on_click(cx.listener(move |shell, _, _, cx| {
+                            shell.state.download_update(&release, cx);
+                            cx.notify();
+                        })),
+                )
+                .into_any_element()
+        }
+    }
 }

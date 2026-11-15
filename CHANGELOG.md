@@ -16,6 +16,12 @@
 
 ## [Unreleased]
 
+- 2026-11-15 — B5 收尾：启动器自更新与界面缩放：
+  - 新增 sealy-core::update：查询 GitHub 最新 release、按平台选择资产（windows-x64.zip / macos-universal.zip / linux-x86_64.tar.zst）、下载并解压 zip；Windows 下生成 sealy-update.bat，等待启动器退出后替换 exe 并重新启动。
+  - 设置页「启动器更新」：显示当前版本、检查更新（实测从 v0.1.33 检出 v0.1.34）、下载并安装；新增 sealy-launcher --check-update 供脚本/CI 检查。
+  - 界面缩放：AppearanceSettings.ui_scale_pct（90/100/115/130%），kit::px 统一乘以全局缩放因子，设置页切换立即生效并持久化；实测 130% 下布局正常（截图 design/preview/gpui-ui-scale.png）。
+  - 新增 5 个单元测试：版本号比较、平台资产选择、更新包解压、缓存路径等。
+
 - 2026-11-15 — B5 前半：代理、游戏目录切换、崩溃分析：
   - 设置新增「HTTP 代理」（host:port，留空关闭）：写入配置后对后续所有 HTTP 请求生效（ureq 代理），并在启动游戏时注入 -Dhttp/https.proxyHost/proxyPort；格式非法会提示。
   - 设置新增「游戏目录」切换：可指向任意磁盘目录（自动创建），切换后重新扫描已安装版本与 Java；持久化到 settings.json，下次启动仍生效。

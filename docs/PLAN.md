@@ -1019,10 +1019,10 @@ pub trait SkinProvider: Send + Sync;
 | --- | --- | --- | --- | --- |
 | 游戏日志查看器（实时/导出） | `game/Log.java`、`LogExporter` | ✅ 实例页「日志」：尾部 400 行、1.2s 自动跟随、刷新、打开目录（2026-11-15） | **P0** | M |
 | 崩溃报告分析 | `game/CrashReportAnalyzer` | ✅ B5（面板 + 自动分析） | P1 | L |
-| 启动器自更新 | `upgrade/**` | ❌（下一轮） | P1 | M |
+| 启动器自更新 | `upgrade/**` | ✅ B5（检查/下载/Windows 自动替换） | P1 | M |
 | 主题包 / 背景图 / 透明度 / 字体 | `theme/**`、`setting/FontManager` | ◐ 4 套固定主题 | P2 | L |
 | HTTP/SOCKS 代理设置 | `setting/ProxySettings` | ✅ B5（HTTP 代理） | P1 | S |
-| 界面缩放 `ui_scale` | — | ❌（下一轮） | P1 | S |
+| 界面缩放 `ui_scale` | — | ✅ B5（90–130%） | P1 | S |
 | 多语言扩充 | `SupportedLocale` | ◐ zh/en | P2 | M |
 | 反馈 / 关于 / 帮助页 | `FeedbackPage`、`HelpPage`、`AboutPage` | ◐ 设置页内有版本信息 | P3 | S |
 | 快捷进入服务器/世界（Quick Play） | `game/Arguments` | ❌ | P3 | M |
@@ -1044,17 +1044,19 @@ pub trait SkinProvider: Send + Sync;
 | B2 | 模组/资源包/光影列表（启用禁用、拖入、删除）+ 实例图标/删除文件 | B1 的实例目录抽象 | 已完成：详情页三个分区、图标选择、删除确认面板（见 20.12） |
 | B3 | Forge / NeoForge / OptiFine 安装 + 加载器版本列表 | 版本继承（已完成） | 已完成：安装器 jar 静默安装 + 版本列表 + 自动建实例（见 20.13） |
 | B4 | 整合包导入（mrpack/zip/curse）与导出 | B3 的加载器安装 | 已完成：mrpack 导入/导出 + 自动装依赖并建实例（见 20.14） |
-| B5（进行中） | ~~崩溃分析~~ ✅ · ~~代理~~ ✅ · ~~多游戏目录~~ ✅ → 自更新 · `ui_scale` | — | 设置页功能齐（见 20.15） |
+| B5 | 崩溃分析、代理、多游戏目录、自更新、`ui_scale` | — | 已完成（见 20.15） |
 | B6 | 主题包/背景、皮肤、Quick Play、世界管理 | B5 | 对标 HMCL 体验 |
 | 不做 | Terracotta 联机、NBT 编辑器、整合包在线更新 | — | 记录在案 |
 
-### 20.15 B5 交付记录（进行中，2026-11-15）
+### 20.15 B5 交付记录（2026-11-15）
 
 - 代理：`Settings.network.proxy` + `net::set_proxy`，`agent()` 统一走 ureq 代理；启动游戏时注入 JVM `-Dhttp/https.proxyHost/proxyPort`。设置页「HTTP 代理」输入 + 保存，非法格式会提示。
 - 多游戏目录：`Settings.game_dir` + `apply_runtime_settings`（启动时替换 `paths.game`），设置页「游戏目录」输入 + 切换/重置；切换后重启扫描已安装版本与 Java 并持久化。
 - 崩溃分析：`sealy-core::crash` 从最新 crash-report / latest.log 提取摘要并按 10 类模式给出建议；实例详情页「崩溃分析」面板（摘要、建议、片段、重新分析、打开目录），游戏非零退出后自动打开。
 - 实测：OOM 崩溃报告被正确识别（摘要 + 内存建议）；设置页网络卡片可见；`cargo test` 新增 crash 4 个用例全部通过。
-- 剩余：启动器自更新、`ui_scale`，计划下一轮完成。
+- 自更新：`sealy-core::update`（GitHub latest → 平台资产 → 下载 → 解压 → Windows 更新脚本），设置页「启动器更新」+ `--check-update` CLI；实测 v0.1.33 检出 v0.1.34，`extract` 有单测覆盖；Windows 自动替换脚本未在真机走完整流程。
+- `ui_scale`：`ui_scale_pct` 设置 + `kit::px` 全局缩放，90/100/115/130% 即时生效并持久化；130% 截图见 design/preview/gpui-ui-scale.png。
+
 ### 20.14 B4 交付记录（2026-11-15）
 
 - `sealy-core::modpack`：`inspect` 解析 Modrinth `.mrpack`（dependencies/files/hashes/env）与 CurseForge `manifest.json`（Minecraft 版本、`modLoaders[0].id`、overrides 目录）；`import_files` 校验 SHA-1、跳过已存在文件、解压 overrides；`export` 生成可再次导入的 `.mrpack`。
