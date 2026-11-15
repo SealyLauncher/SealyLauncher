@@ -1291,99 +1291,11 @@ fn copy_directory(from: &std::path::Path, to: &std::path::Path) -> std::io::Resu
     }
     Ok(())
 }
-
-/// Per-platform launcher for the file manager.
+/// Hands the folder to the platform file manager through a helper process.
+///
+/// The shell call pumps a message loop and would re-enter GPUI's borrowed
+/// application state if it ran on the UI thread, so it runs in a separate
+/// short lived launcher process instead.
 fn reveal_inner(path: &std::path::Path) -> std::io::Result<()> {
-    #[cfg(target_os = "windows")]
-    {
-        // `explorer.exe <path>` and PowerShell-based helpers silently fail for
-        // some users; the shell "open" verb is the reliable route.
-        return windows_shell::open_folder(path).map_err(std::io::Error::other);
-    }
-
-    #[cfg(target_os = "macos")]
-    {
-        return std::process::Command::new("open")
-            .arg(path)
-            .spawn()
-            .map(|_| ());
-    }
-
-    #[cfg(all(unix, not(target_os = "macos")))]
-    {
-        return std::process::Command::new("xdg-open")
-            .arg(path)
-            .spawn()
-            .map(|_| ());
-    }
-
-    #[allow(unreachable_code)]
-    Ok(())
-}
-
-/// Minimal `ShellExecuteW` binding used to reveal folders on Windows.
-#[cfg(target_os = "windows")]
-#[allow(unsafe_code)]
-mod windows_shell {
-    use std::ffi::OsStr;
-    use std::os::windows::ffi::OsStrExt;
-
-    /// `ShellExecuteW` returns an `HINSTANCE`; values above 32 mean success.
-    const SUCCESS_THRESHOLD: isize = 32;
-    /// `SW_SHOWNORMAL`.
-    const SW_SHOWNORMAL: i32 = 1;
-
-    #[link(name = "shell32")]
-    unsafe extern "system" {
-        fn ShellExecuteW(
-            hwnd: *mut core::ffi::c_void,
-            operation: *const u16,
-            file: *const u16,
-            parameters: *const u16,
-            directory: *const u16,
-            show_cmd: i32,
-        ) -> *mut core::ffi::c_void;
-    }
-
-    fn wide(value: &OsStr) -> Vec<u16> {
-        value.encode_wide().chain(std::iter::once(0)).collect()
-    }
-
-    /// Opens a folder with the shell's default verb.
-    pub(super) fn open_folder(path: &std::path::Path) -> Result<(), String> {
-        let operation = wide(OsStr::new("open"));
-        let file = wide(path.as_os_str());
-        // SAFETY: every pointer refers to a null-terminated UTF-16 buffer that
-        // outlives the call; the remaining arguments are plain OS API values.
-        let result = unsafe {
-            ShellExecuteW(
-                std::ptr::null_mut(),
-                operation.as_ptr(),
-                file.as_ptr(),
-                std::ptr::null(),
-                std::ptr::null(),
-                SW_SHOWNORMAL,
-            )
-        };
-
-        if result as isize > SUCCESS_THRESHOLD {
-            return Ok(());
-        }
-
-        // Fall back to spawning Explorer directly: some shells refuse the
-        // `open` verb for folders inside a job object.
-        if std::process::Command::new("explorer.exe")
-            .arg(path)
-            .spawn()
-            .is_ok()
-        {
-            return Ok(());
-        }
-
-        Err(format!(
-            "ShellExecuteW failed for {} (code {})",
-            path.display(),
-            result as isize
-        ))
-    }
+    sealy_core::shell::spawn_open_helper(path)
 }

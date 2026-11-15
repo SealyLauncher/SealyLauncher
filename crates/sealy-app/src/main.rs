@@ -5,6 +5,16 @@
 mod window_icon;
 
 fn main() {
+    if let Some(path) = open_folder_argument() {
+        match sealy_core::shell::open_folder(std::path::Path::new(&path)) {
+            Ok(()) => std::process::exit(0),
+            Err(err) => {
+                eprintln!("{err}");
+                std::process::exit(1);
+            }
+        }
+    }
+
     if std::env::args().any(|arg| arg == "--version") {
         println!("SealyLauncher {}", sealy_core::version());
         return;
@@ -40,6 +50,17 @@ fn main() {
     window_icon::apply();
 
     sealy_ui::app::run(bootstrap);
+}
+
+/// Reads the --open-folder <path> helper invocation, if any.
+fn open_folder_argument() -> Option<String> {
+    let mut args = std::env::args().skip(1);
+    while let Some(arg) = args.next() {
+        if arg == sealy_core::shell::OPEN_FOLDER_FLAG {
+            return args.next();
+        }
+    }
+    None
 }
 
 /// Reports a fatal startup error where the user can actually see it.

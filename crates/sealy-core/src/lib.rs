@@ -21,6 +21,7 @@ pub mod manifest;
 pub mod microsoft;
 pub mod net;
 pub mod paths;
+pub mod shell;
 pub mod single_instance;
 pub mod version;
 
