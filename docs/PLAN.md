@@ -1064,6 +1064,13 @@ pub trait SkinProvider: Send + Sync;
 - 失败恢复与清理：`write_pending`/`reconcile_pending`/`clear_update_cache`；更新脚本删除安装包与暂存目录。
 - 启动检查：`update.auto_check`（默认开）+ 设置页开关；发现新版本用 toast 提示并预填更新卡片。
 - 签名：新增 `docs/SIGNING.md`（Windows OV/EV、Azure Trusted Signing、SignPath/Certum；macOS Developer ID + notarytool；Linux GPG 校验）。当前发布仍未做商业签名。
+### 20.23 OOBE RadioGroup 与账号卡片（2026-11-15）
+
+- 音频步骤：删除自定义 `radio_card`，改用组件 `RadioGroup::vertical` + `Radio`；受控 `selected_index` + `on_change` 写 `appearance.background_music`，选项标签包含「关/开 + 说明」，实测点击可切换单选。
+- 账号步骤：`account_card` 改为 `card_button`（`UiButton` 适配层）渲染的组件 Button，保留卡片外观与 `.id/.aria_label/.on_click`；点击仍会打开离线用户名输入。
+- 卡片高度：组件 Button 默认高度会裁掉自定义内容，`card_button` 显式 `.h(px(104.0))` 并保留 padding/border/bg。
+- 验证：隔离数据目录（无 settings/accounts）启动 OOBE，音频 RadioGroup、账号卡片点击均实测；截图 `design/preview/gpui-components-{radio,oobe-cards}.png`。测试结束已恢复主数据目录。
+- 待办：toast 可评估迁移到组件 `Notification`；之后做一次全站控件盘点。
 ### 20.22 下载源 Select 与语言联动（2026-11-15）
 
 - 设置页「下载源」由三个 `choice_button` 换成组件 `Select`：`SelectState<SearchableVec<SharedString>>` 在 `SealyShell::new` 中创建并存进 `ShellState.source_select`，订阅 `SelectEvent::Confirm` 后调用 `ShellState::set_source`（同时写 `metadata_source` 与 `file_source` 并持久化）。

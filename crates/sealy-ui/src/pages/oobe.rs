@@ -6,7 +6,9 @@
 use sealy_core::config::Language;
 
 use crate::app::SealyShell;
-use crate::components::{action_bar, choice_button, primary_button, quiet_button};
+use crate::components::{
+    UiButton, action_bar, card_button, choice_button, primary_button, quiet_button,
+};
 use crate::i18n::tr;
 use crate::kit::*;
 use crate::state::{OOBE_STEPS, ShellState};
@@ -172,46 +174,29 @@ fn step_audio(state: &ShellState, t: &ThemeTokens, cx: &mut Context<SealyShell>)
                 .child(tr(lang, "是否播放背景音乐", "Play background music?")),
         )
         .child(
-            div()
-                .flex()
-                .gap(px(14.0))
+            RadioGroup::vertical("oobe-audio")
+                .selected_index(Some(if on { 1 } else { 0 }))
+                .on_change(cx.listener(|shell, index: &usize, _, cx| {
+                    shell.state.settings.appearance.background_music = *index == 1;
+                    cx.notify();
+                }))
                 .child(
-                    radio_card(
-                        tr(lang, "关", "Off"),
-                        tr(
+                    Radio::new("oobe-audio-off")
+                        .label(tr(
                             lang,
-                            "不播放任何声音与音效",
-                            "No music and no interface sounds",
-                        ),
-                        !on,
-                        t,
-                    )
-                    .id("oobe-audio-off")
-                    .role(Role::Button)
-                    .aria_label(tr(lang, "关", "Off"))
-                    .on_click(cx.listener(|shell, _, _, cx| {
-                        shell.state.settings.appearance.background_music = false;
-                        cx.notify();
-                    })),
+                            "关 · 不播放任何声音与音效",
+                            "Off · No music or interface sounds",
+                        ))
+                        .accessibility_label("oobe-audio-off"),
                 )
                 .child(
-                    radio_card(
-                        tr(lang, "开", "On"),
-                        tr(
+                    Radio::new("oobe-audio-on")
+                        .label(tr(
                             lang,
-                            "根据当前主题播放背景音乐与音效",
-                            "Music and sounds follow the current theme",
-                        ),
-                        on,
-                        t,
-                    )
-                    .id("oobe-audio-on")
-                    .role(Role::Button)
-                    .aria_label(tr(lang, "开", "On"))
-                    .on_click(cx.listener(|shell, _, _, cx| {
-                        shell.state.settings.appearance.background_music = true;
-                        cx.notify();
-                    })),
+                            "开 · 根据当前主题播放背景音乐与音效",
+                            "On · Music and sounds follow the theme",
+                        ))
+                        .accessibility_label("oobe-audio-on"),
                 ),
         )
         .into_any_element()
@@ -408,32 +393,29 @@ fn offline_editor(
         .into_any_element()
 }
 
-fn account_card(title: &str, description: &str, t: &ThemeTokens) -> Div {
-    div()
-        .w(px(280.0))
-        .p(px(20.0))
-        .flex()
-        .flex_col()
-        .gap(px(8.0))
-        .rounded(px(theme::RADIUS_TILE))
-        .bg(rgb(t.surface))
-        .border_1()
-        .border_color(rgb(t.line))
-        .cursor_pointer()
-        .child(
-            div()
-                .text_size(px(16.0))
-                .font_weight(FontWeight::SEMIBOLD)
-                .text_color(rgb(t.text))
-                .child(title.to_owned()),
-        )
-        .child(
-            div()
-                .text_size(px(12.0))
-                .line_height(relative(1.5))
-                .text_color(rgb(t.muted))
-                .child(description.to_owned()),
-        )
+fn account_card(title: &str, description: &str, t: &ThemeTokens) -> UiButton {
+    card_button(t).child(
+        div()
+            .w_full()
+            .flex()
+            .flex_col()
+            .items_start()
+            .gap(px(8.0))
+            .child(
+                div()
+                    .text_size(px(16.0))
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_color(rgb(t.text))
+                    .child(title.to_owned()),
+            )
+            .child(
+                div()
+                    .text_size(px(12.0))
+                    .line_height(relative(1.5))
+                    .text_color(rgb(t.muted))
+                    .child(description.to_owned()),
+            ),
+    )
 }
 
 fn step_done(state: &ShellState, t: &ThemeTokens, cx: &mut Context<SealyShell>) -> AnyElement {
@@ -512,65 +494,6 @@ fn glyph(icon: IconName, t: &ThemeTokens) -> Div {
                 .w(px(66.0))
                 .h(px(66.0))
                 .text_color(rgb(t.text)),
-        )
-}
-
-fn radio_card(
-    name: &'static str,
-    description: &'static str,
-    selected: bool,
-    t: &ThemeTokens,
-) -> Div {
-    let border = if selected { t.text } else { t.line };
-
-    div()
-        .w(px(300.0))
-        .p(px(20.0))
-        .flex()
-        .flex_col()
-        .gap(px(8.0))
-        .rounded(px(theme::RADIUS_TILE))
-        .bg(rgb(t.surface))
-        .border_1()
-        .border_color(rgb(border))
-        .cursor_pointer()
-        .child(
-            div()
-                .flex()
-                .items_center()
-                .gap(px(10.0))
-                .child(
-                    div()
-                        .w(px(16.0))
-                        .h(px(16.0))
-                        .rounded_full()
-                        .border_1()
-                        .border_color(rgb(border))
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .child(
-                            div()
-                                .w(px(8.0))
-                                .h(px(8.0))
-                                .rounded_full()
-                                .bg(rgb(if selected { t.text } else { t.surface })),
-                        ),
-                )
-                .child(
-                    div()
-                        .text_size(px(16.0))
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(rgb(t.text))
-                        .child(name),
-                ),
-        )
-        .child(
-            div()
-                .text_size(px(12.0))
-                .line_height(relative(1.5))
-                .text_color(rgb(t.muted))
-                .child(description),
         )
 }
 

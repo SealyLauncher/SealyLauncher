@@ -16,6 +16,15 @@
 
 ## [Unreleased]
 
+- 2026-11-15 — OOBE 音频选项与账号卡片改用组件：
+  - OOBE「音乐与音效」从自定义 `radio_card` 卡片改为 gpui-component `RadioGroup` + `Radio`（vertical、受控 `selected_index`、`on_change` 写 `background_music`），说明文案合并进选项标签。
+  - OOBE 账号步骤的「离线账号 / Microsoft 登录」卡片改用组件 Button：新增 `components::card_button` 适配层（保留纸感卡片外观与 `.id/.aria_label/.on_click` 链），获得组件悬停/焦点态；实测点击离线卡片可打开用户名输入。
+  - 修复 `card_button` 高度：组件 Button 的默认固定高度会裁掉自定义内容，改为显式 104px 卡片高度。
+  - 验证：在隔离数据目录（临时清空 settings/accounts）走到 OOBE 账号步骤，音频单选切换、账号卡片点击打开输入框均通过；测试后已恢复主数据目录 `settings.json` 与 `accounts.json`（10 个账号）。`cargo fmt`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace` 全绿（80 通过 / 2 忽略）；截图 design/preview/gpui-components-{radio,oobe-cards}.png。
+  - 待办：应用内 toast 可评估迁移到组件 Notification；其余主要控件/浮层已完成组件化。
+
+
+
 - 2026-11-15 — 下载源改用组件 Select：
   - 设置页「下载源」从三个按钮改为 gpui-component `Select` 下拉（自动 / 官方 / BMCLAPI）；`SelectState<SearchableVec<SharedString>>` 在窗口创建时建立并订阅 `SelectEvent`，确认后调用 `set_source` 写回 `metadata_source` 与 `file_source` 并持久化。
   - 切换语言时重建下拉选项并恢复当前选中项（中文 Auto/官方、英文 Auto/Official），已验证中英文两种标签。

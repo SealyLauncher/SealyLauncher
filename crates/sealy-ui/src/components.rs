@@ -765,6 +765,35 @@ pub fn nav_button(
     button
 }
 
+/// Card-shaped button used for large choices.
+#[track_caller]
+pub fn card_button(t: &ThemeTokens) -> UiButton {
+    let fallback = button_id(std::panic::Location::caller(), "card");
+    let style = style_of(
+        div()
+            .w(px(280.0))
+            .h(px(104.0))
+            .p(px(20.0))
+            .rounded(px(theme::RADIUS_TILE))
+            .border_1()
+            .border_color(rgb(t.line))
+            .bg(rgb(t.surface))
+            .text_color(rgb(t.text)),
+    );
+    UiButton::new(
+        UiButtonKind::Quiet,
+        None,
+        None,
+        style,
+        (
+            hsla(t.surface),
+            hsla(t.text),
+            hsla(t.line_soft),
+            hsla(t.line_soft),
+        ),
+        fallback,
+    )
+}
 /// Small inline chip button used inside dense rows and notices.
 #[track_caller]
 pub fn chip_button(label: impl Into<SharedString>, t: &ThemeTokens) -> UiButton {
