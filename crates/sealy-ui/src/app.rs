@@ -77,6 +77,8 @@ pub(crate) struct SealyShell {
     _source_subscription: Subscription,
     /// Toast id most recently mirrored into a component notification.
     notified_toast: Option<u64>,
+    /// Sheet currently driven by the page state flags.
+    active_sheet: Option<SheetView>,
     /// Set when the slider value changed without a window at hand.
     memory_sync_pending: bool,
     /// Input that should receive focus on the next frame.
@@ -87,6 +89,19 @@ pub(crate) struct SealyShell {
 
 /// Notification id type used to replace the previous toast in place.
 struct ToastNote;
+
+/// Overlay sheet requested by the shell state.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum SheetView {
+    /// Background-task message center.
+    Messages,
+    /// Per-instance launch settings.
+    LaunchSettings,
+    /// Latest game log.
+    Logs,
+    /// Crash analysis report.
+    Crash,
+}
 
 impl SealyShell {
     fn new(
@@ -159,6 +174,7 @@ impl SealyShell {
             _input_subscriptions: input_subscriptions,
             _source_subscription: source_subscription,
             notified_toast: None,
+            active_sheet: None,
             memory_sync_pending: false,
             pending_focus: None,
             refocus_pending: false,
@@ -281,7 +297,7 @@ impl Render for SealyShell {
             window.focus(&self.focus, cx);
         }
 
-        self.sync_message_sheet(window, cx);
+        self.sync_sheets(window, cx);
         self.sync_toast_notification(window, cx);
         let tokens = self.state.theme();
         let page = pages::render(&mut self.state, cx);
@@ -929,44 +945,73 @@ impl SealyShell {
         });
     }
 
-    /// Keeps the message-center sheet in step with `message_open`.
-    ///
-    /// The sheet is a component-owned overlay, so it is opened and closed
-    /// imperatively after the frame that flipped the state flag.
-    fn sync_message_sheet(&self, window: &mut Window, cx: &mut Context<Self>) {
-        let open = self.state.message_open;
-        let active = window.has_active_sheet(cx);
-        if open && !active {
-            let weak = cx.entity().downgrade();
-            window.defer(cx, move |window, cx| {
-                if weak.upgrade().is_none() {
-                    return;
-                }
-                let build_shell = weak.clone();
-                let close_shell = weak.clone();
-                window.open_sheet(cx, move |sheet, _window, cx| {
-                    let Some(shell) = build_shell.upgrade() else {
-                        return sheet;
-                    };
-                    let sheet = shell.update(cx, |this, cx| {
-                        crate::panel::build_sheet(sheet, &this.state, cx)
-                    });
-                    let close = close_shell.clone();
-                    sheet.on_close(move |_, _, cx| {
-                        if let Some(shell) = close.upgrade() {
-                            shell.update(cx, |this, cx| {
-                                this.state.message_open = false;
-                                cx.notify();
-                            });
-                        }
-                    })
-                });
-            });
-        } else if !open && active {
-            window.defer(cx, |window, cx| window.close_sheet(cx));
+    /// Keeps the component sheet in step with the overlay flags in the state.
+    fn sync_sheets(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let desired = if self.state.message_open {
+            Some(SheetView::Messages)
+        } else if self.state.crash_open {
+            Some(SheetView::Crash)
+        } else if self.state.instance_settings_open {
+            Some(SheetView::LaunchSettings)
+        } else if self.state.logs_open {
+            Some(SheetView::Logs)
+        } else {
+            None
+        };
+        if desired == self.active_sheet {
+            return;
         }
+        let previous = self.active_sheet;
+        self.active_sheet = desired;
+        let weak = cx.entity().downgrade();
+        window.defer(cx, move |window, cx| {
+            if previous.is_some() {
+                window.close_sheet(cx);
+            }
+            let Some(view) = desired else {
+                return;
+            };
+            if weak.upgrade().is_none() {
+                return;
+            }
+            let build_shell = weak.clone();
+            let close_shell = weak.clone();
+            window.open_sheet(cx, move |sheet, _window, cx| {
+                let Some(shell) = build_shell.upgrade() else {
+                    return sheet;
+                };
+                let sheet = shell.update(cx, |this, cx| match view {
+                    SheetView::Messages => crate::panel::build_sheet(sheet, &this.state, cx),
+                    SheetView::LaunchSettings => {
+                        crate::pages::instances::launch_settings_sheet(sheet, &this.state, cx)
+                    }
+                    SheetView::Logs => crate::pages::instances::logs_sheet(sheet, &this.state, cx),
+                    SheetView::Crash => crate::pages::instance::crash_sheet(sheet, &this.state, cx),
+                });
+                let close = close_shell.clone();
+                sheet.on_close(move |_, _, cx| {
+                    if let Some(shell) = close.upgrade() {
+                        shell.update(cx, |this, cx| {
+                            if this.active_sheet != Some(view) {
+                                return;
+                            }
+                            this.active_sheet = None;
+                            match view {
+                                SheetView::Messages => this.state.message_open = false,
+                                SheetView::LaunchSettings => {
+                                    this.state.inst_launch_draft = None;
+                                    this.state.instance_settings_open = false;
+                                }
+                                SheetView::Logs => this.state.close_logs(),
+                                SheetView::Crash => this.state.close_crash_report(),
+                            }
+                            cx.notify();
+                        });
+                    }
+                })
+            });
+        });
     }
-
     /// Window-wide shortcuts: Enter runs the primary action, Escape steps back,
     /// digits jump between pages.
     fn handle_key(&mut self, keystroke: &Keystroke, cx: &mut Context<Self>) {

@@ -218,25 +218,20 @@ pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyEle
                         })),
                 ),
         )
-        .children(
-            state
-                .instance_settings_open
-                .then(|| launch_settings_panel(state, &t, lang, cx)),
-        )
-        .children(state.logs_open.then(|| log_panel(state, &t, lang, cx)))
         .into_any_element()
 }
 
-/// Per-instance launch settings editor (window size, memory, JVM args).
-pub(crate) fn launch_settings_panel(
+/// Per-instance launch settings sheet (window size, memory, JVM args).
+pub(crate) fn launch_settings_sheet(
+    sheet: Sheet,
     state: &ShellState,
-    t: &ThemeTokens,
-    lang: sealy_core::config::Language,
     cx: &mut Context<SealyShell>,
-) -> AnyElement {
+) -> Sheet {
     if state.inst_launch_draft.is_none() {
-        return div().into_any_element();
+        return sheet;
     }
+    let t = state.theme();
+    let lang = state.language();
 
     let fields = (0..4)
         .map(|index| {
@@ -265,70 +260,22 @@ pub(crate) fn launch_settings_panel(
                             _ => tr(lang, "JVM 参数", "JVM arguments"),
                         }),
                 )
-                .child(crate::inputs::field(state, field, 360.0, t))
+                .child(crate::inputs::field(state, field, 360.0, &t))
         })
         .collect::<Vec<_>>();
 
-    div()
-        .absolute()
-        .occlude()
-        .top(px(0.0))
-        .right(px(0.0))
-        .bottom(px(0.0))
-        .w(px(560.0))
-        .flex()
-        .flex_col()
+    sheet
+        .size(DefiniteLength::Absolute(px(560.0).into()))
         .bg(rgb(t.surface))
-        .border_l_1()
         .border_color(rgb(t.line))
+        .title(div().text_color(rgb(t.text)).child(tr(
+            lang,
+            "实例启动设置",
+            "Instance launch settings",
+        )))
         .child(
             div()
-                .h(px(56.0))
-                .flex_shrink_0()
-                .px(px(20.0))
-                .flex()
-                .items_center()
-                .gap(px(10.0))
-                .border_b_1()
-                .border_color(rgb(t.line))
-                .child(
-                    div()
-                        .flex_1()
-                        .text_size(px(14.0))
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(rgb(t.text))
-                        .child(tr(lang, "实例启动设置", "Instance launch settings")),
-                )
-                .child(
-                    div()
-                        .id("instance-settings-close")
-                        .role(Role::Button)
-                        .aria_label("close-instance-settings")
-                        .w(px(28.0))
-                        .h(px(28.0))
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .rounded(px(theme::RADIUS_TILE))
-                        .cursor_pointer()
-                        .hover(move |style| style.bg(rgb(t.line_soft)))
-                        .child(
-                            Icon::new(IconName::X)
-                                .w(px(15.0))
-                                .h(px(15.0))
-                                .text_color(rgb(t.muted)),
-                        )
-                        .on_click(cx.listener(|shell, _, _, cx| {
-                            shell.state.inst_launch_draft = None;
-                            shell.state.instance_settings_open = false;
-                            cx.notify();
-                        })),
-                ),
-        )
-        .child(
-            div()
-                .px(px(20.0))
-                .py(px(6.0))
+                .pb(px(6.0))
                 .text_size(px(11.0))
                 .text_color(rgb(t.faint))
                 .child(tr(
@@ -337,12 +284,12 @@ pub(crate) fn launch_settings_panel(
                     "Empty follows global settings · Click a field · Enter save · Esc cancel",
                 )),
         )
-        .child(div().flex_1().min_h(px(0.0)).px(px(20.0)).children(fields))
-        .child(
-            action_bar(t)
+        .child(div().w_full().children(fields))
+        .footer(
+            action_bar(&t)
                 .child(div().flex_1())
                 .child(
-                    quiet_button(tr(lang, "取消", "Cancel"), t)
+                    quiet_button(tr(lang, "取消", "Cancel"), &t)
                         .id("instance-settings-cancel")
                         .role(Role::Button)
                         .aria_label("cancel-instance-settings")
@@ -353,7 +300,7 @@ pub(crate) fn launch_settings_panel(
                         })),
                 )
                 .child(
-                    primary_button(tr(lang, "保存", "Save"), t)
+                    primary_button(tr(lang, "保存", "Save"), &t)
                         .id("instance-settings-save")
                         .role(Role::Button)
                         .aria_label("save-instance-settings")
@@ -365,16 +312,12 @@ pub(crate) fn launch_settings_panel(
                         })),
                 ),
         )
-        .into_any_element()
 }
-
 /// Read-only viewer for the selected instance's latest game log.
-pub(crate) fn log_panel(
-    state: &ShellState,
-    t: &ThemeTokens,
-    lang: sealy_core::config::Language,
-    cx: &mut Context<SealyShell>,
-) -> AnyElement {
+pub(crate) fn logs_sheet(sheet: Sheet, state: &ShellState, cx: &mut Context<SealyShell>) -> Sheet {
+    let t = state.theme();
+    let lang = state.language();
+    let count = state.logs_lines.len();
     let lines = state
         .logs_lines
         .iter()
@@ -388,14 +331,15 @@ pub(crate) fn log_panel(
         })
         .collect::<Vec<_>>();
 
-    let body = if lines.is_empty() {
+    let body: AnyElement = if lines.is_empty() {
         div()
-            .flex_1()
+            .w_full()
             .flex()
             .flex_col()
             .items_center()
             .justify_center()
             .gap(px(8.0))
+            .py(px(48.0))
             .child(
                 Icon::new(IconName::ScrollText)
                     .w(px(24.0))
@@ -411,11 +355,7 @@ pub(crate) fn log_panel(
     } else {
         div()
             .id("instance-log-lines")
-            .flex_1()
-            .min_h(px(0.0))
-            .overflow_y_scrollbar()
-            .px(px(14.0))
-            .py(px(10.0))
+            .w_full()
             .flex()
             .flex_col()
             .gap(px(1.0))
@@ -423,40 +363,24 @@ pub(crate) fn log_panel(
             .into_any_element()
     };
 
-    div()
-        .absolute()
-        .occlude()
-        .top(px(0.0))
-        .right(px(0.0))
-        .bottom(px(0.0))
-        .w(px(720.0))
-        .flex()
-        .flex_col()
+    sheet
+        .size(DefiniteLength::Absolute(px(720.0).into()))
         .bg(rgb(t.surface))
-        .border_l_1()
         .border_color(rgb(t.line))
-        .child(
+        .title(
             div()
-                .h(px(56.0))
-                .flex_shrink_0()
-                .px(px(20.0))
                 .flex()
                 .items_center()
                 .gap(px(10.0))
-                .border_b_1()
-                .border_color(rgb(t.line))
                 .child(
                     div()
-                        .flex_1()
                         .flex()
                         .flex_col()
-                        .child(
-                            div()
-                                .text_size(px(14.0))
-                                .font_weight(FontWeight::SEMIBOLD)
-                                .text_color(rgb(t.text))
-                                .child(tr(lang, "游戏日志", "Game log")),
-                        )
+                        .child(div().text_color(rgb(t.text)).child(tr(
+                            lang,
+                            "游戏日志",
+                            "Game log",
+                        )))
                         .child(
                             div()
                                 .text_size(px(11.0))
@@ -464,38 +388,14 @@ pub(crate) fn log_panel(
                                 .child(state.logs_title.clone()),
                         ),
                 )
-                .child(mono(format!("{} 行", state.logs_lines.len()), t))
-                .child(
-                    div()
-                        .id("instance-logs-close")
-                        .role(Role::Button)
-                        .aria_label("close-instance-logs")
-                        .w(px(28.0))
-                        .h(px(28.0))
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .rounded(px(theme::RADIUS_TILE))
-                        .cursor_pointer()
-                        .hover(move |style| style.bg(rgb(t.line_soft)))
-                        .child(
-                            Icon::new(IconName::X)
-                                .w(px(15.0))
-                                .h(px(15.0))
-                                .text_color(rgb(t.muted)),
-                        )
-                        .on_click(cx.listener(|shell, _, _, cx| {
-                            shell.state.close_logs();
-                            cx.notify();
-                        })),
-                ),
+                .child(mono(format!("{} 行", count), &t)),
         )
         .child(body)
-        .child(
-            action_bar(t)
+        .footer(
+            action_bar(&t)
                 .child(div().flex_1())
                 .child(
-                    quiet_button(tr(lang, "刷新", "Refresh"), t)
+                    quiet_button(tr(lang, "刷新", "Refresh"), &t)
                         .id("instance-logs-refresh")
                         .role(Role::Button)
                         .aria_label("refresh-instance-logs")
@@ -505,7 +405,7 @@ pub(crate) fn log_panel(
                         })),
                 )
                 .child(
-                    quiet_button(tr(lang, "打开日志目录", "Open log folder"), t)
+                    quiet_button(tr(lang, "打开日志目录", "Open log folder"), &t)
                         .id("instance-logs-folder")
                         .role(Role::Button)
                         .aria_label("open-log-folder")
@@ -515,9 +415,7 @@ pub(crate) fn log_panel(
                         })),
                 ),
         )
-        .into_any_element()
 }
-
 /// Inline editor for renaming the selected instance.
 fn rename_card(
     state: &ShellState,

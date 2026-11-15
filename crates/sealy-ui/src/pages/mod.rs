@@ -3,8 +3,8 @@
 mod accounts;
 mod downloads;
 mod home;
-mod instance;
-mod instances;
+pub(crate) mod instance;
+pub(crate) mod instances;
 mod oobe;
 mod settings;
 

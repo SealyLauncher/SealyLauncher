@@ -16,6 +16,14 @@
 
 ## [Unreleased]
 
+- 2026-11-15 — 实例启动设置、日志与崩溃分析改用组件 Sheet：
+  - 三处页面内自定义右侧浮层改为 gpui-component `Sheet`：实例启动设置（输入字段 + 保存/取消 footer）、游戏日志（行数标题 + 刷新/打开日志目录）、崩溃分析（摘要/发现/报告片段 + 重新分析/打开报告目录）。
+  - 新增统一 `SheetView` 状态同步（消息中心 / 启动设置 / 日志 / 崩溃）：按状态标志优先级打开，切换视图先关闭旧 Sheet 再打开新 Sheet；Sheet 关闭时回写对应状态标志，避免残留。
+  - 验证：实机打开并关闭三个 Sheet（X 与 Esc）、消息中心仍正常；`cargo fmt`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace` 全绿（80 通过 / 2 忽略）；截图 design/preview/gpui-components-sheet-{launch-settings,logs,crash}.png。
+  - 说明：账号/离线/外置表单与新建实例仍是页面内联视图（内部使用组件 Input/Button/Select），不属于浮层。
+
+
+
 - 2026-11-15 — 首页磁贴与主题预览改用组件 Button：
   - 首页导航小磁贴（首页 / 下载 / 账号 / 设置）、实例中磁贴、「安装新版本」宽磁贴由自定义 Div 改为 `UiButton`（新增 `components::tile_button` 适配层），保留原尺寸、配色与图标布局，获得组件悬停/焦点态；实测点击「下载」磁贴可正常导航。
   - 设置页主题预览卡片（纸张 / 墨色 / 陶土 / 青瓷）改为组件 Button，点击切换主题并持久化；实测从陶土切回纸张，`settings.json` 中 `theme=paper`。

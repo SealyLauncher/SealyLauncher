@@ -1064,6 +1064,13 @@ pub trait SkinProvider: Send + Sync;
 - 失败恢复与清理：`write_pending`/`reconcile_pending`/`clear_update_cache`；更新脚本删除安装包与暂存目录。
 - 启动检查：`update.auto_check`（默认开）+ 设置页开关；发现新版本用 toast 提示并预填更新卡片。
 - 签名：新增 `docs/SIGNING.md`（Windows OV/EV、Azure Trusted Signing、SignPath/Certum；macOS Developer ID + notarytool；Linux GPG 校验）。当前发布仍未做商业签名。
+### 20.26 页面侧滑面板统一为 Sheet（2026-11-15）
+
+- `launch_settings_panel`、`log_panel`、`crash_panel` 重写为 `launch_settings_sheet` / `logs_sheet` / `crash_sheet`：内容去掉绝对定位与自绘标题/关闭按钮，使用 Sheet 的标题、关闭按钮、遮罩、滚动 body 与 footer；输入仍为组件 Input，按钮为 UiButton。
+- `SealyShell` 增加 `active_sheet: Option<SheetView>` 与 `sync_sheets`：按消息中心 → 崩溃 → 启动设置 → 日志的优先级由状态标志决定当前 Sheet；切换时先 `close_sheet` 再 `open_sheet`；`on_close` 在仍是当前视图时回写对应状态，旧视图关闭不会清掉新视图。
+- 关闭路径：组件 X、遮罩、Esc 均走 `on_close`；页面快捷键清标志后由同步逻辑关闭 Sheet。
+- 验证：三个 Sheet 均实机打开/关闭，消息中心回归正常；fmt/clippy/test 全绿（80 通过）；截图 `design/preview/gpui-components-sheet-{launch-settings,logs,crash}.png`。
+- 账号/离线/外置与新建实例属于页面内联视图（组件 Input/Button/Select），不是浮层，保持现状。
 ### 20.25 首页磁贴与主题预览组件化（2026-11-15）
 
 - 新增 `components::tile_button`（UiButton 适配层）：固定宽高/内边距/底色/边框，子元素通过单个 `size_full` 容器铺满，保留磁贴的图标与文字布局。

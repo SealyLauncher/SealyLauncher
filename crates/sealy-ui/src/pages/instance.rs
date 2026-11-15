@@ -370,27 +370,13 @@ pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyEle
                         })),
                 ),
         )
-        .children(
-            state
-                .instance_settings_open
-                .then(|| super::instances::launch_settings_panel(state, &t, lang, cx)),
-        )
-        .children(
-            state
-                .logs_open
-                .then(|| super::instances::log_panel(state, &t, lang, cx)),
-        )
-        .children(state.crash_open.then(|| crash_panel(state, &t, lang, cx)))
         .into_any_element()
 }
 
-/// Right-hand panel with the crash analysis.
-fn crash_panel(
-    state: &ShellState,
-    t: &ThemeTokens,
-    lang: sealy_core::config::Language,
-    cx: &mut Context<SealyShell>,
-) -> AnyElement {
+/// Crash analysis sheet.
+pub(crate) fn crash_sheet(sheet: Sheet, state: &ShellState, cx: &mut Context<SealyShell>) -> Sheet {
+    let t = state.theme();
+    let lang = state.language();
     let report = state.crash_view.clone().unwrap_or_default();
     let summary = if report.summary.is_empty() {
         tr(lang, "没有可用的崩溃摘要", "No crash summary available").to_owned()
@@ -436,68 +422,18 @@ fn crash_panel(
         .as_ref()
         .and_then(|path| path.parent().map(std::path::Path::to_path_buf));
 
-    div()
-        .absolute()
-        .occlude()
-        .top(px(0.0))
-        .right(px(0.0))
-        .bottom(px(0.0))
-        .w(px(720.0))
-        .flex()
-        .flex_col()
+    sheet
+        .size(DefiniteLength::Absolute(px(720.0).into()))
         .bg(rgb(t.surface))
-        .border_l_1()
         .border_color(rgb(t.line))
-        .child(
+        .title(
             div()
-                .h(px(56.0))
-                .flex_shrink_0()
-                .px(px(20.0))
-                .flex()
-                .items_center()
-                .gap(px(10.0))
-                .border_b_1()
-                .border_color(rgb(t.line))
-                .child(
-                    div()
-                        .flex_1()
-                        .text_size(px(14.0))
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(rgb(t.text))
-                        .child(tr(lang, "崩溃分析", "Crash analysis")),
-                )
-                .child(
-                    div()
-                        .id("crash-close")
-                        .role(Role::Button)
-                        .aria_label("close-crash")
-                        .w(px(28.0))
-                        .h(px(28.0))
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .rounded(px(theme::RADIUS_TILE))
-                        .cursor_pointer()
-                        .hover(move |style| style.bg(rgb(t.line_soft)))
-                        .child(
-                            Icon::new(IconName::X)
-                                .w(px(15.0))
-                                .h(px(15.0))
-                                .text_color(rgb(t.muted)),
-                        )
-                        .on_click(cx.listener(|shell, _, _, cx| {
-                            shell.state.close_crash_report();
-                            cx.notify();
-                        })),
-                ),
+                .text_color(rgb(t.text))
+                .child(tr(lang, "崩溃分析", "Crash analysis")),
         )
         .child(
             div()
-                .flex_1()
-                .min_h(px(0.0))
-                .id("crash-body")
-                .overflow_y_scrollbar()
-                .p(px(20.0))
+                .w_full()
                 .flex()
                 .flex_col()
                 .gap(px(12.0))
@@ -524,10 +460,10 @@ fn crash_panel(
                 )
                 .children(excerpt),
         )
-        .child(
-            action_bar(t)
+        .footer(
+            action_bar(&t)
                 .child(
-                    quiet_button(tr(lang, "重新分析", "Analyse again"), t)
+                    quiet_button(tr(lang, "重新分析", "Analyse again"), &t)
                         .id("crash-refresh")
                         .role(Role::Button)
                         .aria_label("refresh-crash")
@@ -538,7 +474,7 @@ fn crash_panel(
                 )
                 .child(div().flex_1())
                 .child(
-                    quiet_button(tr(lang, "打开报告目录", "Open report folder"), t)
+                    quiet_button(tr(lang, "打开报告目录", "Open report folder"), &t)
                         .id("crash-folder")
                         .role(Role::Button)
                         .aria_label("open-crash-folder")
@@ -551,9 +487,7 @@ fn crash_panel(
                         })),
                 ),
         )
-        .into_any_element()
 }
-
 /// Empty state when there is no instance to show.
 fn empty(
     _state: &ShellState,
