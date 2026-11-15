@@ -25,6 +25,7 @@
   - 自动检查：新增设置 update.auto_check（默认开）与「启动时检查更新」开关，启动后静默检查并在有新版本时提示；检查失败不打扰用户。
   - 实测：Windows 沙箱 debug 版（新代码）→ 真实 v0.1.36 发布包，UI 下载→校验→暂存→替换→自动重启成功，update.log 记录 starting/finished，无 .bat/.old 残留；另验证 pending 恢复：伪造 pending 后启动会清理缓存（截图 design/preview/gpui-update-progress.png 等）。
   - 新增 [docs/SIGNING.md](docs/SIGNING.md)：Windows/macOS/Linux 代码签名获取途径、CI 接入方式与当前 SmartScreen/Gatekeeper 限制说明。
+  - 补充实测：发布版 v0.1.37 → v0.1.38 走完整 UI 更新（进度条 0.0/8.5 MB + 取消按钮可见 → 校验 → 暂存 → 替换 → 重启），update.log 记录 starting/finished，updates/ 与 .bat/.old 均无残留；下载取消路径有单测（半成品文件被删除）。
 
 - 2026-11-15 — 设置页侧栏、内存控制、macOS 窗口与菜单栏：
   - 设置页改为「外观 / 下载 / Java 与内存 / 网络与目录 / 启动器」五类侧栏（每类带图标），内容按分类分开显示；主题、缩放、语言、动效、下载源、Java、代理、目录、更新与维护各自归位。
