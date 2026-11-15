@@ -16,6 +16,14 @@
 
 ## [Unreleased]
 
+- 2026-11-15 — 首页磁贴与主题预览改用组件 Button：
+  - 首页导航小磁贴（首页 / 下载 / 账号 / 设置）、实例中磁贴、「安装新版本」宽磁贴由自定义 Div 改为 `UiButton`（新增 `components::tile_button` 适配层），保留原尺寸、配色与图标布局，获得组件悬停/焦点态；实测点击「下载」磁贴可正常导航。
+  - 设置页主题预览卡片（纸张 / 墨色 / 陶土 / 青瓷）改为组件 Button，点击切换主题并持久化；实测从陶土切回纸张，`settings.json` 中 `theme=paper`。
+  - 验证：`cargo fmt`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace` 全绿（80 通过 / 2 忽略）；截图 design/preview/gpui-components-{tiles,swatches}.png。
+  - 待办：实例启动设置侧滑、日志面板、离线/外置账号输入浮层仍为自定义浮层，可迁移到 Sheet/Dialog 后做最终全站盘点。
+
+
+
 - 2026-11-15 — toast 迁移到组件 Notification：
   - 应用内提示从自定义底部浮层改为 gpui-component `Notification`（右上角浮层、组件关闭按钮、自动隐藏、点击关闭），状态仍由 `ShellState.toast` 驱动；渲染帧用 `defer` 推送并按 toast id 原位替换，关闭时回写状态。
   - 撤销操作改用组件 Button 作为 Notification action；实测删除账号后出现「已删除账号 … / 撤销」通知，点击「撤销」后账号恢复（10 个）。

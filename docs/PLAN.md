@@ -1064,6 +1064,13 @@ pub trait SkinProvider: Send + Sync;
 - 失败恢复与清理：`write_pending`/`reconcile_pending`/`clear_update_cache`；更新脚本删除安装包与暂存目录。
 - 启动检查：`update.auto_check`（默认开）+ 设置页开关；发现新版本用 toast 提示并预填更新卡片。
 - 签名：新增 `docs/SIGNING.md`（Windows OV/EV、Azure Trusted Signing、SignPath/Certum；macOS Developer ID + notarytool；Linux GPG 校验）。当前发布仍未做商业签名。
+### 20.25 首页磁贴与主题预览组件化（2026-11-15）
+
+- 新增 `components::tile_button`（UiButton 适配层）：固定宽高/内边距/底色/边框，子元素通过单个 `size_full` 容器铺满，保留磁贴的图标与文字布局。
+- 首页 `small_tile`（导航）、`medium_tile`（实例）、`wide_tile`（安装新版本）返回 `UiButton`；`nav_tile`、实例磁贴与安装磁贴的 `.id/.role/.aria_label/.on_click` 链不变，点击导航实测通过。
+- 设置页 `swatch` 改为 `tile_button` + 单列内容（色块 + 标签），点击切换主题并持久化，实测切回纸张后 `theme=paper`。
+- 验证：fmt/clippy/test 全绿（80 通过）；截图 `design/preview/gpui-components-{tiles,swatches}.png`。
+- 待办：实例启动设置/日志侧滑、离线/外置账号输入浮层仍是自定义浮层，迁移到 Sheet/Dialog 后做最终盘点。
 ### 20.24 toast 迁移到组件 Notification（2026-11-15）
 
 - `ShellState.toast` 仍是唯一状态源（id/文本/可选撤销/5 秒 deadline）；`SealyShell::sync_toast_notification` 在渲染帧比较 `notified_toast`，用 `window.defer` 调 `push_notification` / `remove_notification1::<ToastNote>(id)`，实现原位替换与到期移除。

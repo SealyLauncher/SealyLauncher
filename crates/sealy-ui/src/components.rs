@@ -268,100 +268,131 @@ pub fn tile(t: &ThemeTokens) -> Div {
         .hover(move |s| s.border_color(rgb(t.text)))
 }
 
-/// Small square tile: icon only.
-pub fn small_tile(icon: IconName, active: bool, t: &ThemeTokens) -> Div {
-    let base = tile(t)
-        .w(px(theme::TILE_SM))
-        .h(px(theme::TILE_SM))
-        .flex()
-        .items_center()
-        .justify_center();
+/// Component button shell used by the home tiles and theme swatches.
+#[track_caller]
+pub fn tile_button(
+    t: &ThemeTokens,
+    width: f32,
+    height: f32,
+    pad: f32,
+    bg: u32,
+    border: u32,
+) -> UiButton {
+    let style = style_of(
+        div()
+            .w(px(width))
+            .h(px(height))
+            .p(px(pad))
+            .rounded(px(theme::RADIUS_TILE))
+            .bg(rgb(bg))
+            .border_1()
+            .border_color(rgb(border))
+            .text_color(rgb(t.text)),
+    );
+    UiButton::new(
+        UiButtonKind::Quiet,
+        None,
+        None,
+        style,
+        (hsla(bg), hsla(t.text), hsla(t.line_soft), hsla(t.line_soft)),
+        button_id(std::panic::Location::caller(), "tile"),
+    )
+}
 
-    if active {
-        base.bg(rgb(t.block)).border_color(rgb(t.block)).child(
-            Icon::new(icon)
-                .w(px(22.0))
-                .h(px(22.0))
-                .text_color(rgb(t.block_text)),
-        )
+/// Small square tile: icon only.
+pub fn small_tile(icon: IconName, active: bool, t: &ThemeTokens) -> UiButton {
+    let (bg, border, fg) = if active {
+        (t.block, t.block, t.block_text)
     } else {
-        base.child(
-            Icon::new(icon)
-                .w(px(22.0))
-                .h(px(22.0))
-                .text_color(rgb(t.text)),
-        )
-    }
+        (t.surface, t.line, t.text)
+    };
+    tile_button(t, theme::TILE_SM, theme::TILE_SM, 0.0, bg, border).child(
+        div()
+            .size_full()
+            .flex()
+            .items_center()
+            .justify_center()
+            .child(Icon::new(icon).w(px(22.0)).h(px(22.0)).text_color(rgb(fg))),
+    )
 }
 
 /// Medium tile: icon above a label.
-pub fn medium_tile(icon: IconName, label: impl Into<SharedString>, t: &ThemeTokens) -> Div {
+pub fn medium_tile(icon: IconName, label: impl Into<SharedString>, t: &ThemeTokens) -> UiButton {
     let label: SharedString = label.into();
-    tile(t)
-        .w(px(theme::TILE_MD))
-        .h(px(theme::TILE_MD))
-        .flex()
-        .flex_col()
-        .justify_end()
-        .gap(px(10.0))
-        .p(px(14.0))
-        .child(
-            Icon::new(icon)
-                .w(px(24.0))
-                .h(px(24.0))
-                .text_color(rgb(t.text)),
-        )
-        .child(
-            div()
-                .text_size(px(13.0))
-                .font_weight(FontWeight::SEMIBOLD)
-                .text_color(rgb(t.text))
-                .child(label),
-        )
+    tile_button(t, theme::TILE_MD, theme::TILE_MD, 14.0, t.surface, t.line).child(
+        div()
+            .size_full()
+            .flex()
+            .flex_col()
+            .justify_end()
+            .gap(px(10.0))
+            .child(
+                Icon::new(icon)
+                    .w(px(24.0))
+                    .h(px(24.0))
+                    .text_color(rgb(t.text)),
+            )
+            .child(
+                div()
+                    .text_size(px(13.0))
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_color(rgb(t.text))
+                    .child(label),
+            ),
+    )
 }
 
 /// Wide tile: framed icon, label, trailing arrow.
-pub fn wide_tile(icon: IconName, label: impl Into<SharedString>, t: &ThemeTokens) -> Div {
+pub fn wide_tile(icon: IconName, label: impl Into<SharedString>, t: &ThemeTokens) -> UiButton {
     let label: SharedString = label.into();
-    tile(t)
-        .w(px(theme::TILE_MD * 2.0 + theme::TILE_GAP))
-        .h(px(theme::TILE_MD))
-        .flex()
-        .items_center()
-        .gap(px(16.0))
-        .px(px(20.0))
-        .child(
-            div()
-                .w(px(54.0))
-                .h(px(54.0))
-                .flex_shrink_0()
-                .flex()
-                .items_center()
-                .justify_center()
-                .rounded(px(theme::RADIUS_TILE))
-                .border_1()
-                .border_color(rgb(t.line))
-                .child(
-                    Icon::new(icon)
-                        .w(px(26.0))
-                        .h(px(26.0))
-                        .text_color(rgb(t.text)),
-                ),
-        )
-        .child(
-            div()
-                .text_size(px(17.0))
-                .font_weight(FontWeight::SEMIBOLD)
-                .text_color(rgb(t.text))
-                .child(label),
-        )
-        .child(div().flex_1())
-        .child(
-            Icon::new(IconName::ArrowRight)
-                .w(px(15.0))
-                .h(px(15.0))
-                .text_color(rgb(t.faint)),
-        )
+    tile_button(
+        t,
+        theme::TILE_MD * 2.0 + theme::TILE_GAP,
+        theme::TILE_MD,
+        0.0,
+        t.surface,
+        t.line,
+    )
+    .child(
+        div()
+            .size_full()
+            .flex()
+            .items_center()
+            .gap(px(16.0))
+            .px(px(20.0))
+            .child(
+                div()
+                    .w(px(54.0))
+                    .h(px(54.0))
+                    .flex_shrink_0()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .rounded(px(theme::RADIUS_TILE))
+                    .border_1()
+                    .border_color(rgb(t.line))
+                    .child(
+                        Icon::new(icon)
+                            .w(px(26.0))
+                            .h(px(26.0))
+                            .text_color(rgb(t.text)),
+                    ),
+            )
+            .child(
+                div()
+                    .text_size(px(17.0))
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_color(rgb(t.text))
+                    .child(label),
+            )
+            .child(div().flex_1())
+            .child(
+                Icon::new(IconName::ArrowRight)
+                    .w(px(15.0))
+                    .h(px(15.0))
+                    .text_color(rgb(t.faint)),
+            ),
+    )
 }
 
 /// Inverted block used for the notices tile.

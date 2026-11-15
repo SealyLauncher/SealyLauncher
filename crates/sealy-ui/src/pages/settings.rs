@@ -6,6 +6,7 @@ use sealy_core::config::{Language, MemoryMode, MotionSetting, ThemeName};
 use crate::app::SealyShell;
 use crate::components::{
     action_bar, choice_button, field_row, head_band_back, mono, nav_button, quiet_button,
+    tile_button,
 };
 use crate::i18n::tr;
 use crate::kit::*;
@@ -899,58 +900,56 @@ fn swatch(
         ThemeName::Celadon => tr(lang, "青瓷", "Celadon"),
     };
 
-    div()
-        .id(("theme", index))
-        .role(Role::Button)
-        .aria_label(label)
-        .w(px(96.0))
-        .h(px(64.0))
-        .p(px(10.0))
-        .flex()
-        .flex_col()
-        .justify_between()
-        .rounded(px(theme::RADIUS_TILE))
-        .bg(rgb(preset.bg))
-        .border_1()
-        .border_color(if selected {
-            rgb(current.text)
-        } else {
-            rgb(current.line)
-        })
-        .cursor_pointer()
-        .hover(move |s| s.border_color(rgb(current.muted)))
-        .child(
-            div()
-                .flex()
-                .items_center()
-                .gap(px(6.0))
-                .child(
-                    div()
-                        .w(px(28.0))
-                        .h(px(12.0))
-                        .rounded(px(1.0))
-                        .bg(rgb(preset.block)),
-                )
-                .child(
-                    div()
-                        .w(px(10.0))
-                        .h(px(10.0))
-                        .rounded(px(1.0))
-                        .bg(rgb(preset.accent)),
-                ),
-        )
-        .child(
-            div()
-                .text_size(px(11.0))
-                .font_weight(FontWeight::MEDIUM)
-                .text_color(rgb(preset.text))
-                .child(label),
-        )
-        .on_click(cx.listener(move |shell, _, _, cx| {
-            shell.state.set_theme(name);
-            cx.notify();
-        }))
-        .into_any_element()
+    tile_button(
+        current,
+        96.0,
+        64.0,
+        10.0,
+        preset.bg,
+        if selected { current.text } else { current.line },
+    )
+    .id(("theme", index))
+    .role(Role::Button)
+    .aria_label(label.to_owned())
+    .child(
+        div()
+            .size_full()
+            .flex()
+            .flex_col()
+            .justify_between()
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(6.0))
+                    .child(
+                        div()
+                            .w(px(28.0))
+                            .h(px(12.0))
+                            .rounded(px(1.0))
+                            .bg(rgb(preset.block)),
+                    )
+                    .child(
+                        div()
+                            .w(px(10.0))
+                            .h(px(10.0))
+                            .rounded(px(1.0))
+                            .bg(rgb(preset.accent)),
+                    ),
+            )
+            .child(
+                div()
+                    .text_size(px(11.0))
+                    .font_weight(FontWeight::MEDIUM)
+                    .text_color(rgb(preset.text))
+                    .child(label),
+            ),
+    )
+    .on_click(cx.listener(move |shell, _, _, cx| {
+        shell.state.set_theme(name);
+        cx.notify();
+    }))
+    .into_any_element()
 }
 
 /// Status text and download button for the self-update row.
