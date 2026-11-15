@@ -10,16 +10,57 @@ pub fn user_agent() -> String {
     format!("SealyLauncher/{}", crate::version())
 }
 
+/// Process-wide proxy address, set from the saved settings at startup.
+static PROXY: std::sync::OnceLock<std::sync::RwLock<Option<String>>> = std::sync::OnceLock::new();
+
+fn proxy_cell() -> &'static std::sync::RwLock<Option<String>> {
+    PROXY.get_or_init(|| std::sync::RwLock::new(None))
+}
+
+/// Configures the proxy used by every request.
+pub fn set_proxy(proxy: Option<String>) {
+    if let Ok(mut cell) = proxy_cell().write() {
+        *cell = proxy.filter(|value| !value.trim().is_empty());
+    }
+}
+
+/// Current proxy address, when one is configured.
+pub fn proxy() -> Option<String> {
+    proxy_cell().read().ok().and_then(|cell| cell.clone())
+}
+
+/// Splits `host:port` (with an optional scheme) into its parts.
+pub fn split_host_port(value: &str) -> Option<(String, u16)> {
+    let trimmed = value.trim();
+    let without_scheme = trimmed
+        .split_once("://")
+        .map(|(_, rest)| rest)
+        .unwrap_or(trimmed);
+    let (host, port) = without_scheme.rsplit_once(':')?;
+    if host.is_empty() {
+        return None;
+    }
+    let port = port.trim_end_matches('/').parse::<u16>().ok()?;
+    Some((host.to_owned(), port))
+}
+
 /// Builds a `ureq` agent with the native TLS backend and sane timeouts.
 pub fn agent() -> Result<ureq::Agent, CoreError> {
     let connector = ureq::native_tls::TlsConnector::new()
         .map_err(|err| CoreError::Network(format!("tls backend: {err}")))?;
 
-    Ok(ureq::AgentBuilder::new()
+    let mut builder = ureq::AgentBuilder::new()
         .tls_connector(std::sync::Arc::new(connector))
         .timeout_connect(Duration::from_secs(8))
-        .timeout(Duration::from_secs(60))
-        .build())
+        .timeout(Duration::from_secs(60));
+
+    if let Some(address) = proxy() {
+        let parsed = ureq::Proxy::new(&address)
+            .map_err(|err| CoreError::Network(format!("代理 {address} 无效: {err}")))?;
+        builder = builder.proxy(parsed);
+    }
+
+    Ok(builder.build())
 }
 
 /// Fetches a URL as text.

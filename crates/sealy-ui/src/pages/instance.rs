@@ -281,6 +281,16 @@ pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyEle
                         })),
                 )
                 .child(
+                    quiet_button(tr(lang, "崩溃分析", "Crash report"), &t)
+                        .id("detail-crash")
+                        .role(Role::Button)
+                        .aria_label("crash-report")
+                        .on_click(cx.listener(|shell, _, _, cx| {
+                            shell.state.open_crash_report();
+                            cx.notify();
+                        })),
+                )
+                .child(
                     quiet_button(tr(lang, "日志", "Logs"), &t)
                         .id("detail-logs")
                         .role(Role::Button)
@@ -329,6 +339,177 @@ pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyEle
             state
                 .logs_open
                 .then(|| super::instances::log_panel(state, &t, lang, cx)),
+        )
+        .children(state.crash_open.then(|| crash_panel(state, &t, lang, cx)))
+        .into_any_element()
+}
+
+/// Right-hand panel with the crash analysis.
+fn crash_panel(
+    state: &ShellState,
+    t: &ThemeTokens,
+    lang: sealy_core::config::Language,
+    cx: &mut Context<SealyShell>,
+) -> AnyElement {
+    let report = state.crash_view.clone().unwrap_or_default();
+    let summary = if report.summary.is_empty() {
+        tr(lang, "没有可用的崩溃摘要", "No crash summary available").to_owned()
+    } else {
+        report.summary.clone()
+    };
+    let source = report
+        .source
+        .as_ref()
+        .map(|path| path.display().to_string())
+        .unwrap_or_default();
+
+    let findings = report
+        .findings
+        .iter()
+        .enumerate()
+        .map(|(index, finding)| {
+            div()
+                .id(("crash-finding", index))
+                .py(px(8.0))
+                .border_b_1()
+                .border_color(rgb(t.line_soft))
+                .text_size(px(12.0))
+                .text_color(rgb(t.text))
+                .child(finding.text(lang).to_owned())
+        })
+        .collect::<Vec<_>>();
+
+    let excerpt = report
+        .excerpt
+        .iter()
+        .map(|line| {
+            div()
+                .text_size(px(10.0))
+                .font_family("Consolas")
+                .text_color(rgb(t.muted))
+                .child(line.clone())
+        })
+        .collect::<Vec<_>>();
+
+    let folder = report
+        .source
+        .as_ref()
+        .and_then(|path| path.parent().map(std::path::Path::to_path_buf));
+
+    div()
+        .absolute()
+        .occlude()
+        .top(px(0.0))
+        .right(px(0.0))
+        .bottom(px(0.0))
+        .w(px(720.0))
+        .flex()
+        .flex_col()
+        .bg(rgb(t.surface))
+        .border_l_1()
+        .border_color(rgb(t.line))
+        .child(
+            div()
+                .h(px(56.0))
+                .flex_shrink_0()
+                .px(px(20.0))
+                .flex()
+                .items_center()
+                .gap(px(10.0))
+                .border_b_1()
+                .border_color(rgb(t.line))
+                .child(
+                    div()
+                        .flex_1()
+                        .text_size(px(14.0))
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_color(rgb(t.text))
+                        .child(tr(lang, "崩溃分析", "Crash analysis")),
+                )
+                .child(
+                    div()
+                        .id("crash-close")
+                        .role(Role::Button)
+                        .aria_label("close-crash")
+                        .w(px(28.0))
+                        .h(px(28.0))
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .rounded(px(theme::RADIUS_TILE))
+                        .cursor_pointer()
+                        .hover(move |style| style.bg(rgb(t.line_soft)))
+                        .child(
+                            Icon::new(IconName::X)
+                                .w(px(15.0))
+                                .h(px(15.0))
+                                .text_color(rgb(t.muted)),
+                        )
+                        .on_click(cx.listener(|shell, _, _, cx| {
+                            shell.state.close_crash_report();
+                            cx.notify();
+                        })),
+                ),
+        )
+        .child(
+            div()
+                .flex_1()
+                .min_h(px(0.0))
+                .id("crash-body")
+                .overflow_y_scroll()
+                .p(px(20.0))
+                .flex()
+                .flex_col()
+                .gap(px(12.0))
+                .child(
+                    div()
+                        .text_size(px(11.0))
+                        .text_color(rgb(t.muted))
+                        .child(source.clone()),
+                )
+                .child(
+                    div()
+                        .text_size(px(13.0))
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_color(rgb(t.text))
+                        .child(summary.clone()),
+                )
+                .children(findings)
+                .child(
+                    div()
+                        .mt(px(8.0))
+                        .text_size(px(11.0))
+                        .text_color(rgb(t.muted))
+                        .child(tr(lang, "报告片段", "Report excerpt")),
+                )
+                .children(excerpt),
+        )
+        .child(
+            action_bar(t)
+                .child(
+                    quiet_button(tr(lang, "重新分析", "Analyse again"), t)
+                        .id("crash-refresh")
+                        .role(Role::Button)
+                        .aria_label("refresh-crash")
+                        .on_click(cx.listener(|shell, _, _, cx| {
+                            shell.state.refresh_crash_report();
+                            cx.notify();
+                        })),
+                )
+                .child(div().flex_1())
+                .child(
+                    quiet_button(tr(lang, "打开报告目录", "Open report folder"), t)
+                        .id("crash-folder")
+                        .role(Role::Button)
+                        .aria_label("open-crash-folder")
+                        .on_click(cx.listener(move |shell, _, _, cx| {
+                            let target = folder
+                                .clone()
+                                .unwrap_or_else(|| shell.state.paths.game.clone());
+                            let _ = sealy_core::shell::spawn_open_helper(&target);
+                            cx.notify();
+                        })),
+                ),
         )
         .into_any_element()
 }

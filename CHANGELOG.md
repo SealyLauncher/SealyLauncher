@@ -16,6 +16,13 @@
 
 ## [Unreleased]
 
+- 2026-11-15 — B5 前半：代理、游戏目录切换、崩溃分析：
+  - 设置新增「HTTP 代理」（host:port，留空关闭）：写入配置后对后续所有 HTTP 请求生效（ureq 代理），并在启动游戏时注入 -Dhttp/https.proxyHost/proxyPort；格式非法会提示。
+  - 设置新增「游戏目录」切换：可指向任意磁盘目录（自动创建），切换后重新扫描已安装版本与 Java；持久化到 settings.json，下次启动仍生效。
+  - 新增 sealy-core::crash：从最新的 crash-reports/*.txt（含实例目录）或 logs/latest.log 提取摘要，按 10 类常见错误（OOM、Java 版本、NoSuchMethod/NoClassDefFound、重复模组、Mixin、模组依赖、OpenGL、权限、下载失败、NPE）给出中英文建议；4 个单元测试。
+  - 实例详情页新增「崩溃分析」面板（摘要、建议、报告片段、重新分析、打开报告目录），Esc 关闭；游戏进程非零退出后自动打开该面板。
+  - 实测：伪造 OOM 崩溃报告 → 面板显示摘要与“内存不足”建议（截图 design/preview/gpui-crash-analysis.png）；设置页网络卡片可见并可点开编辑。
+
 - 2026-11-15 — B4 整合包导入与导出：
   - 新增 sealy-core::modpack：解析 Modrinth .mrpack（modrinth.index.json + files/hashes/dependencies）与 CurseForge 包（manifest.json，读取 Minecraft 版本、modLoaders[0].id 与 overrides 目录）；路径安全校验拒绝 ../绝对路径；按 SHA-1 校验下载并支持已存在文件跳过；解压 overrides/、client-overrides/。
   - 整合包导出：把实例的 mods/config/resourcepacks/shaderpacks/scripts 写成合法 .mrpack（files 为空、内容放在 overrides），可直接再导入。

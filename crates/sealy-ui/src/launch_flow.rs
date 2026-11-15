@@ -85,9 +85,12 @@ pub(crate) fn start(state: &mut ShellState, instance: Instance, cx: &mut Context
         });
 
         match outcome.await {
-            Ok((status, tokens)) => {
+            Ok((status, tokens, crashed)) => {
                 let _ = this.update(cx, |shell, cx| {
                     shell.state.tokens = tokens;
+                    if crashed {
+                        shell.state.open_crash_report();
+                    }
                     shell.state.save_tokens();
                     shell.state.update_message(message_id, |row| {
                         row.tone = MessageTone::Done;
@@ -129,7 +132,7 @@ fn launch_blocking(
     account: sealy_core::accounts::Account,
     client_id: String,
     mut tokens: sealy_core::auth::TokenStore,
-) -> Result<(String, sealy_core::auth::TokenStore), String> {
+) -> Result<(String, sealy_core::auth::TokenStore, bool), String> {
     let document = root
         .join("versions")
         .join(&version_id)
@@ -167,6 +170,15 @@ fn launch_blocking(
     };
     let mut jvm_extra = jvm_extra;
     jvm_extra.extend(user_jvm.iter().cloned());
+    // Forward the configured proxy to the game's JVM.
+    if let Some((host, port)) =
+        sealy_core::net::proxy().and_then(|proxy| sealy_core::net::split_host_port(&proxy))
+    {
+        for scheme in ["http", "https"] {
+            jvm_extra.push(format!("-D{scheme}.proxyHost={host}"));
+            jvm_extra.push(format!("-D{scheme}.proxyPort={port}"));
+        }
+    }
 
     let spec = sealy_core::launch::LaunchSpec {
         root: &root,
@@ -191,9 +203,11 @@ fn launch_blocking(
         sealy_core::launch::spawn(&command, &instance_dir, &log).map_err(|err| err.to_string())?;
     let status = child.wait().map_err(|err| err.to_string())?;
 
+    let code = status.code().unwrap_or(-1);
     Ok((
-        format!("退出码 {} · {}", status.code().unwrap_or(-1), log.display()),
+        format!("退出码 {} · {}", code, log.display()),
         tokens,
+        code != 0,
     ))
 }
 

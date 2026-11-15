@@ -318,6 +318,130 @@ pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyEle
                                 &t,
                             )
                         })
+                        .child(row(
+                            tr(lang, "HTTP 代理", "HTTP proxy"),
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap(px(8.0))
+                                .child(
+                                    div()
+                                        .id("proxy-input")
+                                        .role(Role::Button)
+                                        .aria_label("proxy-input")
+                                        .h(px(30.0))
+                                        .w(px(260.0))
+                                        .px(px(10.0))
+                                        .flex()
+                                        .items_center()
+                                        .overflow_hidden()
+                                        .rounded(px(theme::RADIUS_TILE))
+                                        .border_1()
+                                        .border_color(rgb(if state.proxy_draft.is_some() {
+                                            t.text
+                                        } else {
+                                            t.line
+                                        }))
+                                        .cursor_pointer()
+                                        .text_size(px(11.0))
+                                        .text_color(rgb(if state.proxy_draft.is_some() {
+                                            t.text
+                                        } else if state.settings.network.proxy.is_empty() {
+                                            t.faint
+                                        } else {
+                                            t.text
+                                        }))
+                                        .on_click(cx.listener(|shell, _, _, cx| {
+                                            shell.state.proxy_draft =
+                                                Some(shell.state.settings.network.proxy.clone());
+                                            cx.notify();
+                                        }))
+                                        .child(state.proxy_draft.clone().unwrap_or_else(|| {
+                                            if state.settings.network.proxy.is_empty() {
+                                                tr(lang, "点击编辑代理", "Click to edit").to_owned()
+                                            } else {
+                                                state.settings.network.proxy.clone()
+                                            }
+                                        })),
+                                )
+                                .child(
+                                    quiet_button(tr(lang, "保存", "Save"), &t)
+                                        .id("proxy-save")
+                                        .role(Role::Button)
+                                        .aria_label("proxy-save")
+                                        .on_click(cx.listener(|shell, _, _, cx| {
+                                            let value =
+                                                shell.state.proxy_draft.clone().unwrap_or_else(
+                                                    || shell.state.settings.network.proxy.clone(),
+                                                );
+                                            shell.state.commit_proxy(value);
+                                            cx.notify();
+                                        })),
+                                ),
+                            &t,
+                        ))
+                        .child(row(
+                            tr(lang, "游戏目录", "Game folder"),
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap(px(8.0))
+                                .child(
+                                    div()
+                                        .id("game-dir-input")
+                                        .role(Role::Button)
+                                        .aria_label("game-dir-input")
+                                        .h(px(30.0))
+                                        .w(px(260.0))
+                                        .px(px(10.0))
+                                        .flex()
+                                        .items_center()
+                                        .overflow_hidden()
+                                        .rounded(px(theme::RADIUS_TILE))
+                                        .border_1()
+                                        .border_color(rgb(if state.game_dir_draft.is_some() {
+                                            t.text
+                                        } else {
+                                            t.line
+                                        }))
+                                        .cursor_pointer()
+                                        .text_size(px(11.0))
+                                        .text_color(rgb(t.text))
+                                        .on_click(cx.listener(|shell, _, _, cx| {
+                                            shell.state.game_dir_draft =
+                                                Some(shell.state.paths.game.display().to_string());
+                                            cx.notify();
+                                        }))
+                                        .child(state.game_dir_draft.clone().unwrap_or_else(|| {
+                                            state.paths.game.display().to_string()
+                                        })),
+                                )
+                                .child(
+                                    quiet_button(tr(lang, "切换", "Switch"), &t)
+                                        .id("game-dir-save")
+                                        .role(Role::Button)
+                                        .aria_label("game-dir-save")
+                                        .on_click(cx.listener(|shell, _, _, cx| {
+                                            let value =
+                                                shell.state.game_dir_draft.clone().unwrap_or_else(
+                                                    || shell.state.paths.game.display().to_string(),
+                                                );
+                                            shell.state.commit_game_dir(value);
+                                            cx.notify();
+                                        })),
+                                )
+                                .child(
+                                    quiet_button(tr(lang, "重置", "Reset"), &t)
+                                        .id("game-dir-reset")
+                                        .role(Role::Button)
+                                        .aria_label("game-dir-reset")
+                                        .on_click(cx.listener(|shell, _, _, cx| {
+                                            shell.state.commit_game_dir(String::new());
+                                            cx.notify();
+                                        })),
+                                ),
+                            &t,
+                        ))
                         .child(field_row(
                             tr(lang, "数据目录", "Data directory"),
                             data_dir,

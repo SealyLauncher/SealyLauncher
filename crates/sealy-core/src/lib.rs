@@ -9,6 +9,7 @@ pub mod assets;
 pub mod auth;
 pub mod authlib;
 pub mod config;
+pub mod crash;
 pub mod error;
 pub mod events;
 pub mod install;
@@ -54,14 +55,39 @@ pub struct Bootstrap {
 /// Resolves usable paths (falling back to per-user data), then loads settings.
 pub fn bootstrap() -> Result<Bootstrap, CoreError> {
     let exe = std::env::current_exe().ok();
-    let (paths, data_fallback) = LauncherPaths::prepare()?;
+    let (mut paths, data_fallback) = LauncherPaths::prepare()?;
     let settings = Settings::load_or_default(&paths.settings_file());
+    apply_runtime_settings(&mut paths, &settings)?;
     Ok(Bootstrap {
         paths,
         settings,
         data_fallback,
         translocated: exe.as_deref().is_some_and(LauncherPaths::is_translocated),
     })
+}
+
+/// Applies settings that live outside the launcher data directory.
+///
+/// The HTTP proxy is process-wide, and a custom game directory replaces the
+/// portable `.minecraft` folder for every game-related path.
+pub fn apply_runtime_settings(
+    paths: &mut LauncherPaths,
+    settings: &Settings,
+) -> Result<(), CoreError> {
+    crate::net::set_proxy(Some(settings.network.proxy.clone()));
+
+    if let Some(dir) = settings
+        .game_dir
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        let dir = std::path::PathBuf::from(dir);
+        std::fs::create_dir_all(&dir)?;
+        paths.game = dir;
+        paths.ensure()?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]

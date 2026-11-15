@@ -318,6 +318,14 @@ pub struct ShellState {
     pub delete_confirm_open: bool,
     /// Sidebar section shown on the instance detail page.
     pub instance_section: InstanceSection,
+    /// Inline proxy editor in the settings page.
+    pub proxy_draft: Option<String>,
+    /// Inline game-directory editor in the settings page.
+    pub game_dir_draft: Option<String>,
+    /// Whether the crash-analysis panel is open.
+    pub crash_open: bool,
+    /// Latest crash analysis, when one was requested.
+    pub crash_view: Option<sealy_core::crash::CrashReport>,
 }
 
 /// Sidebar sections of the instance detail page.
@@ -491,6 +499,10 @@ impl ShellState {
             last_instance_click: None,
             delete_confirm_open: false,
             instance_section: InstanceSection::default(),
+            proxy_draft: None,
+            game_dir_draft: None,
+            crash_open: false,
+            crash_view: None,
         }
     }
 
@@ -936,6 +948,82 @@ impl ShellState {
         sealy_core::addons::remove(&dir, kind, name).map_err(|err| err.to_string())
     }
 
+    /// Analyses the newest crash report and opens the panel.
+    pub fn open_crash_report(&mut self) {
+        self.crash_view = Some(sealy_core::crash::analyze(&self.paths.game));
+        self.crash_open = true;
+    }
+
+    /// Re-runs the analysis while the panel stays open.
+    pub fn refresh_crash_report(&mut self) {
+        self.crash_view = Some(sealy_core::crash::analyze(&self.paths.game));
+    }
+
+    /// Closes the crash-analysis panel.
+    pub fn close_crash_report(&mut self) {
+        self.crash_open = false;
+        self.crash_view = None;
+    }
+    /// Saves the HTTP proxy address and applies it to new requests.
+    pub fn commit_proxy(&mut self, value: String) {
+        let trimmed = value.trim().to_owned();
+        if !trimmed.is_empty() && sealy_core::net::split_host_port(&trimmed).is_none() {
+            let lang = self.language();
+            self.notify(crate::i18n::tr(
+                lang,
+                "代理格式应为 host:port",
+                "Use host:port for the proxy",
+            ));
+            return;
+        }
+        if let Some(draft) = &mut self.proxy_draft {
+            draft.clear();
+        }
+        self.proxy_draft = None;
+        self.settings.network.proxy = trimmed.clone();
+        sealy_core::net::set_proxy(Some(trimmed.clone()));
+        self.persist();
+        let lang = self.language();
+        let message = if trimmed.is_empty() {
+            crate::i18n::tr(lang, "已关闭代理", "Proxy disabled").to_owned()
+        } else {
+            format!(
+                "{} {trimmed}",
+                crate::i18n::tr(lang, "代理已启用", "Proxy enabled")
+            )
+        };
+        self.notify(message);
+    }
+
+    /// Switches the game directory and reloads installed versions/Java.
+    pub fn commit_game_dir(&mut self, value: String) {
+        let trimmed = value.trim().to_owned();
+        self.game_dir_draft = None;
+        self.settings.game_dir = if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed.clone())
+        };
+        let mut paths = self.paths.clone();
+        if let Err(err) = sealy_core::apply_runtime_settings(&mut paths, &self.settings) {
+            let lang = self.language();
+            self.notify(format!(
+                "{} {err}",
+                crate::i18n::tr(lang, "无法切换目录:", "Cannot switch:")
+            ));
+            return;
+        }
+        self.paths = paths;
+        self.persist();
+        self.installed = sealy_core::version::installed(&self.paths.game);
+        self.java = sealy_core::java::detect(&self.paths.game);
+        let lang = self.language();
+        let line = self.paths.game.display().to_string();
+        self.notify(format!(
+            "{} {line}",
+            crate::i18n::tr(lang, "游戏目录已切换", "Game folder")
+        ));
+    }
     /// Minecraft version an installed version id resolves to.
     pub fn version_game_version(&self, version_id: &str) -> String {
         let document = self

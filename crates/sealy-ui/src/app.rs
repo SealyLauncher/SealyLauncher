@@ -304,6 +304,13 @@ impl SealyShell {
             return;
         }
 
+        // The crash analysis closes on Escape.
+        if keystroke.key == "escape" && self.state.crash_open {
+            self.state.close_crash_report();
+            cx.notify();
+            return;
+        }
+
         // The log viewer closes on Escape.
         if keystroke.key == "escape" && self.state.logs_open {
             self.state.close_logs();
@@ -311,6 +318,56 @@ impl SealyShell {
             return;
         }
 
+        // The settings-page text inputs capture typing while they are open.
+        if self.state.proxy_draft.is_some() || self.state.game_dir_draft.is_some() {
+            let proxy = self.state.proxy_draft.is_some();
+            match keystroke.key.as_str() {
+                "escape" => {
+                    if proxy {
+                        self.state.proxy_draft = None;
+                    } else {
+                        self.state.game_dir_draft = None;
+                    }
+                }
+                "enter" => {
+                    let value = if proxy {
+                        self.state.proxy_draft.take().unwrap_or_default()
+                    } else {
+                        self.state.game_dir_draft.take().unwrap_or_default()
+                    };
+                    if proxy {
+                        self.state.commit_proxy(value);
+                    } else {
+                        self.state.commit_game_dir(value);
+                    }
+                }
+                "backspace" => {
+                    let draft = if proxy {
+                        &mut self.state.proxy_draft
+                    } else {
+                        &mut self.state.game_dir_draft
+                    };
+                    if let Some(text) = draft {
+                        text.pop();
+                    }
+                }
+                key if key.chars().count() == 1 => {
+                    if let Some(ch) = key.chars().next() {
+                        let draft = if proxy {
+                            &mut self.state.proxy_draft
+                        } else {
+                            &mut self.state.game_dir_draft
+                        };
+                        if let Some(text) = draft {
+                            text.push(ch);
+                        }
+                    }
+                }
+                _ => {}
+            }
+            cx.notify();
+            return;
+        }
         // The "add Java" input captures typing while it is open.
         if self.state.java_path_draft.is_some() {
             match keystroke.key.as_str() {

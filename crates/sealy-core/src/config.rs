@@ -216,8 +216,28 @@ pub struct Settings {
     /// Debugging.
     #[serde(default)]
     pub debug: DebugSettings,
+    /// Network proxy.
+    #[serde(default)]
+    pub network: NetworkSettings,
+    /// Custom game directory; None keeps the portable .minecraft.
+    #[serde(default)]
+    pub game_dir: Option<String>,
 }
 
+/// Network settings.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NetworkSettings {
+    /// Proxy address (`host:port`), empty when no proxy is used.
+    #[serde(default)]
+    pub proxy: String,
+}
+
+impl NetworkSettings {
+    /// Whether a proxy is configured.
+    pub fn enabled(&self) -> bool {
+        !self.proxy.trim().is_empty()
+    }
+}
 /// Debugging settings.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DebugSettings {
@@ -258,6 +278,8 @@ impl Default for Settings {
             motion: MotionSetting::default(),
             auth: AuthSettings::default(),
             debug: DebugSettings::default(),
+            network: NetworkSettings::default(),
+            game_dir: None,
         }
     }
 }
