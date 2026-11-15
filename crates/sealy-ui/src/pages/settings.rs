@@ -192,16 +192,32 @@ fn appearance_section(
                 .child(
                     choice_button("简体中文", lang == Language::ZhCn, t)
                         .id("lang-zh")
-                        .on_click(cx.listener(|shell, _, _, cx| {
+                        .role(Role::Button)
+                        .aria_label("lang-zh")
+                        .on_click(cx.listener(|shell, _, window, cx| {
                             shell.state.set_language(Language::ZhCn);
+                            crate::inputs::relocalize(
+                                &shell.state.inputs,
+                                Language::ZhCn,
+                                window,
+                                cx,
+                            );
                             cx.notify();
                         })),
                 )
                 .child(
                     choice_button("English", lang == Language::EnUs, t)
                         .id("lang-en")
-                        .on_click(cx.listener(|shell, _, _, cx| {
+                        .role(Role::Button)
+                        .aria_label("lang-en")
+                        .on_click(cx.listener(|shell, _, window, cx| {
                             shell.state.set_language(Language::EnUs);
+                            crate::inputs::relocalize(
+                                &shell.state.inputs,
+                                Language::EnUs,
+                                window,
+                                cx,
+                            );
                             cx.notify();
                         })),
                 ),
@@ -352,33 +368,19 @@ fn java_section(
         })
         .collect::<Vec<_>>();
 
-    let java_row = if let Some(draft) = state.java_path_draft.clone() {
+    let java_row = if state.java_path_draft.is_some() {
         row(
             tr(lang, "添加 Java", "Add Java"),
             div()
                 .flex()
                 .items_center()
                 .gap(px(8.0))
-                .child(
-                    div()
-                        .w(px(360.0))
-                        .h(px(30.0))
-                        .px(px(10.0))
-                        .flex()
-                        .items_center()
-                        .overflow_hidden()
-                        .rounded(px(theme::RADIUS_TILE))
-                        .border_1()
-                        .border_color(rgb(t.text))
-                        .text_size(px(11.0))
-                        .text_color(rgb(t.text))
-                        .child(if draft.is_empty() {
-                            tr(lang, "/path/to/java 然后回车", "/path/to/java, then Enter")
-                                .to_owned()
-                        } else {
-                            draft
-                        }),
-                )
+                .child(crate::inputs::field(
+                    state,
+                    crate::inputs::InputField::JavaPath,
+                    360.0,
+                    t,
+                ))
                 .child(
                     quiet_button(tr(lang, "取消", "Cancel"), t)
                         .id("java-cancel")
@@ -398,9 +400,13 @@ fn java_section(
                 .id("java-add")
                 .role(Role::Button)
                 .aria_label("java-add")
-                .on_click(cx.listener(|shell, _, _, cx| {
-                    shell.state.begin_add_java();
-                    cx.notify();
+                .on_click(cx.listener(|shell, _, window, cx| {
+                    shell.open_input(
+                        crate::inputs::InputField::JavaPath,
+                        String::new(),
+                        window,
+                        cx,
+                    );
                 })),
             t,
         )
@@ -451,17 +457,32 @@ fn java_section(
         }
     });
 
-    let value_label = state
-        .memory_draft
-        .clone()
-        .map(|draft| {
-            if draft.is_empty() {
-                "MB".to_owned()
-            } else {
-                format!("{draft} MB")
-            }
-        })
-        .unwrap_or_else(|| format!("{memory} MB"));
+    let memory_editor: AnyElement = if state.memory_draft.is_some() {
+        crate::inputs::field(state, crate::inputs::InputField::Memory, 150.0, t)
+    } else {
+        div()
+            .id("memory-input")
+            .role(Role::Button)
+            .aria_label("memory-input")
+            .h(px(30.0))
+            .w(px(150.0))
+            .px(px(10.0))
+            .flex()
+            .items_center()
+            .justify_center()
+            .overflow_hidden()
+            .rounded(px(theme::RADIUS_TILE))
+            .border_1()
+            .border_color(rgb(t.line))
+            .cursor_pointer()
+            .text_size(px(11.0))
+            .text_color(rgb(t.text))
+            .on_click(cx.listener(|shell, _, window, cx| {
+                shell.open_input(crate::inputs::InputField::Memory, String::new(), window, cx);
+            }))
+            .child(format!("{memory} MB"))
+            .into_any_element()
+    };
 
     let common = [2048_u32, 4096, 8192]
         .into_iter()
@@ -560,34 +581,7 @@ fn java_section(
                         .items_center()
                         .gap(px(12.0))
                         .child(div().w(px(300.0)).children(slider))
-                        .child(
-                            div()
-                                .id("memory-input")
-                                .role(Role::Button)
-                                .aria_label("memory-input")
-                                .h(px(30.0))
-                                .w(px(96.0))
-                                .px(px(10.0))
-                                .flex()
-                                .items_center()
-                                .justify_center()
-                                .overflow_hidden()
-                                .rounded(px(theme::RADIUS_TILE))
-                                .border_1()
-                                .border_color(rgb(if state.memory_draft.is_some() {
-                                    t.text
-                                } else {
-                                    t.line
-                                }))
-                                .cursor_pointer()
-                                .text_size(px(11.0))
-                                .text_color(rgb(t.text))
-                                .on_click(cx.listener(|shell, _, _, cx| {
-                                    shell.state.begin_memory_draft();
-                                    cx.notify();
-                                }))
-                                .child(value_label),
-                        ),
+                        .child(memory_editor),
                 ),
         )
         .child(row(
@@ -637,6 +631,70 @@ fn network_section(
     lang: Language,
     cx: &mut Context<SealyShell>,
 ) -> AnyElement {
+    use crate::inputs::InputField;
+
+    let proxy_editor: AnyElement = if state.proxy_draft.is_some() {
+        crate::inputs::field(state, InputField::Proxy, 300.0, t)
+    } else {
+        div()
+            .id("proxy-input")
+            .role(Role::Button)
+            .aria_label("proxy-input")
+            .h(px(30.0))
+            .w(px(300.0))
+            .px(px(10.0))
+            .flex()
+            .items_center()
+            .overflow_hidden()
+            .rounded(px(theme::RADIUS_TILE))
+            .border_1()
+            .border_color(rgb(t.line))
+            .cursor_pointer()
+            .text_size(px(11.0))
+            .text_color(rgb(if state.settings.network.proxy.is_empty() {
+                t.faint
+            } else {
+                t.text
+            }))
+            .on_click(cx.listener(|shell, _, window, cx| {
+                let value = shell.state.settings.network.proxy.clone();
+                shell.open_input(InputField::Proxy, value, window, cx);
+            }))
+            .child(if state.settings.network.proxy.is_empty() {
+                tr(lang, "点击编辑代理", "Click to edit").to_owned()
+            } else {
+                state.settings.network.proxy.clone()
+            })
+            .into_any_element()
+    };
+
+    let game_editor: AnyElement = if state.game_dir_draft.is_some() {
+        crate::inputs::field(state, InputField::GameDir, 300.0, t)
+    } else {
+        div()
+            .id("game-dir-input")
+            .role(Role::Button)
+            .aria_label("game-dir-input")
+            .h(px(30.0))
+            .w(px(300.0))
+            .px(px(10.0))
+            .flex()
+            .items_center()
+            .overflow_hidden()
+            .rounded(px(theme::RADIUS_TILE))
+            .border_1()
+            .border_color(rgb(t.line))
+            .cursor_pointer()
+            .text_size(px(11.0))
+            .text_color(rgb(t.text))
+            .on_click(cx.listener(|shell, _, window, cx| {
+                let value = shell.state.paths.game.display().to_string();
+                shell.open_input(InputField::GameDir, value, window, cx);
+            }))
+            .child(state.paths.game.display().to_string())
+            .into_any_element()
+    };
+
     form(t)
         .child(row(
             tr(lang, "HTTP 代理", "HTTP proxy"),
@@ -644,46 +702,7 @@ fn network_section(
                 .flex()
                 .items_center()
                 .gap(px(8.0))
-                .child(
-                    div()
-                        .id("proxy-input")
-                        .role(Role::Button)
-                        .aria_label("proxy-input")
-                        .h(px(30.0))
-                        .w(px(260.0))
-                        .px(px(10.0))
-                        .flex()
-                        .items_center()
-                        .overflow_hidden()
-                        .rounded(px(theme::RADIUS_TILE))
-                        .border_1()
-                        .border_color(rgb(if state.proxy_draft.is_some() {
-                            t.text
-                        } else {
-                            t.line
-                        }))
-                        .cursor_pointer()
-                        .text_size(px(11.0))
-                        .text_color(rgb(if state.proxy_draft.is_some() {
-                            t.text
-                        } else if state.settings.network.proxy.is_empty() {
-                            t.faint
-                        } else {
-                            t.text
-                        }))
-                        .on_click(cx.listener(|shell, _, _, cx| {
-                            shell.state.proxy_draft =
-                                Some(shell.state.settings.network.proxy.clone());
-                            cx.notify();
-                        }))
-                        .child(state.proxy_draft.clone().unwrap_or_else(|| {
-                            if state.settings.network.proxy.is_empty() {
-                                tr(lang, "点击编辑代理", "Click to edit").to_owned()
-                            } else {
-                                state.settings.network.proxy.clone()
-                            }
-                        })),
-                )
+                .child(proxy_editor)
                 .child(
                     quiet_button(tr(lang, "保存", "Save"), t)
                         .id("proxy-save")
@@ -695,6 +714,7 @@ fn network_section(
                                 .proxy_draft
                                 .clone()
                                 .unwrap_or_else(|| shell.state.settings.network.proxy.clone());
+                            shell.state.proxy_draft = None;
                             shell.state.commit_proxy(value);
                             cx.notify();
                         })),
@@ -707,39 +727,7 @@ fn network_section(
                 .flex()
                 .items_center()
                 .gap(px(8.0))
-                .child(
-                    div()
-                        .id("game-dir-input")
-                        .role(Role::Button)
-                        .aria_label("game-dir-input")
-                        .h(px(30.0))
-                        .w(px(260.0))
-                        .px(px(10.0))
-                        .flex()
-                        .items_center()
-                        .overflow_hidden()
-                        .rounded(px(theme::RADIUS_TILE))
-                        .border_1()
-                        .border_color(rgb(if state.game_dir_draft.is_some() {
-                            t.text
-                        } else {
-                            t.line
-                        }))
-                        .cursor_pointer()
-                        .text_size(px(11.0))
-                        .text_color(rgb(t.text))
-                        .on_click(cx.listener(|shell, _, _, cx| {
-                            shell.state.game_dir_draft =
-                                Some(shell.state.paths.game.display().to_string());
-                            cx.notify();
-                        }))
-                        .child(
-                            state
-                                .game_dir_draft
-                                .clone()
-                                .unwrap_or_else(|| state.paths.game.display().to_string()),
-                        ),
-                )
+                .child(game_editor)
                 .child(
                     quiet_button(tr(lang, "切换", "Switch"), t)
                         .id("game-dir-save")
@@ -750,6 +738,7 @@ fn network_section(
                                 shell.state.game_dir_draft.clone().unwrap_or_else(|| {
                                     shell.state.paths.game.display().to_string()
                                 });
+                            shell.state.game_dir_draft = None;
                             shell.state.commit_game_dir(value);
                             cx.notify();
                         })),
@@ -760,6 +749,7 @@ fn network_section(
                         .role(Role::Button)
                         .aria_label("game-dir-reset")
                         .on_click(cx.listener(|shell, _, _, cx| {
+                            shell.state.game_dir_draft = None;
                             shell.state.commit_game_dir(String::new());
                             cx.notify();
                         })),

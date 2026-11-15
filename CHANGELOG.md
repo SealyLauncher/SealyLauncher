@@ -16,6 +16,16 @@
 
 ## [Unreleased]
 
+- 2026-11-15 — 输入框全部改为 GPUI 组件编辑引擎（含 B4 复核）：
+  - 新增 `crates/sealy-ui/src/inputs.rs`：用 gpui-component 的 `InputState`/`Input` 为 13 个字段各建一个共享编辑实体，统一占位符、无障碍标签（`input-*`）、密码掩码与语言切换刷新；`gpui-kit` 已内置该组件，无需新增依赖。
+  - 替换所有手写输入：设置页 HTTP 代理 / 游戏目录 / Java 路径 / 内存数字，账号页离线账号名 / authlib 服务器与用户名密码，实例页重命名 / 启动设置宽度、高度、内存、JVM 参数，引导页离线账号名。
+  - 交互修复：闪烁光标竖线；鼠标点击任意位置定位插入点；拖拽/双击选择；长文本水平滚动不再截断；字段间点选、回车推进/提交、Esc 取消、剪贴板粘贴、IME 输入；Enter 提交后与 Esc 取消后焦点回到窗口，避免键盘失效；打开新字段时自动关闭上一个。
+  - 语义保持：代理仍校验 host:port、游戏目录仍切换并重扫、Java 路径回车探测并设为默认、内存 512–32768 夹取并同步滑块、账号/重命名回车提交、authlib 回车逐字段推进并在密码后登录、启动设置回车保存。
+  - 清理 `state.rs` 中 14 个仅供手写输入使用的 push/pop/begin 方法；启动设置字段标签改中英双语；设置页与引导页语言按钮补 aria_label 并在切换时刷新占位符。
+  - 验证：`cargo fmt --all`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace` 全绿（79 通过 / 2 忽略）；Windows 实机按字段走通：代理输入保存 127.0.0.1:8080、Java 路径回车添加并设为默认、内存 8192 同步滑块、离线账号 Tester、实例重命名为 renamed-by-input、启动宽度 1280 持久化、authlib 三字段（密码掩码）、中英切换后占位符为英文；截图 design/preview/gpui-input-{proxy,authlib,launch,memory}.png。
+  - B4 复核：整合包导入/导出链路（`sealy-core::modpack`、导入/导出按钮、`--import-modpack`）本轮未改，单测仍通过，见 docs/PLAN.md §20.14。
+  - 已知问题：Tab 在单行输入由组件处理，字段切换以点击/回车为主；macOS/Linux 仅编译与单测验证，未真机操作输入框。
+
 - 2026-11-15 — 自更新加固（进度/取消/校验/回滚/跨平台替换）：
   - 下载：进度条（字节计数）、取消按钮、失败重试；下载中断会删除半成品文件。
   - 完整性：读取 Release 的 SHA256SUMS，下载后校验 SHA-256，缺失或不匹配直接失败；校验通过才进入暂存。

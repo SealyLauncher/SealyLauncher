@@ -60,9 +60,9 @@ fn open_shell_window(
         ..TitleBar::window_options()
     };
 
-    let (handle, _root) = gpui_kit::open_window(options, cx, move |_, cx| {
+    let (handle, _root) = gpui_kit::open_window(options, cx, move |window, cx| {
         let bootstrap = bootstrap.clone();
-        cx.new(|cx| SealyShell::new(bootstrap, cx))
+        cx.new(|cx| SealyShell::new(bootstrap, window, cx))
     })?;
     Ok(handle)
 }
@@ -71,12 +71,21 @@ pub(crate) struct SealyShell {
     pub(crate) state: ShellState,
     focus: FocusHandle,
     _memory_subscription: Subscription,
+    _input_subscriptions: Vec<Subscription>,
     /// Set when the slider value changed without a window at hand.
     memory_sync_pending: bool,
+    /// Input that should receive focus on the next frame.
+    pending_focus: Option<crate::inputs::InputField>,
+    /// Restore focus to the shell after a field closed.
+    refocus_pending: bool,
 }
 
 impl SealyShell {
-    fn new(bootstrap: std::rc::Rc<sealy_core::Bootstrap>, cx: &mut Context<Self>) -> Self {
+    fn new(
+        bootstrap: std::rc::Rc<sealy_core::Bootstrap>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
         let mut state = ShellState::from_bootstrap((*bootstrap).clone());
         let memory_slider = cx.new(|_| {
             SliderState::new()
@@ -98,12 +107,30 @@ impl SealyShell {
                 cx.notify();
             });
 
+        let lang = state.language();
+        let inputs = crate::inputs::create_map(lang, window, cx);
+        state.inputs = inputs.clone();
+        let mut input_subscriptions = Vec::new();
+        for field in crate::inputs::InputField::ALL {
+            if let Some(input) = inputs.get(&field).cloned() {
+                input_subscriptions.push(cx.subscribe(
+                    &input,
+                    move |shell, _, event: &crate::inputs::FieldEvent, cx| {
+                        shell.on_input_event(field, event, cx);
+                    },
+                ));
+            }
+        }
+
         // macOS sandboxing of downloaded bundles is invisible otherwise.
         let mut shell = Self {
             state,
             focus: cx.focus_handle(),
             _memory_subscription: memory_subscription,
+            _input_subscriptions: input_subscriptions,
             memory_sync_pending: false,
+            pending_focus: None,
+            refocus_pending: false,
         };
         if shell.state.translocated {
             shell.state.push_message(
@@ -214,6 +241,15 @@ impl Render for SealyShell {
             self.sync_memory_slider(window, cx);
         }
 
+        if let Some(field) = self.pending_focus.take() {
+            if let Some(input) = self.state.inputs.get(&field).cloned() {
+                crate::inputs::focus(&input, window, cx);
+            }
+        } else if self.refocus_pending {
+            self.refocus_pending = false;
+            window.focus(&self.focus, cx);
+        }
+
         let tokens = self.state.theme();
         let page = pages::render(&mut self.state, cx);
         let panel = self
@@ -275,6 +311,14 @@ impl Render for SealyShell {
             )
             .on_action(cx.listener(|shell, _: &crate::menu::QuitLauncher, _, cx| {
                 crate::menu::apply(shell, crate::menu::MenuAction::Quit, cx)
+            }))
+            .on_action(cx.listener(|shell, _: &InputEscape, window, cx| {
+                // The editing engine handles Escape first; when it propagates,
+                // the field should close and focus return to the window.
+                if shell.cancel_active_input() {
+                    window.focus(&shell.focus, cx);
+                    cx.notify();
+                }
             }))
             .size_full()
             .flex()
@@ -406,9 +450,311 @@ impl SealyShell {
             slider.update(cx, |state, cx| state.set_value(value, window, cx));
         }
     }
+    /// Routes one editing event from a shared field into the page state.
+    fn on_input_event(
+        &mut self,
+        field: crate::inputs::InputField,
+        event: &crate::inputs::FieldEvent,
+        cx: &mut Context<Self>,
+    ) {
+        use crate::inputs::FieldEvent;
+        match event {
+            FieldEvent::Change => {
+                let text = crate::inputs::value(&self.state, field, cx);
+                self.sync_field_draft(field, text);
+                cx.notify();
+            }
+            FieldEvent::PressEnter { .. } => self.commit_field(field, cx),
+            FieldEvent::Focus | FieldEvent::Blur => {}
+        }
+    }
+
+    /// Keeps the draft mirrors (which commit logic reads) in step with editing.
+    fn sync_field_draft(&mut self, field: crate::inputs::InputField, text: String) {
+        use crate::inputs::InputField as F;
+        match field {
+            F::Account => self.state.account_draft = Some(text),
+            F::Rename => {
+                if let Some(draft) = &mut self.state.rename_draft {
+                    draft.buffer = text;
+                }
+            }
+            F::AuthlibServer => {
+                if let Some(draft) = &mut self.state.authlib_draft {
+                    draft.server = text;
+                }
+            }
+            F::AuthlibUser => {
+                if let Some(draft) = &mut self.state.authlib_draft {
+                    draft.username = text;
+                }
+            }
+            F::AuthlibPassword => {
+                if let Some(draft) = &mut self.state.authlib_draft {
+                    draft.password = text;
+                }
+            }
+            F::JavaPath => {
+                if let Some(draft) = &mut self.state.java_path_draft {
+                    *draft = text;
+                }
+            }
+            F::Proxy => {
+                if let Some(draft) = &mut self.state.proxy_draft {
+                    *draft = text;
+                }
+            }
+            F::GameDir => {
+                if let Some(draft) = &mut self.state.game_dir_draft {
+                    *draft = text;
+                }
+            }
+            F::Memory => {
+                if let Some(draft) = &mut self.state.memory_draft {
+                    *draft = text;
+                }
+            }
+            F::LaunchWidth | F::LaunchHeight | F::LaunchMemory | F::LaunchJvm => {
+                if let Some(draft) = &mut self.state.inst_launch_draft {
+                    match field {
+                        F::LaunchWidth => draft.width = text,
+                        F::LaunchHeight => draft.height = text,
+                        F::LaunchMemory => draft.max_mb = text,
+                        F::LaunchJvm => draft.jvm_args = text,
+                        _ => {}
+                    }
+                }
+            }
+        }
+    }
+
+    /// Commits one field (Enter in a real text input).
+    fn commit_field(&mut self, field: crate::inputs::InputField, cx: &mut Context<Self>) {
+        use crate::inputs::InputField as F;
+        self.refocus_pending = true;
+        match field {
+            F::Account => self.state.commit_account(),
+            F::Rename => self.state.commit_rename(),
+            F::AuthlibServer | F::AuthlibUser | F::AuthlibPassword => {
+                if field == F::AuthlibPassword || self.state.authlib_last_field() {
+                    crate::auth_flow::start_authlib(&mut self.state, cx);
+                } else {
+                    // Moving to the next field keeps focus inside the form.
+                    self.refocus_pending = false;
+                    self.state.authlib_next_field();
+                    self.pending_focus = Some(if self.state.authlib_last_field() {
+                        F::AuthlibPassword
+                    } else {
+                        F::AuthlibUser
+                    });
+                }
+            }
+            F::JavaPath => self.commit_java_path(cx),
+            F::Proxy => {
+                let text = crate::inputs::value(&self.state, field, cx);
+                self.state.proxy_draft = None;
+                self.state.commit_proxy(text);
+            }
+            F::GameDir => {
+                let text = crate::inputs::value(&self.state, field, cx);
+                self.state.game_dir_draft = None;
+                self.state.commit_game_dir(text);
+            }
+            F::Memory => self.apply_memory_draft(cx),
+            F::LaunchWidth | F::LaunchHeight | F::LaunchMemory | F::LaunchJvm => {
+                if let Err(err) = self.state.commit_instance_settings() {
+                    self.state.notify(err);
+                }
+            }
+        }
+        cx.notify();
+    }
+
+    /// Probes the path typed into the "add Java" field.
+    fn commit_java_path(&mut self, cx: &mut Context<Self>) {
+        let Some(path) = self.state.take_java_path() else {
+            return;
+        };
+        cx.spawn(async move |this, cx| {
+            let probed = cx
+                .background_executor()
+                .spawn(async move { sealy_core::java::probe(&path) })
+                .await;
+            let _ = this.update(cx, |shell, cx| {
+                match probed {
+                    Some(found) => {
+                        let version = found.version.clone();
+                        shell.state.add_java(found.clone());
+                        shell.state.set_default_java(Some(&found.path));
+                        shell
+                            .state
+                            .notify(format!("已添加 Java {version} 并设为默认"));
+                    }
+                    None => shell.state.notify("该路径不是可用的 Java 可执行文件"),
+                }
+                cx.notify();
+            });
+        })
+        .detach();
+    }
+
+    /// Opens one field: mirrors the initial value into its draft and focuses it.
+    pub(crate) fn open_input(
+        &mut self,
+        field: crate::inputs::InputField,
+        value: impl Into<String>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        use crate::inputs::InputField as F;
+        // Only one inline editor is open at a time.
+        let _ = self.cancel_active_input();
+        let value = value.into();
+        match field {
+            F::Account => self.state.account_draft = Some(value.clone()),
+            F::Rename => {
+                let old = self
+                    .state
+                    .instances
+                    .current()
+                    .map(|instance| instance.name.clone())
+                    .unwrap_or_default();
+                self.state.rename_draft = Some(crate::state::RenameDraft {
+                    old,
+                    buffer: value.clone(),
+                });
+            }
+            F::AuthlibServer | F::AuthlibUser | F::AuthlibPassword => {
+                let draft = self
+                    .state
+                    .authlib_draft
+                    .get_or_insert_with(Default::default);
+                match field {
+                    F::AuthlibServer => draft.server = value.clone(),
+                    F::AuthlibUser => draft.username = value.clone(),
+                    _ => draft.password = value.clone(),
+                }
+            }
+            F::JavaPath => self.state.java_path_draft = Some(value.clone()),
+            F::Proxy => self.state.proxy_draft = Some(value.clone()),
+            F::GameDir => self.state.game_dir_draft = Some(value.clone()),
+            F::Memory => self.state.memory_draft = Some(value.clone()),
+            F::LaunchWidth | F::LaunchHeight | F::LaunchMemory | F::LaunchJvm => {
+                if let Some(draft) = &mut self.state.inst_launch_draft {
+                    match field {
+                        F::LaunchWidth => draft.width = value.clone(),
+                        F::LaunchHeight => draft.height = value.clone(),
+                        F::LaunchMemory => draft.max_mb = value.clone(),
+                        _ => draft.jvm_args = value.clone(),
+                    }
+                }
+            }
+        }
+        self.set_input_value(field, value, window, cx, true);
+        cx.notify();
+    }
+
+    /// Fills the authlib form inputs and focuses the first one.
+    pub(crate) fn load_authlib_inputs(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        use crate::inputs::InputField as F;
+        let draft = self.state.authlib_draft.clone().unwrap_or_default();
+        for (field, value) in [
+            (F::AuthlibServer, draft.server),
+            (F::AuthlibUser, draft.username),
+            (F::AuthlibPassword, draft.password),
+        ] {
+            self.set_input_value(field, value, window, cx, false);
+        }
+        self.pending_focus = Some(F::AuthlibServer);
+        cx.notify();
+    }
+
+    /// Fills the instance launch-setting inputs from the draft.
+    pub(crate) fn load_launch_inputs(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        use crate::inputs::InputField as F;
+        let Some(draft) = self.state.inst_launch_draft.clone() else {
+            return;
+        };
+        for (field, value) in [
+            (F::LaunchWidth, draft.width),
+            (F::LaunchHeight, draft.height),
+            (F::LaunchMemory, draft.max_mb),
+            (F::LaunchJvm, draft.jvm_args),
+        ] {
+            self.set_input_value(field, value, window, cx, false);
+        }
+        self.pending_focus = Some(F::LaunchWidth);
+        cx.notify();
+    }
+
+    fn set_input_value(
+        &mut self,
+        field: crate::inputs::InputField,
+        value: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+        focus: bool,
+    ) {
+        let Some(input) = self.state.inputs.get(&field).cloned() else {
+            return;
+        };
+        if focus {
+            crate::inputs::focus_with_value(&input, value, window, cx);
+        } else {
+            input.update(cx, |state, cx| state.set_value(value, window, cx));
+        }
+    }
+
+    /// Cancels whichever field is open; returns whether one was open.
+    fn cancel_active_input(&mut self) -> bool {
+        if self.state.memory_draft.take().is_some() {
+            return true;
+        }
+        if self.state.proxy_draft.take().is_some() {
+            return true;
+        }
+        if self.state.game_dir_draft.take().is_some() {
+            return true;
+        }
+        if self.state.java_path_draft.take().is_some() {
+            return true;
+        }
+        if self.state.account_draft.is_some() {
+            self.state.cancel_account();
+            return true;
+        }
+        if self.state.rename_draft.is_some() {
+            self.state.cancel_rename();
+            return true;
+        }
+        if self.state.authlib_draft.is_some() {
+            self.state.authlib_draft = None;
+            return true;
+        }
+        if self.state.inst_launch_draft.is_some() {
+            self.state.inst_launch_draft = None;
+            self.state.instance_settings_open = false;
+            return true;
+        }
+        false
+    }
+
     /// Window-wide shortcuts: Enter runs the primary action, Escape steps back,
     /// digits jump between pages.
     fn handle_key(&mut self, keystroke: &Keystroke, cx: &mut Context<Self>) {
+        // Escape cancels an open text field before anything else.
+        if keystroke.key == "escape" && self.cancel_active_input() {
+            self.refocus_pending = true;
+            cx.notify();
+            return;
+        }
+
+        // While a field is open its editing engine owns the keyboard; only
+        // Escape (handled above) remains a window shortcut.
+        if self.state.input_active() {
+            return;
+        }
+
         // Escape closes the message center before anything else.
         if keystroke.key == "escape" && self.state.message_open {
             self.state.message_open = false;
@@ -430,31 +776,6 @@ impl SealyShell {
             return;
         }
 
-        // The instance launch-settings panel captures typing while it is open.
-        if self.state.inst_launch_draft.is_some() {
-            match keystroke.key.as_str() {
-                "escape" => {
-                    self.state.inst_launch_draft = None;
-                    self.state.instance_settings_open = false;
-                }
-                "tab" => self.state.inst_draft_next_field(),
-                "enter" => {
-                    if let Err(err) = self.state.commit_instance_settings() {
-                        self.state.notify(err);
-                    }
-                }
-                "backspace" => self.state.inst_draft_pop_char(),
-                key if key.chars().count() == 1 => {
-                    if let Some(ch) = key.chars().next() {
-                        self.state.inst_draft_push_char(ch);
-                    }
-                }
-                _ => {}
-            }
-            cx.notify();
-            return;
-        }
-
         // The delete confirmation closes on Escape.
         if keystroke.key == "escape" && self.state.delete_confirm_open {
             self.state.delete_confirm_open = false;
@@ -472,184 +793,6 @@ impl SealyShell {
         // The log viewer closes on Escape.
         if keystroke.key == "escape" && self.state.logs_open {
             self.state.close_logs();
-            cx.notify();
-            return;
-        }
-
-        // The numeric memory editor captures typing while it is open.
-        if self.state.memory_draft.is_some() {
-            match keystroke.key.as_str() {
-                "escape" => self.state.memory_draft = None,
-                "enter" => self.apply_memory_draft(cx),
-                "backspace" => {
-                    if let Some(text) = &mut self.state.memory_draft {
-                        text.pop();
-                    }
-                }
-                key if key.chars().count() == 1 => {
-                    if let Some(ch) = key.chars().next().filter(char::is_ascii_digit)
-                        && let Some(text) = &mut self.state.memory_draft
-                    {
-                        text.push(ch);
-                    }
-                }
-                _ => {}
-            }
-            cx.notify();
-            return;
-        }
-
-        // The settings-page text inputs capture typing while they are open.
-        if self.state.proxy_draft.is_some() || self.state.game_dir_draft.is_some() {
-            let proxy = self.state.proxy_draft.is_some();
-            match keystroke.key.as_str() {
-                "escape" => {
-                    if proxy {
-                        self.state.proxy_draft = None;
-                    } else {
-                        self.state.game_dir_draft = None;
-                    }
-                }
-                "enter" => {
-                    let value = if proxy {
-                        self.state.proxy_draft.take().unwrap_or_default()
-                    } else {
-                        self.state.game_dir_draft.take().unwrap_or_default()
-                    };
-                    if proxy {
-                        self.state.commit_proxy(value);
-                    } else {
-                        self.state.commit_game_dir(value);
-                    }
-                }
-                "backspace" => {
-                    let draft = if proxy {
-                        &mut self.state.proxy_draft
-                    } else {
-                        &mut self.state.game_dir_draft
-                    };
-                    if let Some(text) = draft {
-                        text.pop();
-                    }
-                }
-                key if key.chars().count() == 1 => {
-                    if let Some(ch) = key.chars().next() {
-                        let draft = if proxy {
-                            &mut self.state.proxy_draft
-                        } else {
-                            &mut self.state.game_dir_draft
-                        };
-                        if let Some(text) = draft {
-                            text.push(ch);
-                        }
-                    }
-                }
-                _ => {}
-            }
-            cx.notify();
-            return;
-        }
-        // The "add Java" input captures typing while it is open.
-        if self.state.java_path_draft.is_some() {
-            match keystroke.key.as_str() {
-                "escape" => self.state.java_path_draft = None,
-                "enter" => {
-                    if let Some(path) = self.state.take_java_path() {
-                        cx.spawn(async move |this, cx| {
-                            let probed = cx
-                                .background_executor()
-                                .spawn(async move { sealy_core::java::probe(&path) })
-                                .await;
-                            let _ = this.update(cx, |shell, cx| {
-                                match probed {
-                                    Some(found) => {
-                                        let version = found.version.clone();
-                                        shell.state.add_java(found.clone());
-                                        shell.state.set_default_java(Some(&found.path));
-                                        shell
-                                            .state
-                                            .notify(format!("已添加 Java {version} 并设为默认"));
-                                    }
-                                    None => shell.state.notify("该路径不是可用的 Java 可执行文件"),
-                                }
-                                cx.notify();
-                            });
-                        })
-                        .detach();
-                    }
-                }
-                "backspace" => self.state.java_path_pop_char(),
-                key if key.chars().count() == 1 => {
-                    if let Some(ch) = key.chars().next() {
-                        self.state.java_path_push_char(ch);
-                    }
-                }
-                _ => {}
-            }
-            cx.notify();
-            return;
-        }
-
-        // The authlib form captures typing while it is open.
-        if self.state.authlib_draft.is_some() {
-            match keystroke.key.as_str() {
-                "escape" => self.state.authlib_draft = None,
-                "tab" => self.state.authlib_next_field(),
-                "enter" => {
-                    if self.state.authlib_last_field() {
-                        crate::auth_flow::start_authlib(&mut self.state, cx);
-                    } else {
-                        self.state.authlib_next_field();
-                    }
-                }
-                "backspace" => self.state.authlib_pop_char(),
-                key if key.chars().count() == 1 => {
-                    if let Some(ch) = key.chars().next() {
-                        self.state.authlib_push_char(ch);
-                    }
-                }
-                _ => {}
-            }
-            cx.notify();
-            return;
-        }
-
-        // Inline name editors capture typing while they are open.
-        if self.state.account_draft.is_some() || self.state.rename_draft.is_some() {
-            let renaming = self.state.rename_draft.is_some();
-            match keystroke.key.as_str() {
-                "enter" => {
-                    if renaming {
-                        self.state.commit_rename();
-                    } else {
-                        self.state.commit_account();
-                    }
-                }
-                "escape" => {
-                    if renaming {
-                        self.state.cancel_rename();
-                    } else {
-                        self.state.cancel_account();
-                    }
-                }
-                "backspace" => {
-                    if renaming {
-                        self.state.pop_rename_char();
-                    } else {
-                        self.state.pop_account_char();
-                    }
-                }
-                key if key.chars().count() == 1 => {
-                    if let Some(ch) = key.chars().next() {
-                        if renaming {
-                            self.state.push_rename_char(ch);
-                        } else {
-                            self.state.push_account_char(ch);
-                        }
-                    }
-                }
-                _ => {}
-            }
             cx.notify();
             return;
         }

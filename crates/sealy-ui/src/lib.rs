@@ -5,6 +5,7 @@ pub mod assets;
 pub mod auth_flow;
 pub mod components;
 pub mod i18n;
+pub mod inputs;
 pub mod install_flow;
 pub mod kit;
 pub mod launch_flow;

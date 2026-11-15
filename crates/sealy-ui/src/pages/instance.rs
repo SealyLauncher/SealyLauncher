@@ -305,9 +305,9 @@ pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyEle
                         .id("detail-settings")
                         .role(Role::Button)
                         .aria_label("detail-settings")
-                        .on_click(cx.listener(|shell, _, _, cx| {
+                        .on_click(cx.listener(|shell, _, window, cx| {
                             shell.state.begin_instance_settings();
-                            cx.notify();
+                            shell.load_launch_inputs(window, cx);
                         })),
                 )
                 .child(

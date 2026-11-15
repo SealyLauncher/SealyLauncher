@@ -326,6 +326,8 @@ pub struct ShellState {
     pub memory_draft: Option<String>,
     /// Physical memory detected at startup, in MiB.
     pub total_ram_mb: Option<u64>,
+    /// Text fields shared by every page.
+    pub inputs: crate::inputs::InputMap,
     /// Inline proxy editor in the settings page.
     pub proxy_draft: Option<String>,
     /// Inline game-directory editor in the settings page.
@@ -573,6 +575,7 @@ impl ShellState {
             memory_slider: None,
             memory_draft: None,
             total_ram_mb: sealy_core::system::total_memory_mb(),
+            inputs: crate::inputs::InputMap::new(),
             proxy_draft: None,
             game_dir_draft: None,
             crash_open: false,
@@ -633,28 +636,6 @@ impl ShellState {
     pub fn save_tokens(&mut self) {
         if let Err(err) = self.tokens.save(&self.paths.tokens_file()) {
             tracing::warn!(error = %err, "failed to save tokens");
-        }
-    }
-
-    /// Opens the inline name editor for a new offline account.
-    pub fn begin_account(&mut self) {
-        self.account_draft = Some(String::new());
-    }
-
-    /// Feeds one typed character into the draft.
-    pub fn push_account_char(&mut self, ch: char) {
-        if let Some(draft) = &mut self.account_draft
-            && draft.chars().count() < 16
-            && (ch.is_alphanumeric() || ch == '_')
-        {
-            draft.push(ch);
-        }
-    }
-
-    /// Removes the last character of the draft.
-    pub fn pop_account_char(&mut self) {
-        if let Some(draft) = &mut self.account_draft {
-            draft.pop();
         }
     }
 
@@ -753,22 +734,6 @@ impl ShellState {
         }
     }
 
-    /// Feeds one character into the rename buffer.
-    pub fn push_rename_char(&mut self, ch: char) {
-        if let Some(draft) = &mut self.rename_draft
-            && draft.buffer.chars().count() < 48
-        {
-            draft.buffer.push(ch);
-        }
-    }
-
-    /// Removes the last rename character.
-    pub fn pop_rename_char(&mut self) {
-        if let Some(draft) = &mut self.rename_draft {
-            draft.buffer.pop();
-        }
-    }
-
     /// Commits the rename, moving the instance directory too.
     pub fn commit_rename(&mut self) {
         let Some(draft) = self.rename_draft.take() else {
@@ -805,11 +770,6 @@ impl ShellState {
         self.persist();
     }
 
-    /// Opens the inline "add Java" input.
-    pub fn begin_add_java(&mut self) {
-        self.java_path_draft = Some(String::new());
-    }
-
     /// Opens the launch settings of the selected instance.
     pub fn begin_instance_settings(&mut self) {
         let Some(instance) = self.instances.current() else {
@@ -833,43 +793,6 @@ impl ShellState {
             field: 0,
         });
         self.instance_settings_open = true;
-    }
-
-    /// Appends a character to the focused instance-settings field.
-    pub fn inst_draft_push_char(&mut self, ch: char) {
-        let Some(draft) = &mut self.inst_launch_draft else {
-            return;
-        };
-        let field = match draft.field {
-            0 => &mut draft.width,
-            1 => &mut draft.height,
-            2 => &mut draft.max_mb,
-            _ => &mut draft.jvm_args,
-        };
-        if field.chars().count() < 400 {
-            field.push(ch);
-        }
-    }
-
-    /// Removes the last character from the focused field.
-    pub fn inst_draft_pop_char(&mut self) {
-        let Some(draft) = &mut self.inst_launch_draft else {
-            return;
-        };
-        let field = match draft.field {
-            0 => &mut draft.width,
-            1 => &mut draft.height,
-            2 => &mut draft.max_mb,
-            _ => &mut draft.jvm_args,
-        };
-        field.pop();
-    }
-
-    /// Moves to the next instance-settings field.
-    pub fn inst_draft_next_field(&mut self) {
-        if let Some(draft) = &mut self.inst_launch_draft {
-            draft.field = (draft.field + 1) % InstanceLaunchDraft::FIELDS.len();
-        }
     }
 
     /// Validates and stores the edited launch settings.
@@ -1345,22 +1268,6 @@ impl ShellState {
         self.reveal_with_feedback(&dir.clone());
     }
 
-    /// Appends a character to the Java path input.
-    pub fn java_path_push_char(&mut self, ch: char) {
-        if let Some(draft) = &mut self.java_path_draft
-            && draft.chars().count() < 300
-        {
-            draft.push(ch);
-        }
-    }
-
-    /// Removes the last character from the Java path input.
-    pub fn java_path_pop_char(&mut self) {
-        if let Some(draft) = &mut self.java_path_draft {
-            draft.pop();
-        }
-    }
-
     /// Takes the typed path, closing the input.
     pub fn take_java_path(&mut self) -> Option<std::path::PathBuf> {
         let raw = self.java_path_draft.take()?;
@@ -1369,31 +1276,6 @@ impl ShellState {
             None
         } else {
             Some(std::path::PathBuf::from(trimmed))
-        }
-    }
-
-    pub fn authlib_push_char(&mut self, ch: char) {
-        if let Some(draft) = &mut self.authlib_draft {
-            let field = match draft.field {
-                0 => &mut draft.server,
-                1 => &mut draft.username,
-                _ => &mut draft.password,
-            };
-            if field.chars().count() < 120 {
-                field.push(ch);
-            }
-        }
-    }
-
-    /// Removes the last character of the focused authlib field.
-    pub fn authlib_pop_char(&mut self) {
-        if let Some(draft) = &mut self.authlib_draft {
-            let field = match draft.field {
-                0 => &mut draft.server,
-                1 => &mut draft.username,
-                _ => &mut draft.password,
-            };
-            field.pop();
         }
     }
 
@@ -1555,6 +1437,17 @@ impl ShellState {
         self.persist();
     }
 
+    /// Whether any text field is currently being edited.
+    pub fn input_active(&self) -> bool {
+        self.memory_draft.is_some()
+            || self.proxy_draft.is_some()
+            || self.game_dir_draft.is_some()
+            || self.java_path_draft.is_some()
+            || self.account_draft.is_some()
+            || self.rename_draft.is_some()
+            || self.authlib_draft.is_some()
+            || self.inst_launch_draft.is_some()
+    }
     /// Changes the maximum heap and persists settings.
     pub fn set_max_memory(&mut self, mb: u32) {
         self.settings.java.memory_mode = MemoryMode::Manual;
@@ -1586,12 +1479,6 @@ impl ShellState {
             MemoryMode::Auto => sealy_core::system::auto_memory_mb(self.total_ram_mb),
             MemoryMode::Manual => self.settings.java.memory.max_mb.clamp(512, 32768),
         }
-    }
-
-    /// Opens the inline numeric memory editor with the current value.
-    pub fn begin_memory_draft(&mut self) {
-        // Start empty so the first keystroke replaces the current cap.
-        self.memory_draft = Some(String::new());
     }
 
     /// Parses and applies the inline numeric memory editor.

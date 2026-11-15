@@ -7,6 +7,7 @@ pub use gpui_kit::assets::IconName;
 pub use gpui_kit::base::slider::{SliderEvent, SliderState};
 pub use gpui_kit::base::{Slider as BaseSlider, SliderIndicator, SliderThumb, SliderTrack};
 pub use gpui_kit::component::Icon;
+pub use gpui_kit::component::input::Escape as InputEscape;
 pub use gpui_kit::prelude::*;
 pub use gpui_kit::{
     Animation, AnimationExt, AnyElement, App, Bounds, ClickEvent, ClipboardItem, Context, Div,

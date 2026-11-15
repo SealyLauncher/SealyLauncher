@@ -87,9 +87,15 @@ pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyEle
                         .id("instance-rename")
                         .role(Role::Button)
                         .aria_label("rename-instance")
-                        .on_click(cx.listener(|shell, _, _, cx| {
+                        .on_click(cx.listener(|shell, _, window, cx| {
                             shell.state.begin_rename();
-                            cx.notify();
+                            let name = shell
+                                .state
+                                .instances
+                                .current()
+                                .map(|instance| instance.name.clone())
+                                .unwrap_or_default();
+                            shell.open_input(crate::inputs::InputField::Rename, name, window, cx);
                         })),
                 )
                 .child(
@@ -117,9 +123,9 @@ pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyEle
                         .id("instance-settings")
                         .role(Role::Button)
                         .aria_label("instance-launch-settings")
-                        .on_click(cx.listener(|shell, _, _, cx| {
+                        .on_click(cx.listener(|shell, _, window, cx| {
                             shell.state.begin_instance_settings();
-                            cx.notify();
+                            shell.load_launch_inputs(window, cx);
                         })),
                 )
                 .child(
@@ -234,31 +240,17 @@ pub(crate) fn launch_settings_panel(
     lang: sealy_core::config::Language,
     cx: &mut Context<SealyShell>,
 ) -> AnyElement {
-    let Some(draft) = &state.inst_launch_draft else {
+    if state.inst_launch_draft.is_none() {
         return div().into_any_element();
-    };
-
-    let values = [&draft.width, &draft.height, &draft.max_mb, &draft.jvm_args];
-    let placeholders = [
-        format!("{}", state.settings.launch.width),
-        format!("{}", state.settings.launch.height),
-        format!("{}", state.settings.java.memory.max_mb),
-        tr(
-            lang,
-            "可选，例如 -XX:+UseG1GC",
-            "optional, e.g. -XX:+UseG1GC",
-        )
-        .to_owned(),
-    ];
+    }
 
     let fields = (0..4)
         .map(|index| {
-            let active = draft.field == index;
-            let value = values[index].clone();
-            let shown = if value.is_empty() {
-                placeholders[index].clone()
-            } else {
-                value.clone()
+            let field = match index {
+                0 => crate::inputs::InputField::LaunchWidth,
+                1 => crate::inputs::InputField::LaunchHeight,
+                2 => crate::inputs::InputField::LaunchMemory,
+                _ => crate::inputs::InputField::LaunchJvm,
             };
             div()
                 .h(px(46.0))
@@ -272,33 +264,14 @@ pub(crate) fn launch_settings_panel(
                         .w(px(120.0))
                         .text_size(px(12.0))
                         .text_color(rgb(t.muted))
-                        .child(crate::state::InstanceLaunchDraft::FIELDS[index]),
+                        .child(match index {
+                            0 => tr(lang, "窗口宽度", "Width"),
+                            1 => tr(lang, "窗口高度", "Height"),
+                            2 => tr(lang, "最大内存 (MB)", "Max memory (MB)"),
+                            _ => tr(lang, "JVM 参数", "JVM arguments"),
+                        }),
                 )
-                .child(
-                    div()
-                        .id(("inst-field", index))
-                        .role(Role::Button)
-                        .aria_label(format!("inst-field-{index}"))
-                        .cursor_pointer()
-                        .on_click(cx.listener(move |shell, _, _, cx| {
-                            if let Some(draft) = &mut shell.state.inst_launch_draft {
-                                draft.field = index;
-                            }
-                            cx.notify();
-                        }))
-                        .flex_1()
-                        .min_w(px(0.0))
-                        .h(px(30.0))
-                        .px(px(10.0))
-                        .flex()
-                        .items_center()
-                        .rounded(px(theme::RADIUS_TILE))
-                        .border_1()
-                        .border_color(rgb(if active { t.text } else { t.line }))
-                        .text_size(px(12.0))
-                        .text_color(rgb(if value.is_empty() { t.faint } else { t.text }))
-                        .child(shown),
-                )
+                .child(crate::inputs::field(state, field, 360.0, t))
         })
         .collect::<Vec<_>>();
 
@@ -366,8 +339,8 @@ pub(crate) fn launch_settings_panel(
                 .text_color(rgb(t.faint))
                 .child(tr(
                     lang,
-                    "留空则跟随全局设置 · Tab 切换字段 · Enter 保存 · Esc 取消",
-                    "Empty follows global settings · Tab next · Enter save · Esc cancel",
+                    "留空则跟随全局设置 · 点击字段编辑 · Enter 保存 · Esc 取消",
+                    "Empty follows global settings · Click a field · Enter save · Esc cancel",
                 )),
         )
         .child(div().flex_1().min_h(px(0.0)).px(px(20.0)).children(fields))
@@ -558,12 +531,6 @@ fn rename_card(
     lang: sealy_core::config::Language,
     cx: &mut Context<SealyShell>,
 ) -> AnyElement {
-    let buffer = state
-        .rename_draft
-        .as_ref()
-        .map(|draft| draft.buffer.clone())
-        .unwrap_or_default();
-
     div()
         .flex_1()
         .flex()
@@ -571,26 +538,12 @@ fn rename_card(
         .items_center()
         .justify_center()
         .gap(px(14.0))
-        .child(
-            div()
-                .w(px(420.0))
-                .h(px(56.0))
-                .px(px(16.0))
-                .flex()
-                .items_center()
-                .rounded(px(theme::RADIUS_TILE))
-                .border_1()
-                .border_color(rgb(t.text))
-                .bg(rgb(t.surface))
-                .child(
-                    div()
-                        .text_size(px(18.0))
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(rgb(t.text))
-                        .child(buffer),
-                )
-                .child(div().w(px(2.0)).h(px(20.0)).bg(rgb(t.text))),
-        )
+        .child(crate::inputs::field(
+            state,
+            crate::inputs::InputField::Rename,
+            420.0,
+            t,
+        ))
         .child(
             div()
                 .flex()
@@ -624,7 +577,6 @@ fn rename_card(
         )
         .into_any_element()
 }
-
 /// New-instance panel: a scrollable version list with loader actions.
 fn create_panel(
     state: &ShellState,

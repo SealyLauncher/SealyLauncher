@@ -1064,6 +1064,14 @@ pub trait SkinProvider: Send + Sync;
 - 失败恢复与清理：`write_pending`/`reconcile_pending`/`clear_update_cache`；更新脚本删除安装包与暂存目录。
 - 启动检查：`update.auto_check`（默认开）+ 设置页开关；发现新版本用 toast 提示并预填更新卡片。
 - 签名：新增 `docs/SIGNING.md`（Windows OV/EV、Azure Trusted Signing、SignPath/Certum；macOS Developer ID + notarytool；Linux GPG 校验）。当前发布仍未做商业签名。
+### 20.18 输入框统一为 GPUI 组件（2026-11-15）
+
+- 组件选型：`gpui-component` 自带 `input` 模块（`InputState` 单行编辑引擎、`Input` 元素、`InputEvent::{Change, PressEnter, Focus, Blur}` 与编辑动作/按键绑定，另有 `NumberInput`/`Textarea`/`Editor`/`Search`），随 `gpui-kit` 一并引入，未新增 crate；此前手写 div + 键盘拦截无法提供光标、点选插入、拖拽选择与水平滚动。
+- 结构：`sealy-ui/src/inputs.rs` 定义 `InputField`（13 个字段）、`InputMap` 与 `create_map`/`relocalize`/`field`；`ShellState.inputs` 持有实体，`SealyShell::new` 为每个字段注册 `InputEvent` 订阅，`on_input_event` 把文本镜像进既有 draft（提交逻辑零改动）、回车走 `commit_field`。
+- 打开/关闭：`open_input` 设置 draft + 写入初值 + 聚焦；`load_authlib_inputs`/`load_launch_inputs` 批量填充；`cancel_active_input` 统一取消；提交/取消后 `refocus_pending` 让窗口重新获得焦点（否则输入框卸载后键盘事件丢失）。
+- Esc 双路径：组件内 Esc 先清选择/候选，未消费时动作冒泡到根元素 `InputEscape` 处理器关闭字段；无输入焦点时仍由 `handle_key` 处理。
+- 验证：`cargo fmt`、`cargo clippy -D warnings`、`cargo test` 全绿；Windows 逐字段实测（代理、游戏目录、Java、内存、离线账号、authlib、重命名、启动设置），覆盖点击定位、Home/End、长文本滚动、粘贴、Enter/Esc、焦点回落、语言切换占位符；截图 `design/preview/gpui-input-*.png`。
+- 限制：Tab 键由组件占用（IndentInline），跨字段切换以点击/回车为主；macOS/Linux 尚未真机验证输入交互。
 ### 20.15 B5 交付记录（2026-11-15）
 
 - 代理：`Settings.network.proxy` + `net::set_proxy`，`agent()` 统一走 ureq 代理；启动游戏时注入 JVM `-Dhttp/https.proxyHost/proxyPort`。设置页「HTTP 代理」输入 + 保存，非法格式会提示。

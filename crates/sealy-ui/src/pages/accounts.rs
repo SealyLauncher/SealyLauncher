@@ -27,11 +27,11 @@ pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyEle
     let authlib = state.authlib_draft.clone();
 
     let body: AnyElement = if let Some(authlib) = authlib {
-        authlib_form(&authlib, &t, lang, cx)
+        authlib_form(state, &authlib, &t, lang, cx)
     } else if let Some(login) = login {
         login_card(&login, &t, lang, cx)
     } else if draft.is_some() {
-        editor(&draft.unwrap_or_default(), &t, lang, cx)
+        editor(state, &t, lang, cx)
     } else if rows.is_empty() {
         empty(&t, lang)
     } else {
@@ -109,9 +109,9 @@ pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyEle
                         .id("account-authlib")
                         .role(Role::Button)
                         .aria_label("authlib-login")
-                        .on_click(cx.listener(|shell, _, _, cx| {
+                        .on_click(cx.listener(|shell, _, window, cx| {
                             shell.state.authlib_draft = Some(Default::default());
-                            cx.notify();
+                            shell.load_authlib_inputs(window, cx);
                         })),
                 )
                 .child(
@@ -128,9 +128,13 @@ pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyEle
                         .id("account-add")
                         .role(Role::Button)
                         .aria_label("add-account")
-                        .on_click(cx.listener(|shell, _, _, cx| {
-                            shell.state.begin_account();
-                            cx.notify();
+                        .on_click(cx.listener(|shell, _, window, cx| {
+                            shell.open_input(
+                                crate::inputs::InputField::Account,
+                                String::new(),
+                                window,
+                                cx,
+                            );
                         })),
                 ),
         )
@@ -166,20 +170,13 @@ fn empty(t: &ThemeTokens, lang: Language) -> AnyElement {
         .into_any_element()
 }
 
-/// Inline name editor; typing is handled by the shell's key handler.
+/// Inline name editor backed by the shared text field.
 fn editor(
-    draft: &str,
+    state: &ShellState,
     t: &ThemeTokens,
     lang: Language,
     cx: &mut Context<SealyShell>,
 ) -> AnyElement {
-    let shown = if draft.is_empty() {
-        tr(lang, "输入用户名", "Type a username").to_owned()
-    } else {
-        draft.to_owned()
-    };
-    let is_placeholder = draft.is_empty();
-
     div()
         .flex_1()
         .flex()
@@ -187,27 +184,12 @@ fn editor(
         .items_center()
         .justify_center()
         .gap(px(14.0))
-        .child(
-            div()
-                .w(px(420.0))
-                .h(px(56.0))
-                .px(px(16.0))
-                .flex()
-                .items_center()
-                .gap(px(2.0))
-                .rounded(px(theme::RADIUS_TILE))
-                .border_1()
-                .border_color(rgb(t.text))
-                .bg(rgb(t.surface))
-                .child(
-                    div()
-                        .text_size(px(18.0))
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(rgb(if is_placeholder { t.faint } else { t.text }))
-                        .child(shown),
-                )
-                .child(div().w(px(2.0)).h(px(20.0)).bg(rgb(t.text))),
-        )
+        .child(crate::inputs::field(
+            state,
+            crate::inputs::InputField::Account,
+            420.0,
+            t,
+        ))
         .child(
             div()
                 .flex()
@@ -244,18 +226,13 @@ fn editor(
 
 /// Three-field form for authlib-injector (Yggdrasil) sign-in.
 fn authlib_form(
-    draft: &crate::state::AuthlibDraft,
+    state: &ShellState,
+    _draft: &crate::state::AuthlibDraft,
     t: &ThemeTokens,
     lang: Language,
     cx: &mut Context<SealyShell>,
 ) -> AnyElement {
-    let field = |index: usize, label: &'static str, value: String, masked: bool| {
-        let focused = draft.field == index;
-        let text = if masked {
-            "•".repeat(value.chars().count())
-        } else {
-            value
-        };
+    let field = |field: crate::inputs::InputField, label: &'static str| {
         div()
             .w(px(460.0))
             .flex()
@@ -267,34 +244,7 @@ fn authlib_form(
                     .text_color(rgb(t.muted))
                     .child(label),
             )
-            .child(
-                div()
-                    .id(("authlib-field", index))
-                    .role(Role::Button)
-                    .aria_label(format!("authlib-field-{index}"))
-                    .cursor_pointer()
-                    .on_click(cx.listener(move |shell, _, _, cx| {
-                        if let Some(draft) = &mut shell.state.authlib_draft {
-                            draft.field = index;
-                        }
-                        cx.notify();
-                    }))
-                    .h(px(46.0))
-                    .px(px(14.0))
-                    .flex()
-                    .items_center()
-                    .rounded(px(theme::RADIUS_TILE))
-                    .border_1()
-                    .border_color(rgb(if focused { t.text } else { t.line }))
-                    .bg(rgb(t.surface))
-                    .child(
-                        div()
-                            .text_size(px(15.0))
-                            .text_color(rgb(t.text))
-                            .child(text),
-                    )
-                    .child(div().w(px(2.0)).h(px(18.0)).bg(rgb(t.text))),
-            )
+            .child(crate::inputs::field(state, field, 460.0, t))
     };
 
     div()
@@ -310,22 +260,16 @@ fn authlib_form(
                 .child(tr(lang, "外置登录", "Authlib sign-in")),
         )
         .child(field(
-            0,
+            crate::inputs::InputField::AuthlibServer,
             tr(lang, "服务器地址", "Server (Yggdrasil API root)"),
-            draft.server.clone(),
-            false,
         ))
         .child(field(
-            1,
+            crate::inputs::InputField::AuthlibUser,
             tr(lang, "用户名", "Username"),
-            draft.username.clone(),
-            false,
         ))
         .child(field(
-            2,
+            crate::inputs::InputField::AuthlibPassword,
             tr(lang, "密码", "Password"),
-            draft.password.clone(),
-            true,
         ))
         .child(
             div()
@@ -334,8 +278,8 @@ fn authlib_form(
                 .gap(px(12.0))
                 .child(div().text_size(px(11.0)).text_color(rgb(t.muted)).child(tr(
                     lang,
-                    "Tab 切换 · 回车登录 · Esc 取消",
-                    "Tab to switch · Enter to sign in · Esc to cancel",
+                    "点击切换字段 · 回车登录 · Esc 取消",
+                    "Click to switch · Enter to sign in · Esc to cancel",
                 )))
                 .child(
                     quiet_button(tr(lang, "取消", "Cancel"), t)
@@ -359,7 +303,6 @@ fn authlib_form(
         )
         .into_any_element()
 }
-
 fn login_card(
     login: &crate::state::MicrosoftLogin,
     t: &ThemeTokens,

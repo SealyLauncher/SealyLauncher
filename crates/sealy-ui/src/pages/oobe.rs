@@ -121,8 +121,14 @@ fn step_language(state: &ShellState, t: &ThemeTokens, cx: &mut Context<SealyShel
                         .id("oobe-lang-zh")
                         .role(Role::Button)
                         .aria_label("简体中文")
-                        .on_click(cx.listener(|shell, _, _, cx| {
+                        .on_click(cx.listener(|shell, _, window, cx| {
                             shell.state.set_language(Language::ZhCn);
+                            crate::inputs::relocalize(
+                                &shell.state.inputs,
+                                Language::ZhCn,
+                                window,
+                                cx,
+                            );
                             cx.notify();
                         })),
                 )
@@ -131,8 +137,14 @@ fn step_language(state: &ShellState, t: &ThemeTokens, cx: &mut Context<SealyShel
                         .id("oobe-lang-en")
                         .role(Role::Button)
                         .aria_label("English")
-                        .on_click(cx.listener(|shell, _, _, cx| {
+                        .on_click(cx.listener(|shell, _, window, cx| {
                             shell.state.set_language(Language::EnUs);
+                            crate::inputs::relocalize(
+                                &shell.state.inputs,
+                                Language::EnUs,
+                                window,
+                                cx,
+                            );
                             cx.notify();
                         })),
                 ),
@@ -211,7 +223,8 @@ fn step_account(state: &ShellState, t: &ThemeTokens, cx: &mut Context<SealyShell
     }
 
     if let Some(draft) = &state.account_draft {
-        return offline_editor(draft, t, lang, cx);
+        let _ = draft;
+        return offline_editor(state, t, lang, cx);
     }
 
     if let Some(account) = state.accounts.current() {
@@ -294,9 +307,13 @@ fn step_account(state: &ShellState, t: &ThemeTokens, cx: &mut Context<SealyShell
                     .id("oobe-account-offline")
                     .role(Role::Button)
                     .aria_label("oobe-offline")
-                    .on_click(cx.listener(|shell, _, _, cx| {
-                        shell.state.account_draft = Some(String::new());
-                        cx.notify();
+                    .on_click(cx.listener(|shell, _, window, cx| {
+                        shell.open_input(
+                            crate::inputs::InputField::Account,
+                            String::new(),
+                            window,
+                            cx,
+                        );
                     })),
                 )
                 .child(
@@ -332,7 +349,7 @@ fn step_account_code(
 
 /// Inline name editor used for the offline account.
 fn offline_editor(
-    draft: &str,
+    state: &ShellState,
     t: &ThemeTokens,
     lang: Language,
     cx: &mut Context<SealyShell>,
@@ -349,25 +366,12 @@ fn offline_editor(
                 .text_color(rgb(t.text))
                 .child(tr(lang, "输入玩家名字", "Pick a player name")),
         )
-        .child(
-            div()
-                .w(px(380.0))
-                .h(px(56.0))
-                .px(px(16.0))
-                .flex()
-                .items_center()
-                .rounded(px(theme::RADIUS_TILE))
-                .border_1()
-                .border_color(rgb(t.text))
-                .bg(rgb(t.surface))
-                .child(
-                    div()
-                        .text_size(px(18.0))
-                        .text_color(rgb(t.text))
-                        .child(draft.to_owned()),
-                )
-                .child(div().w(px(2.0)).h(px(20.0)).bg(rgb(t.text))),
-        )
+        .child(crate::inputs::field(
+            state,
+            crate::inputs::InputField::Account,
+            380.0,
+            t,
+        ))
         .child(
             div()
                 .flex()
