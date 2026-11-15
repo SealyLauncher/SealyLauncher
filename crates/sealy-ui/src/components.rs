@@ -796,6 +796,75 @@ pub fn nav_button(
     button
 }
 
+/// Bordered value chip that opens the shared input editor.
+#[track_caller]
+pub fn value_button(
+    label: impl Into<SharedString>,
+    width: f32,
+    text_color: u32,
+    t: &ThemeTokens,
+) -> UiButton {
+    let label: SharedString = label.into();
+    let fallback = button_id(
+        std::panic::Location::caller(),
+        &format!("value:{}", label.as_ref()),
+    );
+    let style = style_of(
+        div()
+            .w(px(width))
+            .h(px(30.0))
+            .px(px(10.0))
+            .rounded(px(theme::RADIUS_TILE))
+            .border_1()
+            .border_color(rgb(t.line))
+            .bg(rgb(t.surface))
+            .text_size(px(11.0))
+            .text_color(rgb(text_color)),
+    );
+    UiButton::new(
+        UiButtonKind::Quiet,
+        Some(label),
+        None,
+        style,
+        (
+            hsla(t.surface),
+            hsla(text_color),
+            hsla(t.line_soft),
+            hsla(t.line_soft),
+        ),
+        fallback,
+    )
+}
+
+/// Full-width prompt row with a trailing arrow.
+#[track_caller]
+pub fn prompt_button(t: &ThemeTokens) -> UiButton {
+    let fallback = button_id(std::panic::Location::caller(), "prompt");
+    let style = style_of(
+        div()
+            .w_full()
+            .h(px(64.0))
+            .px(px(20.0))
+            .rounded(px(theme::RADIUS_TILE))
+            .border_1()
+            .border_color(rgb(t.line))
+            .bg(rgb(t.surface))
+            .text_color(rgb(t.text)),
+    );
+    UiButton::new(
+        UiButtonKind::Quiet,
+        None,
+        None,
+        style,
+        (
+            hsla(t.surface),
+            hsla(t.text),
+            hsla(t.line_soft),
+            hsla(t.line_soft),
+        ),
+        fallback,
+    )
+}
 /// Card-shaped button used for large choices.
 #[track_caller]
 pub fn card_button(t: &ThemeTokens) -> UiButton {

@@ -6,7 +6,7 @@ use sealy_core::config::{Language, MemoryMode, MotionSetting, ThemeName};
 use crate::app::SealyShell;
 use crate::components::{
     action_bar, choice_button, field_row, head_band_back, mono, nav_button, quiet_button,
-    tile_button,
+    tile_button, value_button,
 };
 use crate::i18n::tr;
 use crate::kit::*;
@@ -421,27 +421,12 @@ fn java_section(
     let memory_editor: AnyElement = if state.memory_draft.is_some() {
         crate::inputs::field(state, crate::inputs::InputField::Memory, 150.0, t)
     } else {
-        div()
+        value_button(format!("{memory} MB"), 150.0, t.text, t)
             .id("memory-input")
-            .role(Role::Button)
             .aria_label("memory-input")
-            .h(px(30.0))
-            .w(px(150.0))
-            .px(px(10.0))
-            .flex()
-            .items_center()
-            .justify_center()
-            .overflow_hidden()
-            .rounded(px(theme::RADIUS_TILE))
-            .border_1()
-            .border_color(rgb(t.line))
-            .cursor_pointer()
-            .text_size(px(11.0))
-            .text_color(rgb(t.text))
             .on_click(cx.listener(|shell, _, window, cx| {
                 shell.open_input(crate::inputs::InputField::Memory, String::new(), window, cx);
             }))
-            .child(format!("{memory} MB"))
             .into_any_element()
     };
 
@@ -597,62 +582,39 @@ fn network_section(
     let proxy_editor: AnyElement = if state.proxy_draft.is_some() {
         crate::inputs::field(state, InputField::Proxy, 300.0, t)
     } else {
-        div()
-            .id("proxy-input")
-            .role(Role::Button)
-            .aria_label("proxy-input")
-            .h(px(30.0))
-            .w(px(300.0))
-            .px(px(10.0))
-            .flex()
-            .items_center()
-            .overflow_hidden()
-            .rounded(px(theme::RADIUS_TILE))
-            .border_1()
-            .border_color(rgb(t.line))
-            .cursor_pointer()
-            .text_size(px(11.0))
-            .text_color(rgb(if state.settings.network.proxy.is_empty() {
-                t.faint
-            } else {
-                t.text
-            }))
-            .on_click(cx.listener(|shell, _, window, cx| {
-                let value = shell.state.settings.network.proxy.clone();
-                shell.open_input(InputField::Proxy, value, window, cx);
-            }))
-            .child(if state.settings.network.proxy.is_empty() {
+        value_button(
+            if state.settings.network.proxy.is_empty() {
                 tr(lang, "点击编辑代理", "Click to edit").to_owned()
             } else {
                 state.settings.network.proxy.clone()
-            })
-            .into_any_element()
+            },
+            300.0,
+            if state.settings.network.proxy.is_empty() {
+                t.faint
+            } else {
+                t.text
+            },
+            t,
+        )
+        .id("proxy-input")
+        .aria_label("proxy-input")
+        .on_click(cx.listener(|shell, _, window, cx| {
+            let value = shell.state.settings.network.proxy.clone();
+            shell.open_input(InputField::Proxy, value, window, cx);
+        }))
+        .into_any_element()
     };
 
     let game_editor: AnyElement = if state.game_dir_draft.is_some() {
         crate::inputs::field(state, InputField::GameDir, 300.0, t)
     } else {
-        div()
+        value_button(state.paths.game.display().to_string(), 300.0, t.text, t)
             .id("game-dir-input")
-            .role(Role::Button)
             .aria_label("game-dir-input")
-            .h(px(30.0))
-            .w(px(300.0))
-            .px(px(10.0))
-            .flex()
-            .items_center()
-            .overflow_hidden()
-            .rounded(px(theme::RADIUS_TILE))
-            .border_1()
-            .border_color(rgb(t.line))
-            .cursor_pointer()
-            .text_size(px(11.0))
-            .text_color(rgb(t.text))
             .on_click(cx.listener(|shell, _, window, cx| {
                 let value = shell.state.paths.game.display().to_string();
                 shell.open_input(InputField::GameDir, value, window, cx);
             }))
-            .child(state.paths.game.display().to_string())
             .into_any_element()
     };
 

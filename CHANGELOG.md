@@ -16,6 +16,14 @@
 
 ## [Unreleased]
 
+- 2026-11-15 — 全站组件盘点与最后一批按钮迁移：
+  - 设置页内存、HTTP 代理、游戏目录三个「值编辑」入口由自定义 div 改为组件 Button（新增 `components::value_button`），点击仍打开组件 Input 编辑器。
+  - 新增 `docs/COMPONENTS.md`：逐项对照 GPUI 组件与界面能力（Input / Button / Switch / RadioGroup / Radio / Select / Progress / Spinner / Avatar / Notification / Sheet / Dialog / TabBar / Scrollable / TitleBar / Slider / Icon）。
+  - 列表滚动复核：10 个账号、13 个实例滚轮滚动正常，行高固定、滚动条可见（目标第 2 项）。
+  - 验证：`cargo fmt`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace` 全绿（80 通过 / 2 忽略）；截图 design/preview/gpui-components-*.png 与 target/audit-{accounts,instances}-scroll.png。
+
+
+
 - 2026-11-15 — 实例启动设置、日志与崩溃分析改用组件 Sheet：
   - 三处页面内自定义右侧浮层改为 gpui-component `Sheet`：实例启动设置（输入字段 + 保存/取消 footer）、游戏日志（行数标题 + 刷新/打开日志目录）、崩溃分析（摘要/发现/报告片段 + 重新分析/打开报告目录）。
   - 新增统一 `SheetView` 状态同步（消息中心 / 启动设置 / 日志 / 崩溃）：按状态标志优先级打开，切换视图先关闭旧 Sheet 再打开新 Sheet；Sheet 关闭时回写对应状态标志，避免残留。

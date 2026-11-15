@@ -1064,6 +1064,15 @@ pub trait SkinProvider: Send + Sync;
 - 失败恢复与清理：`write_pending`/`reconcile_pending`/`clear_update_cache`；更新脚本删除安装包与暂存目录。
 - 启动检查：`update.auto_check`（默认开）+ 设置页开关；发现新版本用 toast 提示并预填更新卡片。
 - 签名：新增 `docs/SIGNING.md`（Windows OV/EV、Azure Trusted Signing、SignPath/Certum；macOS Developer ID + notarytool；Linux GPG 校验）。当前发布仍未做商业签名。
+### 20.27 全站组件盘点（2026-11-15）
+
+- 对照 GPUI Kit / gpui-component 清单完成盘点，新增 `docs/COMPONENTS.md` 记录能力与组件映射：
+  Input、Button（UiButton 全部变体）、Switch、RadioGroup/Radio、Select、Progress、Spinner、Avatar、Notification、Sheet、Dialog、TabBar、ScrollableElement、TitleBar、Slider、Icon。
+- 最后一批：设置页内存 / 代理 / 游戏目录值编辑入口改用 `components::value_button`（组件 Button + 组件 Input 编辑器）。
+- 非标准控件但保留自定义的只有列表行内容（账号/实例/下载版本行的选择态与元数据）与 OOBE 一处文字链接；行内按钮、输入、滚动均为组件。
+- 列表滚动复核：10 个账号、13 个实例滚轮滚动正常，行高固定、滚动条可见；证据 `design/preview/gpui-components-scroll.png`、`target/audit-{accounts,instances}-scroll.png`。
+- 验证：fmt/clippy/test 全绿（80 通过 / 2 忽略）。
+- 结论：目标第 1 项（全站标准控件/浮层组件化）与第 2 项（账户/实例列表滑动不挤压）均已完成。
 ### 20.26 页面侧滑面板统一为 Sheet（2026-11-15）
 
 - `launch_settings_panel`、`log_panel`、`crash_panel` 重写为 `launch_settings_sheet` / `logs_sheet` / `crash_sheet`：内容去掉绝对定位与自绘标题/关闭按钮，使用 Sheet 的标题、关闭按钮、遮罩、滚动 body 与 footer；输入仍为组件 Input，按钮为 UiButton。
