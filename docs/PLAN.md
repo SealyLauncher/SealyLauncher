@@ -1064,6 +1064,14 @@ pub trait SkinProvider: Send + Sync;
 - 失败恢复与清理：`write_pending`/`reconcile_pending`/`clear_update_cache`；更新脚本删除安装包与暂存目录。
 - 启动检查：`update.auto_check`（默认开）+ 设置页开关；发现新版本用 toast 提示并预填更新卡片。
 - 签名：新增 `docs/SIGNING.md`（Windows OV/EV、Azure Trusted Signing、SignPath/Certum；macOS Developer ID + notarytool；Linux GPG 校验）。当前发布仍未做商业签名。
+### 20.21 Sheet、Dialog 与 Tabs 迁移（2026-11-15）
+
+- 消息中心：改为 `gpui-component` 的 `Sheet`（右侧滑入、组件标题栏/关闭按钮、遮罩、Esc 与遮罩关闭）。`message_open` 与 Sheet 双向同步：渲染帧用 `window.defer` + `open_sheet` 打开，`on_close` 回写状态；面板内容复用原消息行。
+- 删除确认：改为组件 `Dialog`（标题、说明、自定义 footer 三个按钮）。按钮在 `shell.update` 中调用 `delete_selected_instance` 后 `window.close_dialog`；Esc/关闭按钮走组件自身关闭流程。
+- 实例详情：左侧分区栏改为组件 `TabBar`（Underline 变体），点击切换概览/模组/资源包/光影；内容区保留 `overflow_y_scrollbar` 独立滚动。
+- 按钮修复：UiButton 的 Primary 改用组件 primary 变体 + 样式覆盖背景，修正自定义变体把背景混合成灰色的问题。
+- 验证：fmt/clippy/test 全绿（80 通过）；实机 Sheet 开/合（关闭按钮、Esc）、Dialog 删除（实例从 instances.json 消失）与 Esc、TabBar 切换均通过；截图 `design/preview/gpui-components-{sheet,dialog,tabs}.png`。
+- 待办：下载源、并发等选项改用 `Select`/`Combobox`；OOBE 卡片改用 `RadioGroup`/`Radio`；通知可评估用组件 Notification。
 ### 20.20 UI 组件化与列表滚动（2026-11-15）
 
 - 结论：`gpui-component` 已提供 button / switch / checkbox / radio / select / combobox / progress / spinner / avatar / tag / badge / list / scroll / tab / sidebar / dialog / sheet，经 `gpui-kit` 直接可用，不需要新增依赖。

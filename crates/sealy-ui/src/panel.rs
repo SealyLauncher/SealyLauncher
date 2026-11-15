@@ -5,11 +5,11 @@ use crate::components::{chip_button, mono};
 use crate::i18n::tr;
 use crate::kit::*;
 use crate::state::{MessageTone, ShellState};
-use crate::theme::{self, ThemeTokens};
+use crate::theme::ThemeTokens;
 use sealy_core::config::Language;
 
-/// Slide-over panel anchored to the right edge of the content area.
-pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyElement {
+/// Builds the message-center sheet.
+pub(crate) fn build_sheet(sheet: Sheet, state: &ShellState, cx: &mut Context<SealyShell>) -> Sheet {
     let t = state.theme();
     let lang = state.language();
 
@@ -42,73 +42,31 @@ pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyEle
     } else {
         div()
             .id("message-list")
-            .flex_1()
-            .min_h(px(0.0))
-            .overflow_y_scrollbar()
+            .w_full()
             .flex()
             .flex_col()
             .children(rows)
             .into_any_element()
     };
 
-    div()
-        .absolute()
-        .occlude()
-        .top(px(0.0))
-        .right(px(0.0))
-        .bottom(px(0.0))
-        .w(px(420.0))
-        .flex()
-        .flex_col()
+    sheet
+        .size(DefiniteLength::Absolute(px(440.0).into()))
         .bg(rgb(t.surface))
-        .border_l_1()
         .border_color(rgb(t.line))
-        .child(
+        .text_color(rgb(t.text))
+        .title(
             div()
-                .h(px(56.0))
-                .flex_shrink_0()
-                .px(px(20.0))
                 .flex()
                 .items_center()
                 .gap(px(10.0))
-                .border_b_1()
-                .border_color(rgb(t.line))
                 .child(
                     div()
-                        .flex_1()
-                        .text_size(px(14.0))
-                        .font_weight(FontWeight::SEMIBOLD)
                         .text_color(rgb(t.text))
                         .child(tr(lang, "消息中心", "Message center")),
                 )
-                .child(mono(format!("{:02}", state.messages.len()), &t))
-                .child(
-                    div()
-                        .id("messages-close")
-                        .role(Role::Button)
-                        .aria_label("close messages")
-                        .w(px(28.0))
-                        .h(px(28.0))
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .rounded(px(theme::RADIUS_TILE))
-                        .cursor_pointer()
-                        .hover(move |s| s.bg(rgb(t.line_soft)))
-                        .child(
-                            Icon::new(IconName::X)
-                                .w(px(15.0))
-                                .h(px(15.0))
-                                .text_color(rgb(t.muted)),
-                        )
-                        .on_click(cx.listener(|shell, _, _, cx| {
-                            shell.state.message_open = false;
-                            cx.notify();
-                        })),
-                ),
+                .child(mono(format!("{:02}", state.messages.len()), &t)),
         )
         .child(body)
-        .into_any_element()
 }
 
 fn row(

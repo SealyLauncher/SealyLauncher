@@ -2,8 +2,7 @@
 
 use crate::app::SealyShell;
 use crate::components::{
-    action_bar, choice_button, field_row, head_band_back_to, mono, nav_button, primary_button,
-    quiet_button,
+    action_bar, choice_button, field_row, head_band_back_to, mono, primary_button, quiet_button,
 };
 use crate::i18n::tr;
 use crate::kit::*;
@@ -177,15 +176,55 @@ pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyEle
         }
     };
 
+    let sections = crate::state::InstanceSection::ALL;
+    let current_index = sections
+        .iter()
+        .position(|section| *section == state.instance_section)
+        .unwrap_or(0);
+    let tabs = sections
+        .iter()
+        .enumerate()
+        .map(|(index, section)| {
+            Tab::new()
+                .label(section.label(lang))
+                .aria_label(format!("instance-section-{index}"))
+        })
+        .collect::<Vec<_>>();
+    let tabs_shell = cx.entity().downgrade();
     let body = div()
         .flex_1()
         .min_h(px(0.0))
         .flex()
-        .child(instance_sidebar(state, &t, lang, cx))
+        .flex_col()
+        .child(
+            div()
+                .flex_shrink_0()
+                .px(px(theme::PAGE_PADDING))
+                .pt(px(8.0))
+                .border_b_1()
+                .border_color(rgb(t.line))
+                .child(
+                    TabBar::new("instance-sections")
+                        .underline()
+                        .selected_index(current_index)
+                        .children(tabs)
+                        .on_click(move |index, _, cx| {
+                            let Some(section) = sections.get(*index).copied() else {
+                                return;
+                            };
+                            if let Some(shell) = tabs_shell.upgrade() {
+                                shell.update(cx, |this, cx| {
+                                    this.state.instance_section = section;
+                                    cx.notify();
+                                });
+                            }
+                        }),
+                ),
+        )
         .child(
             div()
                 .flex_1()
-                .min_w(px(0.0))
+                .min_h(px(0.0))
                 .id("instance-detail-body")
                 .overflow_y_scrollbar()
                 .p(px(theme::PAGE_PADDING))
@@ -556,41 +595,6 @@ fn empty(
 }
 
 /// Left navigation of the instance page.
-fn instance_sidebar(
-    state: &ShellState,
-    t: &ThemeTokens,
-    lang: sealy_core::config::Language,
-    cx: &mut Context<SealyShell>,
-) -> AnyElement {
-    let current = state.instance_section;
-    let items = crate::state::InstanceSection::ALL
-        .into_iter()
-        .enumerate()
-        .map(|(index, section)| {
-            let selected = section == current;
-            nav_button(section.label(lang), None, selected, t)
-                .id(("instance-section", index))
-                .aria_label(format!("instance-section-{index}"))
-                .on_click(cx.listener(move |shell, _, _, cx| {
-                    shell.state.instance_section = section;
-                    cx.notify();
-                }))
-        })
-        .collect::<Vec<_>>();
-
-    div()
-        .w(px(176.0))
-        .flex_shrink_0()
-        .h_full()
-        .py(px(12.0))
-        .flex()
-        .flex_col()
-        .gap(px(2.0))
-        .border_r_1()
-        .border_color(rgb(t.line))
-        .children(items)
-        .into_any_element()
-}
 /// One addon section: title, count, import action and the entry list.
 fn addon_section(
     state: &ShellState,

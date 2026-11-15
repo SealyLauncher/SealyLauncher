@@ -143,9 +143,8 @@ pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyEle
                         .id("instance-delete")
                         .role(Role::Button)
                         .aria_label("delete-instance")
-                        .on_click(cx.listener(|shell, _, _, cx| {
-                            shell.state.delete_confirm_open = true;
-                            cx.notify();
+                        .on_click(cx.listener(|shell, _, window, cx| {
+                            shell.open_delete_dialog(window, cx);
                         })),
                 )
                 .child(
@@ -223,11 +222,6 @@ pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyEle
             state
                 .instance_settings_open
                 .then(|| launch_settings_panel(state, &t, lang, cx)),
-        )
-        .children(
-            state
-                .delete_confirm_open
-                .then(|| delete_confirm_panel(state, &t, lang, cx)),
         )
         .children(state.logs_open.then(|| log_panel(state, &t, lang, cx)))
         .into_any_element()
@@ -1268,134 +1262,6 @@ pub(crate) fn instance_icon(instance: &Instance) -> IconName {
 }
 
 /// Confirmation panel shown before deleting an instance.
-fn delete_confirm_panel(
-    state: &ShellState,
-    t: &ThemeTokens,
-    lang: sealy_core::config::Language,
-    cx: &mut Context<SealyShell>,
-) -> AnyElement {
-    let name = state
-        .instances
-        .current()
-        .map(|instance| instance.name.clone())
-        .unwrap_or_default();
-
-    div()
-        .absolute()
-        .occlude()
-        .top(px(0.0))
-        .right(px(0.0))
-        .bottom(px(0.0))
-        .w(px(420.0))
-        .flex()
-        .flex_col()
-        .bg(rgb(t.surface))
-        .border_l_1()
-        .border_color(rgb(t.line))
-        .child(
-            div()
-                .h(px(56.0))
-                .flex_shrink_0()
-                .px(px(20.0))
-                .flex()
-                .items_center()
-                .gap(px(10.0))
-                .border_b_1()
-                .border_color(rgb(t.line))
-                .child(
-                    div()
-                        .flex_1()
-                        .text_size(px(14.0))
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(rgb(t.text))
-                        .child(tr(lang, "删除实例", "Delete instance")),
-                )
-                .child(
-                    div()
-                        .id("delete-close")
-                        .role(Role::Button)
-                        .aria_label("close-delete")
-                        .w(px(28.0))
-                        .h(px(28.0))
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .rounded(px(theme::RADIUS_TILE))
-                        .cursor_pointer()
-                        .hover(move |style| style.bg(rgb(t.line_soft)))
-                        .child(
-                            Icon::new(IconName::X)
-                                .w(px(15.0))
-                                .h(px(15.0))
-                                .text_color(rgb(t.muted)),
-                        )
-                        .on_click(cx.listener(|shell, _, _, cx| {
-                            shell.state.delete_confirm_open = false;
-                            cx.notify();
-                        })),
-                ),
-        )
-        .child(
-            div()
-                .p(px(20.0))
-                .flex()
-                .flex_col()
-                .gap(px(10.0))
-                .child(
-                    div()
-                        .text_size(px(13.0))
-                        .text_color(rgb(t.text))
-                        .child(format!("{} {name}", tr(lang, "要删除的实例：", "Instance:"))),
-                )
-                .child(
-                    div()
-                        .text_size(px(11.0))
-                        .text_color(rgb(t.muted))
-                        .child(tr(
-                            lang,
-                            "「仅移除记录」保留游戏与存档文件，可在提示里撤销；「连同文件删除」会删掉整个实例目录且不可恢复。",
-                            "Removing the entry keeps saves and can be undone; deleting files removes the whole instance folder for good.",
-                        )),
-                ),
-        )
-        .child(div().flex_1())
-        .child(
-            action_bar(t)
-                .child(
-                    quiet_button(tr(lang, "取消", "Cancel"), t)
-                        .id("delete-cancel")
-                        .role(Role::Button)
-                        .aria_label("cancel-delete")
-                        .on_click(cx.listener(|shell, _, _, cx| {
-                            shell.state.delete_confirm_open = false;
-                            cx.notify();
-                        })),
-                )
-                .child(div().flex_1())
-                .child(
-                    quiet_button(tr(lang, "连同文件删除", "Delete files too"), t)
-                        .id("delete-with-files")
-                        .role(Role::Button)
-                        .aria_label("delete-with-files")
-                        .on_click(cx.listener(|shell, _, _, cx| {
-                            shell.state.delete_selected_instance(true);
-                            cx.notify();
-                        })),
-                )
-                .child(
-                    primary_button(tr(lang, "仅移除记录", "Remove entry"), t)
-                        .id("delete-entry-only")
-                        .role(Role::Button)
-                        .aria_label("delete-entry-only")
-                        .on_click(cx.listener(|shell, _, _, cx| {
-                            shell.state.delete_selected_instance(false);
-                            cx.notify();
-                        })),
-                ),
-        )
-        .into_any_element()
-}
-
 /// `2H · 3D · 1W` style label for the last launch.
 fn age_label(stamp: u64) -> String {
     let now = launch_flow::now_epoch();

@@ -2,6 +2,7 @@
 
 use gpui_kit::component::TitleBar;
 
+use crate::i18n::tr;
 use crate::kit::*;
 use crate::pages;
 use crate::state::{Route, ShellState};
@@ -250,12 +251,9 @@ impl Render for SealyShell {
             window.focus(&self.focus, cx);
         }
 
+        self.sync_message_sheet(window, cx);
         let tokens = self.state.theme();
         let page = pages::render(&mut self.state, cx);
-        let panel = self
-            .state
-            .message_open
-            .then(|| crate::panel::render(&self.state, cx));
         let notice = self
             .state
             .toast
@@ -333,30 +331,7 @@ impl Render for SealyShell {
                     .child(div().flex_1())
                     .child(message_button(&tokens, self.state.running_messages(), cx)),
             )
-            .child(
-                div()
-                    .flex_1()
-                    .relative()
-                    .overflow_hidden()
-                    .child(page)
-                    .children(self.state.message_open.then(|| {
-                        div()
-                            .id("messages-backdrop")
-                            .absolute()
-                            .top(px(0.0))
-                            .left(px(0.0))
-                            .right(px(0.0))
-                            .bottom(px(0.0))
-                            .on_mouse_down(
-                                gpui_kit::MouseButton::Left,
-                                cx.listener(|shell, _, _, cx| {
-                                    shell.state.message_open = false;
-                                    cx.notify();
-                                }),
-                            )
-                    }))
-                    .children(panel),
-            )
+            .child(div().flex_1().relative().overflow_hidden().child(page))
             .children(notice)
             .on_key_down(cx.listener(|shell, event: &KeyDownEvent, _, cx| {
                 shell.handle_key(&event.keystroke, cx);
@@ -739,6 +714,134 @@ impl SealyShell {
         false
     }
 
+    /// Opens the component dialog that confirms deleting the selected instance.
+    pub(crate) fn open_delete_dialog(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(name) = self
+            .state
+            .instances
+            .current()
+            .map(|instance| instance.name.clone())
+        else {
+            return;
+        };
+        let lang = self.state.language();
+        let t = self.state.theme();
+        let shell = cx.entity().downgrade();
+        let entry_shell = shell.clone();
+        let files_shell = shell.clone();
+        window.open_dialog(cx, move |dialog, _window, _cx| {
+            let title = tr(lang, "删除实例", "Delete instance");
+            let label = format!("{} {name}", tr(lang, "要删除的实例：", "Instance:"));
+            let hint = tr(
+                lang,
+                "「仅移除记录」保留游戏与存档，可在提示里撤销；「连同文件删除」会删掉整个实例目录且不可恢复。",
+                "Removing the entry keeps saves and can be undone; deleting files removes the whole instance folder for good.",
+            );
+            let cancel = crate::components::quiet_button(tr(lang, "取消", "Cancel"), &t)
+                .on_click(move |_, window, cx| window.close_dialog(cx));
+            let entry_target = entry_shell.clone();
+            let entry = crate::components::primary_button(tr(lang, "仅移除记录", "Remove entry"), &t)
+                .on_click(move |_, window, cx| {
+                    if let Some(shell) = entry_target.upgrade() {
+                        shell.update(cx, |this, cx| {
+                            this.state.delete_selected_instance(false);
+                            cx.notify();
+                        });
+                    }
+                    window.close_dialog(cx);
+                });
+            let files_target = files_shell.clone();
+            let files = crate::components::quiet_button(
+                tr(lang, "连同文件删除", "Delete files too"),
+                &t,
+            )
+            .on_click(move |_, window, cx| {
+                if let Some(shell) = files_target.upgrade() {
+                    shell.update(cx, |this, cx| {
+                        this.state.delete_selected_instance(true);
+                        cx.notify();
+                    });
+                }
+                window.close_dialog(cx);
+            });
+            dialog
+                .title(
+                    div()
+                        .text_size(px(16.0))
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_color(rgb(t.text))
+                        .child(title),
+                )
+                .width(px(500.0))
+                .content(move |content, _, _| {
+                    content
+                        .child(
+                            div()
+                                .text_size(px(13.0))
+                                .text_color(rgb(t.text))
+                                .child(label.clone()),
+                        )
+                        .child(
+                            div()
+                                .mt(px(8.0))
+                                .text_size(px(11.0))
+                                .line_height(relative(1.5))
+                                .text_color(rgb(t.muted))
+                                .child(hint),
+                        )
+                })
+                .footer(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(px(8.0))
+                        .w_full()
+                        .child(cancel)
+                        .child(div().flex_1())
+                        .child(files)
+                        .child(entry),
+                )
+        });
+    }
+
+    /// Keeps the message-center sheet in step with `message_open`.
+    ///
+    /// The sheet is a component-owned overlay, so it is opened and closed
+    /// imperatively after the frame that flipped the state flag.
+    fn sync_message_sheet(&self, window: &mut Window, cx: &mut Context<Self>) {
+        let open = self.state.message_open;
+        let active = window.has_active_sheet(cx);
+        if open && !active {
+            let weak = cx.entity().downgrade();
+            window.defer(cx, move |window, cx| {
+                if weak.upgrade().is_none() {
+                    return;
+                }
+                let build_shell = weak.clone();
+                let close_shell = weak.clone();
+                window.open_sheet(cx, move |sheet, _window, cx| {
+                    let Some(shell) = build_shell.upgrade() else {
+                        return sheet;
+                    };
+                    let sheet = shell.update(cx, |this, cx| {
+                        crate::panel::build_sheet(sheet, &this.state, cx)
+                    });
+                    let close = close_shell.clone();
+                    sheet.on_close(move |_, _, cx| {
+                        if let Some(shell) = close.upgrade() {
+                            shell.update(cx, |this, cx| {
+                                this.state.message_open = false;
+                                cx.notify();
+                            });
+                        }
+                    })
+                });
+            });
+        } else if !open && active {
+            window.defer(cx, |window, cx| window.close_sheet(cx));
+        }
+    }
+
     /// Window-wide shortcuts: Enter runs the primary action, Escape steps back,
     /// digits jump between pages.
     fn handle_key(&mut self, keystroke: &Keystroke, cx: &mut Context<Self>) {
@@ -772,13 +875,6 @@ impl SealyShell {
         // Escape returns from an instance's detail page to the list.
         if keystroke.key == "escape" && self.state.route == Route::Instance {
             self.state.close_instance_detail();
-            cx.notify();
-            return;
-        }
-
-        // The delete confirmation closes on Escape.
-        if keystroke.key == "escape" && self.state.delete_confirm_open {
-            self.state.delete_confirm_open = false;
             cx.notify();
             return;
         }

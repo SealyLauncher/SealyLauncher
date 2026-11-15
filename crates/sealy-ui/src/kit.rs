@@ -9,20 +9,24 @@ pub use gpui_kit::base::slider::{SliderEvent, SliderState};
 pub use gpui_kit::base::{Slider as BaseSlider, SliderIndicator, SliderThumb, SliderTrack};
 pub use gpui_kit::component::Icon;
 pub use gpui_kit::component::Sizable;
+pub use gpui_kit::component::WindowExt;
 pub use gpui_kit::component::avatar::Avatar;
 pub use gpui_kit::component::button::{Button, ButtonCustomVariant, ButtonVariants};
+pub use gpui_kit::component::dialog::Dialog;
 pub use gpui_kit::component::input::Escape as InputEscape;
 pub use gpui_kit::component::progress::Progress;
 pub use gpui_kit::component::scroll::ScrollableElement;
+pub use gpui_kit::component::sheet::Sheet;
 pub use gpui_kit::component::spinner::Spinner;
 pub use gpui_kit::component::switch::Switch;
-pub use gpui_kit::component::{Disableable, RoleOverride, StyledExt};
+pub use gpui_kit::component::tab::{Tab, TabBar};
+pub use gpui_kit::component::{Disableable, RoleOverride, Selectable, StyledExt};
 pub use gpui_kit::prelude::*;
 pub use gpui_kit::{
-    Animation, AnimationExt, AnyElement, App, Bounds, ClickEvent, ClipboardItem, Context, Div,
-    ElementId, FocusHandle, FontWeight, Hsla, IntoElement, KeyDownEvent, Keystroke, ObjectFit,
-    PathPromptOptions, Render, Rgba, Role, SharedString, Window, WindowBounds, WindowOptions, div,
-    img, relative, rgb, rgba, size,
+    Animation, AnimationExt, AnyElement, App, Bounds, ClickEvent, ClipboardItem, Context,
+    DefiniteLength, Div, ElementId, FocusHandle, FontWeight, Hsla, IntoElement, KeyDownEvent,
+    Keystroke, ObjectFit, PathPromptOptions, Render, Rgba, Role, SharedString, Window,
+    WindowBounds, WindowOptions, div, img, relative, rgb, rgba, size,
 };
 pub use gpui_kit::{AnyWindowHandle, Entity, Refineable, Subscription, WindowHandle};
 pub use gpui_kit::{KeyBinding, Menu, MenuItem, NoAction, OsAction, SystemMenuType};

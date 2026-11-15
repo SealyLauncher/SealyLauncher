@@ -16,6 +16,16 @@
 
 ## [Unreleased]
 
+- 2026-11-15 — 消息中心/删除确认改用 Sheet/Dialog，实例详情改用 Tabs：
+  - 消息中心由自定义右侧浮层改为 gpui-component `Sheet`：组件标题栏与关闭按钮、遮罩、Esc/点击遮罩关闭；`message_open` 与 Sheet 双向同步（打开用 defer 注入，关闭回写状态），消息行内容保持原样。
+  - 删除实例确认由页面内浮层改为 gpui-component `Dialog`：标题、说明、自定义三按钮 footer（取消 / 连同文件删除 / 仅移除记录），按钮执行删除并关闭对话框；实测删除后实例从 instances.json 消失，Esc 可关闭。
+  - 实例详情左侧分区栏改为组件 `TabBar`（下划线样式），点击切换概览 / 模组 / 资源包 / 光影，内容区继续独立滚动；无障碍标签保留 `instance-section-N`。
+  - 主按钮修复：UiButton 的 Primary 改用组件 `primary` 变体并在样式中覆盖背景/前景，解决自定义变体把背景洗成灰色的问题。
+  - 验证：`cargo fmt`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace` 全绿（80 通过 / 2 忽略）；截图 design/preview/gpui-components-{sheet,dialog,tabs}.png。
+  - 待办：下载源、并发等选项仍是按钮组（可换 Select/Combobox），OOBE 仍用自定义卡片（可换 RadioGroup/Radio）。
+
+
+
 - 2026-11-15 — 全站 UI 组件化与列表滚动：
   - 组件库存盘点：gpui-component 已内置 button / switch / checkbox / radio / select / combobox / progress / spinner / avatar / tag / badge / list / scroll / tab / sidebar / dialog / sheet 等，经 gpui-kit 直接可用，无需新增依赖。
   - 按钮：新增 `components::UiButton` 适配层（内部渲染 gpui-component `Button` + `ButtonCustomVariant`，保留页面原有 `.id/.aria_label/.role/.on_click/.child` 链）；`primary_button` / `quiet_button` / `choice_button` / `icon_button` / 新增 `chip_button`、`nav_button` 全部切换，悬停、焦点框、键盘激活由组件提供。

@@ -416,7 +416,7 @@ enum UiButtonKind {
     /// Bordered, low-emphasis action.
     Quiet,
     /// Bordered toggle reporting a selection.
-    Choice,
+    Choice { selected: bool },
     /// Square icon-only action.
     Icon,
 }
@@ -428,7 +428,7 @@ enum UiButtonKind {
 /// activation come from `gpui-component`.
 #[derive(IntoElement)]
 pub struct UiButton {
-    _kind: UiButtonKind,
+    kind: UiButtonKind,
     label: Option<SharedString>,
     icon: Option<IconName>,
     id: Option<ElementId>,
@@ -452,7 +452,7 @@ impl UiButton {
         fallback_id: ElementId,
     ) -> Self {
         Self {
-            _kind: kind,
+            kind,
             label,
             icon,
             id: None,
@@ -529,16 +529,23 @@ impl RenderOnce for UiButton {
     // The IntoElement derive wires this into the element tree.
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         let (bg, fg, hover, active) = self.colors;
-        let mut button = Button::new(self.id.unwrap_or(self.fallback_id))
-            .custom(
-                ButtonCustomVariant::new(cx)
+        let mut button = Button::new(self.id.unwrap_or(self.fallback_id));
+        button = match self.kind {
+            UiButtonKind::Primary => button.primary(),
+            other => {
+                let custom = ButtonCustomVariant::new(cx)
                     .color(bg)
                     .foreground(fg)
                     .hover(hover)
                     .active(active)
-                    .shadow(false),
-            )
-            .disabled(self.disabled);
+                    .shadow(false);
+                match other {
+                    UiButtonKind::Choice { selected } => button.selected(selected).custom(custom),
+                    _ => button.custom(custom),
+                }
+            }
+        };
+        button = button.disabled(self.disabled);
         if let Some(label) = self.label {
             button = button.label(label);
         }
@@ -581,6 +588,7 @@ pub fn primary_button(label: impl Into<SharedString>, t: &ThemeTokens) -> UiButt
             .h(px(58.0))
             .px(px(26.0))
             .rounded(px(theme::RADIUS_TILE))
+            .bg(rgb(t.accent))
             .text_size(px(20.0))
             .font_weight(FontWeight::SEMIBOLD)
             .text_color(rgb(t.accent_text)),
@@ -662,7 +670,7 @@ pub fn choice_button(label: impl Into<SharedString>, selected: bool, t: &ThemeTo
             .text_color(rgb(fg)),
     );
     UiButton::new(
-        UiButtonKind::Choice,
+        UiButtonKind::Choice { selected },
         Some(label),
         None,
         style,
