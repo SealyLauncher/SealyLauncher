@@ -82,6 +82,20 @@ pub fn download_to<W: std::io::Write>(
     sink: &mut W,
     on_progress: &mut dyn FnMut(u64),
 ) -> Result<u64, CoreError> {
+    static NEVER: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+    download_to_cancellable(agent, url, sink, on_progress, &NEVER)
+}
+
+/// Fetches a URL into `sink`, aborting when `cancel` is set.
+///
+/// The partially written sink is left untouched; callers remove it.
+pub fn download_to_cancellable<W: std::io::Write>(
+    agent: &ureq::Agent,
+    url: &str,
+    sink: &mut W,
+    on_progress: &mut dyn FnMut(u64),
+    cancel: &std::sync::atomic::AtomicBool,
+) -> Result<u64, CoreError> {
     let response = agent
         .get(url)
         .set("User-Agent", &user_agent())
@@ -92,6 +106,9 @@ pub fn download_to<W: std::io::Write>(
     let mut buffer = [0_u8; 32 * 1024];
     let mut total = 0_u64;
     loop {
+        if cancel.load(std::sync::atomic::Ordering::Relaxed) {
+            return Err(CoreError::Cancelled);
+        }
         let read = reader
             .read(&mut buffer)
             .map_err(|err| CoreError::Network(format!("{url}: {err}")))?;

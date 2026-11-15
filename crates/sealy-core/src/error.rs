@@ -29,6 +29,10 @@ pub enum CoreError {
     #[error("操作失败: {0}")]
     Invalid(String),
 
+    /// The user cancelled a long-running operation.
+    #[error("操作已取消")]
+    Cancelled,
+
     /// Portable root could not be determined.
     #[error("无法确定启动器目录: {0}")]
     RootUnavailable(String),

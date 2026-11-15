@@ -242,11 +242,27 @@ pub struct Settings {
     /// Network proxy.
     #[serde(default)]
     pub network: NetworkSettings,
+    /// Update checks.
+    #[serde(default)]
+    pub update: UpdateSettings,
     /// Custom game directory; None keeps the portable .minecraft.
     #[serde(default)]
     pub game_dir: Option<String>,
 }
 
+/// Self-update settings.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct UpdateSettings {
+    /// Check GitHub for a newer release on startup.
+    #[serde(default = "default_true")]
+    pub auto_check: bool,
+}
+
+impl Default for UpdateSettings {
+    fn default() -> Self {
+        Self { auto_check: true }
+    }
+}
 /// Network settings.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct NetworkSettings {
@@ -302,6 +318,7 @@ impl Default for Settings {
             auth: AuthSettings::default(),
             debug: DebugSettings::default(),
             network: NetworkSettings::default(),
+            update: UpdateSettings::default(),
             game_dir: None,
         }
     }

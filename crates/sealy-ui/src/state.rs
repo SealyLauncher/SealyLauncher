@@ -338,6 +338,23 @@ pub struct ShellState {
     pub update_check: Option<Result<Option<sealy_core::update::ReleaseInfo>, String>>,
     /// Whether the update archive is being downloaded.
     pub update_downloading: bool,
+    /// Live byte progress of the update download.
+    pub update_progress: Option<UpdateProgress>,
+    /// Cancellation flag for the running update download.
+    pub update_cancel: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
+    /// Last update failure, shown with a retry button.
+    pub update_error: Option<String>,
+    /// Warning shown once after a previous update did not finish.
+    pub update_warning: Option<String>,
+}
+
+/// Byte progress of the self-update download.
+#[derive(Debug, Clone)]
+pub struct UpdateProgress {
+    /// Bytes written so far.
+    pub done: std::sync::Arc<std::sync::atomic::AtomicU64>,
+    /// Expected size from the release asset.
+    pub total: u64,
 }
 
 /// Sidebar sections of the instance detail page.
@@ -510,6 +527,8 @@ impl ShellState {
             sealy_core::instances::InstanceBook::load(&bootstrap.paths.instances_file());
         let accounts = sealy_core::accounts::AccountBook::load(&bootstrap.paths.accounts_file());
         let tokens = sealy_core::auth::TokenStore::load(&bootstrap.paths.tokens_file());
+        let update_warning =
+            sealy_core::update::reconcile_pending(&bootstrap.paths.data, sealy_core::version());
         Self {
             route: Route::Home,
             settings: bootstrap.settings,
@@ -560,6 +579,10 @@ impl ShellState {
             crash_view: None,
             update_check: None,
             update_downloading: false,
+            update_progress: None,
+            update_cancel: None,
+            update_error: None,
+            update_warning,
         }
     }
 
@@ -1005,12 +1028,15 @@ impl ShellState {
         sealy_core::addons::remove(&dir, kind, name).map_err(|err| err.to_string())
     }
 
-    /// Downloads the release archive and hands it to the updater.
+    /// Downloads, verifies and applies a release update.
     pub(crate) fn download_update(
         &mut self,
         release: &sealy_core::update::ReleaseInfo,
         cx: &mut crate::kit::Context<crate::app::SealyShell>,
     ) {
+        if self.update_downloading {
+            return;
+        }
         let Some(asset) = release.asset.clone() else {
             let lang = self.language();
             self.notify(crate::i18n::tr(
@@ -1021,63 +1047,81 @@ impl ShellState {
             return;
         };
         self.update_downloading = true;
+        self.update_error = None;
+        self.update_check = Some(Ok(Some(release.clone())));
         let destination = sealy_core::update::cache_path(&self.paths.data, &asset);
+        let done = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0));
+        let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        self.update_progress = Some(UpdateProgress {
+            done: done.clone(),
+            total: asset.size,
+        });
+        self.update_cancel = Some(cancel.clone());
+
+        let data_dir = self.paths.data.clone();
         let install_dir = self.paths.root.clone();
+        let version = release.version.clone();
+        let checksums = release.checksums.clone();
         let executable = std::env::current_exe().ok();
 
         cx.spawn(async move |this, cx| {
-            let result = cx
+            let outcome = cx
                 .background_executor()
                 .spawn({
                     let asset = asset.clone();
                     let destination = destination.clone();
+                    let done = done.clone();
+                    let cancel = cancel.clone();
+                    let data_dir = data_dir.clone();
+                    let version = version.clone();
                     async move {
-                        sealy_core::update::download(&asset, &destination).map(|_| destination)
+                        let Some(exe) = executable.as_deref() else {
+                            return Err(sealy_core::CoreError::Invalid(
+                                "无法定位当前可执行文件".to_owned(),
+                            ));
+                        };
+                        sealy_core::update::install_release(sealy_core::update::UpdateRequest {
+                            asset: &asset,
+                            destination: &destination,
+                            checksums: checksums.as_ref(),
+                            downloaded: &done,
+                            cancel: &cancel,
+                            data_dir: &data_dir,
+                            version: &version,
+                            install_dir: &install_dir,
+                            exe,
+                        })
                     }
                 })
                 .await;
 
-            let mut restart = false;
-            let mut downloaded = false;
-            let mut error: Option<String> = None;
-            match result {
-                Ok(path) => {
-                    downloaded = true;
-                    #[cfg(target_os = "windows")]
-                    if let Some(exe) = executable.as_deref() {
-                        restart =
-                            sealy_core::update::apply_windows(&path, &install_dir, exe).is_ok();
-                    }
-                    let _ = path;
-                }
-                Err(err) => error = Some(err.to_string()),
-            }
-            let _ = &install_dir;
-
+            let succeeded = outcome.is_ok();
+            let cancelled = matches!(outcome, Err(sealy_core::CoreError::Cancelled));
+            let error = outcome.err().map(|err| err.to_string());
             let _ = this.update(cx, |shell, cx| {
                 shell.state.update_downloading = false;
+                shell.state.update_progress = None;
+                shell.state.update_cancel = None;
                 let lang = shell.state.language();
-                match (downloaded, restart) {
-                    (true, true) => shell.state.notify(crate::i18n::tr(
+                if succeeded {
+                    shell.state.update_error = None;
+                    shell.state.notify(crate::i18n::tr(
                         lang,
-                        "更新已下载，正在重启完成安装",
-                        "Update downloaded; restarting to finish",
-                    )),
-                    (true, false) => shell.state.notify(crate::i18n::tr(
-                        lang,
-                        "更新已下载，重启后生效",
-                        "Update downloaded; restart to apply",
-                    )),
-                    (false, _) => {
-                        if let Some(err) = error {
-                            shell.state.notify(err);
-                        }
-                    }
+                        "更新已就绪，正在重启完成安装",
+                        "Update ready; restarting to finish",
+                    ));
+                } else if cancelled {
+                    shell
+                        .state
+                        .notify(crate::i18n::tr(lang, "已取消更新下载", "Update cancelled"));
+                } else if let Some(error) = error {
+                    shell.state.update_error = Some(error.clone());
+                    shell.state.notify(error);
                 }
                 cx.notify();
             });
 
-            if restart {
+            if succeeded {
                 cx.background_executor()
                     .timer(std::time::Duration::from_millis(1200))
                     .await;
@@ -1086,6 +1130,50 @@ impl ShellState {
         })
         .detach();
     }
+
+    /// Requests cancellation of the running update download.
+    pub(crate) fn cancel_update(&mut self) {
+        if let Some(cancel) = &self.update_cancel {
+            cancel.store(true, std::sync::atomic::Ordering::Relaxed);
+        }
+    }
+
+    /// Enables or disables the startup update check.
+    pub(crate) fn set_auto_check_update(&mut self, enabled: bool) {
+        self.settings.update.auto_check = enabled;
+        self.persist();
+    }
+    /// Quietly checks for a release after startup.
+    pub(crate) fn spawn_auto_update_check(
+        &mut self,
+        cx: &mut crate::kit::Context<crate::app::SealyShell>,
+    ) {
+        cx.spawn(async move |this, cx| {
+            let result = cx
+                .background_executor()
+                .spawn(async move { sealy_core::update::check(sealy_core::version()) })
+                .await;
+            let _ = this.update(cx, |shell, cx| {
+                match result {
+                    Ok(Some(release)) => {
+                        let lang = shell.state.language();
+                        let line = format!(
+                            "{} v{}",
+                            crate::i18n::tr(lang, "发现新版本", "New version available"),
+                            release.version
+                        );
+                        shell.state.notify(line);
+                        shell.state.update_check = Some(Ok(Some(release)));
+                    }
+                    Ok(None) => {}
+                    Err(_) => {}
+                }
+                cx.notify();
+            });
+        })
+        .detach();
+    }
+
     /// Analyses the newest crash report and opens the panel.
     pub fn open_crash_report(&mut self) {
         self.crash_view = Some(sealy_core::crash::analyze(&self.paths.game));

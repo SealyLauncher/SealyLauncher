@@ -16,6 +16,16 @@
 
 ## [Unreleased]
 
+- 2026-11-15 — 自更新加固（进度/取消/校验/回滚/跨平台替换）：
+  - 下载：进度条（字节计数）、取消按钮、失败重试；下载中断会删除半成品文件。
+  - 完整性：读取 Release 的 SHA256SUMS，下载后校验 SHA-256，缺失或不匹配直接失败；校验通过才进入暂存。
+  - 安全替换：先解压到 SealyData/updates/staging-<version>，再交给更新脚本；Windows 改为“等进程退出→重命名旧 exe→复制暂存文件→失败则恢复并重启”，避免先删后解压导致无启动器；脚本写入 SealyData/logs/update.log，成功/失败均有记录。
+  - 跨平台：macOS 支持解压 zip、替换 .app bundle 后 open 重启；Linux 支持 tar.zst 解压、替换二进制并重启（缺少 zstd 时给出明确提示）。
+  - 失败恢复：更新前写 pending.json，启动时 econcile_pending 检测“版本未变”的上次更新，提示用户并清理 updates/ 缓存；成功更新后脚本/启动流程会删除安装包与暂存目录。
+  - 自动检查：新增设置 update.auto_check（默认开）与「启动时检查更新」开关，启动后静默检查并在有新版本时提示；检查失败不打扰用户。
+  - 实测：Windows 沙箱 debug 版（新代码）→ 真实 v0.1.36 发布包，UI 下载→校验→暂存→替换→自动重启成功，update.log 记录 starting/finished，无 .bat/.old 残留；另验证 pending 恢复：伪造 pending 后启动会清理缓存（截图 design/preview/gpui-update-progress.png 等）。
+  - 新增 [docs/SIGNING.md](docs/SIGNING.md)：Windows/macOS/Linux 代码签名获取途径、CI 接入方式与当前 SmartScreen/Gatekeeper 限制说明。
+
 - 2026-11-15 — 设置页侧栏、内存控制、macOS 窗口与菜单栏：
   - 设置页改为「外观 / 下载 / Java 与内存 / 网络与目录 / 启动器」五类侧栏（每类带图标），内容按分类分开显示；主题、缩放、语言、动效、下载源、Java、代理、目录、更新与维护各自归位。
   - 游戏内存：新增滑块（512 MB–32 GB，256 MB 步进）、点击数值手动输入（回车保存、Esc 取消、范围校验）、常用值 2048/4096/8192，以及「自动」模式：按物理内存 1/4、512 MB 对齐并限制在 1–8 GB，由启动器每次启动前决定；切换模式或修改值后滑块与数值框同步。新增 sealy-core::system（Windows GlobalMemoryStatusEx / macOS sysctl / Linux /proc/meminfo）与 4 个单测。

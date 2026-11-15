@@ -1056,6 +1056,14 @@ pub trait SkinProvider: Send + Sync;
 - macOS 菜单栏：`sealy-ui::menu` 定义 13 个动作与四组菜单（App/文件/编辑/视图/帮助），菜单项经根元素 `on_action` 分发到页面导航、实例面板、整合包导入、目录打开、更新检查与退出；同时注册 ⌘ 系列快捷键与 Dock 右键菜单。
 - 自更新验证：沙箱 v0.1.34 → v0.1.35 全流程（检查 → 下载 8.7 MB → 自动替换 exe → 重启）实测通过；重启后版本与更新查询一致。
 - 待办：macOS/Linux 自动替换、更新下载进度显示、旧安装包清理。
+### 20.17 自更新加固（2026-11-15）
+
+- 完整性：`update::fetch_checksums` + `verify_file` 校验 `SHA256SUMS`；缺少校验项即失败。
+- 下载体验：`download_with_progress`（原子字节计数 + 取消标志）+ 设置页进度条/取消/重试；`CoreError::Cancelled` 区分取消。
+- 安全替换：`stage` 解压到暂存目录 → `apply` 生成平台脚本；Windows 用重命名旧 exe 的重试等待（最多 ~90s），复制失败会恢复旧 exe 并重启；macOS 替换 `.app` 后 `open`；Linux 替换二进制后重启。脚本统一写 `logs/update.log`。
+- 失败恢复与清理：`write_pending`/`reconcile_pending`/`clear_update_cache`；更新脚本删除安装包与暂存目录。
+- 启动检查：`update.auto_check`（默认开）+ 设置页开关；发现新版本用 toast 提示并预填更新卡片。
+- 签名：新增 `docs/SIGNING.md`（Windows OV/EV、Azure Trusted Signing、SignPath/Certum；macOS Developer ID + notarytool；Linux GPG 校验）。当前发布仍未做商业签名。
 ### 20.15 B5 交付记录（2026-11-15）
 
 - 代理：`Settings.network.proxy` + `net::set_proxy`，`agent()` 统一走 ureq 代理；启动游戏时注入 JVM `-Dhttp/https.proxyHost/proxyPort`。设置页「HTTP 代理」输入 + 保存，非法格式会提示。

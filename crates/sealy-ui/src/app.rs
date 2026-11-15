@@ -125,6 +125,16 @@ impl SealyShell {
                 crate::state::MessageTone::Failed,
             );
         }
+        if let Some(expected) = shell.state.update_warning.take() {
+            shell.state.notify(format!(
+                "上次更新到 {expected} 可能未完成，请重试或手动下载安装"
+            ));
+        }
+
+        // Quiet self-update check; failures never interrupt the user.
+        if shell.state.settings.update.auto_check {
+            shell.state.spawn_auto_update_check(cx);
+        }
 
         // Java probing spawns processes, so it happens after the first frame.
         let game = shell.state.paths.game.clone();
@@ -154,7 +164,12 @@ impl SealyShell {
                     .timer(std::time::Duration::from_millis(250))
                     .await;
                 let updated = this.update(cx, |shell, cx| {
-                    if shell.state.expire_due_toast() {
+                    let mut dirty = shell.state.expire_due_toast();
+                    // Keep the download progress bar repainting while it runs.
+                    if shell.state.update_downloading {
+                        dirty = true;
+                    }
+                    if dirty {
                         cx.notify();
                     }
                 });

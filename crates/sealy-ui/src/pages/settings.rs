@@ -783,6 +783,33 @@ fn launcher_section(
 ) -> AnyElement {
     form(t)
         .child(row(
+            tr(lang, "启动时检查更新", "Check on startup"),
+            div()
+                .flex()
+                .gap(px(8.0))
+                .child(
+                    choice_button(tr(lang, "开", "On"), state.settings.update.auto_check, t)
+                        .id("auto-update-on")
+                        .role(Role::Button)
+                        .aria_label("auto-update-on")
+                        .on_click(cx.listener(|shell, _, _, cx| {
+                            shell.state.set_auto_check_update(true);
+                            cx.notify();
+                        })),
+                )
+                .child(
+                    choice_button(tr(lang, "关", "Off"), !state.settings.update.auto_check, t)
+                        .id("auto-update-off")
+                        .role(Role::Button)
+                        .aria_label("auto-update-off")
+                        .on_click(cx.listener(|shell, _, _, cx| {
+                            shell.state.set_auto_check_update(false);
+                            cx.notify();
+                        })),
+                ),
+            t,
+        ))
+        .child(row(
             tr(lang, "启动器更新", "Launcher update"),
             div()
                 .flex()
@@ -1036,6 +1063,95 @@ fn update_status(
     t: &ThemeTokens,
     cx: &mut Context<SealyShell>,
 ) -> AnyElement {
+    if state.update_downloading {
+        let (done, total) = state
+            .update_progress
+            .as_ref()
+            .map(|progress| {
+                (
+                    progress.done.load(std::sync::atomic::Ordering::Relaxed),
+                    progress.total,
+                )
+            })
+            .unwrap_or((0, 0));
+        let ratio = if total > 0 {
+            (done as f32 / total as f32).clamp(0.0, 1.0)
+        } else {
+            0.0
+        };
+        let label = format!(
+            "{:.1} / {:.1} MB",
+            done as f64 / 1_048_576.0,
+            total as f64 / 1_048_576.0
+        );
+        return div()
+            .flex()
+            .items_center()
+            .gap(px(10.0))
+            .child(
+                div()
+                    .w(px(150.0))
+                    .h(px(4.0))
+                    .rounded(px(2.0))
+                    .bg(rgb(t.line_soft))
+                    .child(
+                        div()
+                            .h(px(4.0))
+                            .w(px(150.0 * ratio))
+                            .rounded(px(2.0))
+                            .bg(rgb(t.text)),
+                    ),
+            )
+            .child(
+                div()
+                    .text_size(px(11.0))
+                    .text_color(rgb(t.muted))
+                    .child(label),
+            )
+            .child(
+                quiet_button(tr(lang, "取消", "Cancel"), t)
+                    .id("cancel-update")
+                    .role(Role::Button)
+                    .aria_label("cancel-update")
+                    .on_click(cx.listener(|shell, _, _, cx| {
+                        shell.state.cancel_update();
+                        cx.notify();
+                    })),
+            )
+            .into_any_element();
+    }
+
+    if let Some(error) = &state.update_error {
+        let release = match &state.update_check {
+            Some(Ok(Some(release))) => Some(release.clone()),
+            _ => None,
+        };
+        let retry = release.map(|release| {
+            quiet_button(tr(lang, "重试", "Retry"), t)
+                .id("retry-update")
+                .role(Role::Button)
+                .aria_label("retry-update")
+                .on_click(cx.listener(move |shell, _, _, cx| {
+                    shell.state.download_update(&release, cx);
+                    cx.notify();
+                }))
+        });
+        return div()
+            .flex()
+            .items_center()
+            .gap(px(8.0))
+            .child(
+                div()
+                    .max_w(px(220.0))
+                    .overflow_hidden()
+                    .text_size(px(11.0))
+                    .text_color(rgb(t.danger))
+                    .child(error.clone()),
+            )
+            .children(retry)
+            .into_any_element();
+    }
+
     match &state.update_check {
         None => div().into_any_element(),
         Some(Err(err)) => div()
@@ -1051,13 +1167,6 @@ fn update_status(
         Some(Ok(Some(release))) => {
             let release = release.clone();
             let has_asset = release.asset.is_some();
-            if state.update_downloading {
-                return div()
-                    .text_size(px(11.0))
-                    .text_color(rgb(t.muted))
-                    .child(tr(lang, "下载中…", "Downloading…"))
-                    .into_any_element();
-            }
             div()
                 .flex()
                 .items_center()
