@@ -9,44 +9,102 @@ use crate::theme;
 
 /// Starts the GPUI application and opens the shell window.
 pub fn run(bootstrap: sealy_core::Bootstrap) {
-    gpui_kit::application()
-        .with_assets(crate::assets::SealyAssets)
-        .run(|cx| {
-            gpui_kit::init(cx);
-            crate::kit::set_ui_scale(bootstrap.settings.appearance.ui_scale_pct as f32 / 100.0);
+    let bootstrap = std::rc::Rc::new(bootstrap);
+    let window = std::rc::Rc::new(std::cell::RefCell::new(None::<AnyWindowHandle>));
 
-            let bounds = Bounds::centered(
-                None,
-                size(px(theme::WINDOW_WIDTH), px(theme::WINDOW_HEIGHT)),
-                cx,
-            );
-            let options = WindowOptions {
-                window_bounds: Some(WindowBounds::Windowed(bounds)),
-                window_min_size: Some(size(px(theme::MIN_WIDTH), px(theme::MIN_HEIGHT))),
-                ..TitleBar::window_options()
-            };
+    let reopen_window = window.clone();
+    let reopen_bootstrap = bootstrap.clone();
+    let application = gpui_kit::application().with_assets(crate::assets::SealyAssets);
+    application.on_reopen(move |cx| {
+        // macOS calls this when the dock icon is clicked without windows.
+        if let Some(handle) = *reopen_window.borrow()
+            && handle
+                .update(cx, |_, window, _| window.activate_window())
+                .is_ok()
+        {
+            cx.activate(true);
+            return;
+        }
+        match open_shell_window(reopen_bootstrap.clone(), cx) {
+            Ok(handle) => {
+                *reopen_window.borrow_mut() = Some(handle);
+                cx.activate(true);
+            }
+            Err(err) => eprintln!("failed to reopen the window: {err}"),
+        }
+    });
+    application.run(move |cx| {
+        gpui_kit::init(cx);
+        crate::kit::set_ui_scale(bootstrap.settings.appearance.ui_scale_pct as f32 / 100.0);
+        crate::menu::install(cx, bootstrap.settings.language);
 
-            gpui_kit::open_window(options, cx, move |_, cx| {
-                cx.new(|cx| SealyShell::new(bootstrap, cx))
-            })
+        let opened = open_shell_window(bootstrap.clone(), cx)
             .expect("failed to open the SealyLauncher window");
-        });
+        *window.borrow_mut() = Some(opened);
+    });
+}
+
+/// Opens the shell window and returns its handle.
+fn open_shell_window(
+    bootstrap: std::rc::Rc<sealy_core::Bootstrap>,
+    cx: &mut App,
+) -> gpui_kit::Result<AnyWindowHandle> {
+    let bounds = Bounds::centered(
+        None,
+        size(px(theme::WINDOW_WIDTH), px(theme::WINDOW_HEIGHT)),
+        cx,
+    );
+    let options = WindowOptions {
+        window_bounds: Some(WindowBounds::Windowed(bounds)),
+        window_min_size: Some(size(px(theme::MIN_WIDTH), px(theme::MIN_HEIGHT))),
+        ..TitleBar::window_options()
+    };
+
+    let (handle, _root) = gpui_kit::open_window(options, cx, move |_, cx| {
+        let bootstrap = bootstrap.clone();
+        cx.new(|cx| SealyShell::new(bootstrap, cx))
+    })?;
+    Ok(handle)
 }
 
 pub(crate) struct SealyShell {
     pub(crate) state: ShellState,
     focus: FocusHandle,
+    _memory_subscription: Subscription,
+    /// Set when the slider value changed without a window at hand.
+    memory_sync_pending: bool,
 }
 
 impl SealyShell {
-    fn new(bootstrap: sealy_core::Bootstrap, cx: &mut Context<Self>) -> Self {
-        let shell = Self {
-            state: ShellState::from_bootstrap(bootstrap),
-            focus: cx.focus_handle(),
-        };
+    fn new(bootstrap: std::rc::Rc<sealy_core::Bootstrap>, cx: &mut Context<Self>) -> Self {
+        let mut state = ShellState::from_bootstrap((*bootstrap).clone());
+        let memory_slider = cx.new(|_| {
+            SliderState::new()
+                .max(32768.0)
+                .min(512.0)
+                .step(256.0)
+                .default_value(state.effective_memory_mb() as f32)
+        });
+        state.memory_slider = Some(memory_slider.clone());
+        let memory_subscription =
+            cx.subscribe(&memory_slider, |shell, _, event: &SliderEvent, cx| {
+                let (value, commit) = match event {
+                    SliderEvent::Change(value) => (value.end(), false),
+                    SliderEvent::Release(value) => (value.end(), true),
+                };
+                shell
+                    .state
+                    .apply_slider_memory((value.round() as u32).max(512), commit);
+                cx.notify();
+            });
 
         // macOS sandboxing of downloaded bundles is invisible otherwise.
-        let mut shell = shell;
+        let mut shell = Self {
+            state,
+            focus: cx.focus_handle(),
+            _memory_subscription: memory_subscription,
+            memory_sync_pending: false,
+        };
         if shell.state.translocated {
             shell.state.push_message(
                 "macOS 正在隔离运行".to_owned(),
@@ -136,6 +194,11 @@ impl Render for SealyShell {
             window.focus(&self.focus, cx);
         }
 
+        if self.memory_sync_pending {
+            self.memory_sync_pending = false;
+            self.sync_memory_slider(window, cx);
+        }
+
         let tokens = self.state.theme();
         let page = pages::render(&mut self.state, cx);
         let panel = self
@@ -153,6 +216,51 @@ impl Render for SealyShell {
             .role(Role::Application)
             .aria_label("SealyLauncher")
             .track_focus(&self.focus)
+            .on_action(cx.listener(|shell, _: &crate::menu::OpenHome, _, cx| {
+                crate::menu::apply(shell, crate::menu::MenuAction::Home, cx)
+            }))
+            .on_action(cx.listener(|shell, _: &crate::menu::OpenInstances, _, cx| {
+                crate::menu::apply(shell, crate::menu::MenuAction::Instances, cx)
+            }))
+            .on_action(cx.listener(|shell, _: &crate::menu::OpenDownloads, _, cx| {
+                crate::menu::apply(shell, crate::menu::MenuAction::Downloads, cx)
+            }))
+            .on_action(cx.listener(|shell, _: &crate::menu::OpenSettings, _, cx| {
+                crate::menu::apply(shell, crate::menu::MenuAction::Settings, cx)
+            }))
+            .on_action(cx.listener(|shell, _: &crate::menu::NewInstance, _, cx| {
+                crate::menu::apply(shell, crate::menu::MenuAction::NewInstance, cx)
+            }))
+            .on_action(cx.listener(|shell, _: &crate::menu::ImportModpack, _, cx| {
+                crate::menu::apply(shell, crate::menu::MenuAction::ImportModpack, cx)
+            }))
+            .on_action(
+                cx.listener(|shell, _: &crate::menu::OpenGameFolder, _, cx| {
+                    crate::menu::apply(shell, crate::menu::MenuAction::GameFolder, cx)
+                }),
+            )
+            .on_action(
+                cx.listener(|shell, _: &crate::menu::OpenDataFolder, _, cx| {
+                    crate::menu::apply(shell, crate::menu::MenuAction::DataFolder, cx)
+                }),
+            )
+            .on_action(cx.listener(|shell, _: &crate::menu::OpenLogFolder, _, cx| {
+                crate::menu::apply(shell, crate::menu::MenuAction::LogFolder, cx)
+            }))
+            .on_action(cx.listener(|shell, _: &crate::menu::CheckUpdate, _, cx| {
+                crate::menu::apply(shell, crate::menu::MenuAction::CheckUpdate, cx)
+            }))
+            .on_action(cx.listener(|shell, _: &crate::menu::AboutLauncher, _, cx| {
+                crate::menu::apply(shell, crate::menu::MenuAction::About, cx)
+            }))
+            .on_action(
+                cx.listener(|shell, _: &crate::menu::OpenRepository, _, cx| {
+                    crate::menu::apply(shell, crate::menu::MenuAction::Repository, cx)
+                }),
+            )
+            .on_action(cx.listener(|shell, _: &crate::menu::QuitLauncher, _, cx| {
+                crate::menu::apply(shell, crate::menu::MenuAction::Quit, cx)
+            }))
             .size_full()
             .flex()
             .flex_col()
@@ -249,6 +357,40 @@ fn message_button(
 }
 
 impl SealyShell {
+    /// Applies the numeric memory editor typed in the settings page.
+    fn apply_memory_draft(&mut self, cx: &mut Context<Self>) {
+        let Some(text) = self.state.memory_draft.take() else {
+            return;
+        };
+        let trimmed = text.trim();
+        if trimmed.is_empty() {
+            cx.notify();
+            return;
+        }
+        match trimmed.parse::<u32>() {
+            Ok(value) => {
+                self.state.set_max_memory(value);
+                self.memory_sync_pending = true;
+                cx.notify();
+            }
+            Err(_) => {
+                let lang = self.state.language();
+                self.state.notify(crate::i18n::tr(
+                    lang,
+                    "请输入 512-32768 之间的整数（MB）",
+                    "Enter an integer between 512 and 32768 (MB)",
+                ));
+            }
+        }
+    }
+
+    /// Pushes the current memory cap into the slider.
+    pub(crate) fn sync_memory_slider(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(slider) = self.state.memory_slider.clone() {
+            let value = self.state.effective_memory_mb() as f32;
+            slider.update(cx, |state, cx| state.set_value(value, window, cx));
+        }
+    }
     /// Window-wide shortcuts: Enter runs the primary action, Escape steps back,
     /// digits jump between pages.
     fn handle_key(&mut self, keystroke: &Keystroke, cx: &mut Context<Self>) {
@@ -315,6 +457,29 @@ impl SealyShell {
         // The log viewer closes on Escape.
         if keystroke.key == "escape" && self.state.logs_open {
             self.state.close_logs();
+            cx.notify();
+            return;
+        }
+
+        // The numeric memory editor captures typing while it is open.
+        if self.state.memory_draft.is_some() {
+            match keystroke.key.as_str() {
+                "escape" => self.state.memory_draft = None,
+                "enter" => self.apply_memory_draft(cx),
+                "backspace" => {
+                    if let Some(text) = &mut self.state.memory_draft {
+                        text.pop();
+                    }
+                }
+                key if key.chars().count() == 1 => {
+                    if let Some(ch) = key.chars().next().filter(char::is_ascii_digit)
+                        && let Some(text) = &mut self.state.memory_draft
+                    {
+                        text.push(ch);
+                    }
+                }
+                _ => {}
+            }
             cx.notify();
             return;
         }

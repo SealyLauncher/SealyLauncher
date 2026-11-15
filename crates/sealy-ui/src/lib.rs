@@ -8,6 +8,7 @@ pub mod i18n;
 pub mod install_flow;
 pub mod kit;
 pub mod launch_flow;
+pub mod menu;
 pub mod motion;
 pub(crate) mod pages;
 pub mod panel;

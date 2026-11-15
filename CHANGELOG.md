@@ -16,6 +16,13 @@
 
 ## [Unreleased]
 
+- 2026-11-15 — 设置页侧栏、内存控制、macOS 窗口与菜单栏：
+  - 设置页改为「外观 / 下载 / Java 与内存 / 网络与目录 / 启动器」五类侧栏（每类带图标），内容按分类分开显示；主题、缩放、语言、动效、下载源、Java、代理、目录、更新与维护各自归位。
+  - 游戏内存：新增滑块（512 MB–32 GB，256 MB 步进）、点击数值手动输入（回车保存、Esc 取消、范围校验）、常用值 2048/4096/8192，以及「自动」模式：按物理内存 1/4、512 MB 对齐并限制在 1–8 GB，由启动器每次启动前决定；切换模式或修改值后滑块与数值框同步。新增 sealy-core::system（Windows GlobalMemoryStatusEx / macOS sysctl / Linux /proc/meminfo）与 4 个单测。
+  - macOS：注册 on_reopen，关闭窗口后点击 Dock 图标会重新打开窗口（已有窗口时激活）；新增菜单栏「SealyLauncher / 文件 / 编辑 / 视图 / 帮助」，包含关于、检查更新、设置、新建实例、导入整合包、打开游戏/数据/日志目录、导航、GitHub 仓库与退出，并注册 ⌘, / ⌘N / ⌘O / ⌘1–3 / ⌘Q 快捷键；Dock 右键菜单加入新建实例、导入整合包、设置。
+  - 自更新实测（Windows 沙箱）：v0.1.34 启动器通过 UI「检查更新 → 下载并安装」下载 v0.1.35 资产（8.7 MB），自动替换 exe 并重启；重启后 --version 与 --check-update 均为 0.1.35，更新脚本自行清理。
+  - 已知限制：macOS/Linux 的自动替换尚未实现（当前提示手动解压覆盖），macOS 菜单与 Dock 重开仅通过 CI 编译验证，未在真机上实测。
+
 - 2026-11-15 — B5 收尾：启动器自更新与界面缩放：
   - 新增 sealy-core::update：查询 GitHub 最新 release、按平台选择资产（windows-x64.zip / macos-universal.zip / linux-x86_64.tar.zst）、下载并解压 zip；Windows 下生成 sealy-update.bat，等待启动器退出后替换 exe 并重新启动。
   - 设置页「启动器更新」：显示当前版本、检查更新（实测从 v0.1.33 检出 v0.1.34）、下载并安装；新增 sealy-launcher --check-update 供脚本/CI 检查。

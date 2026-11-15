@@ -168,6 +168,20 @@ pub struct JavaSettings {
     pub default_path: Option<String>,
     /// Default memory bounds.
     pub memory: MemorySettings,
+    /// Whether the heap cap is chosen manually or by the launcher.
+    #[serde(default)]
+    pub memory_mode: MemoryMode,
+}
+
+/// How the launcher sizes the game heap.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MemoryMode {
+    /// Use `memory.max_mb`.
+    #[default]
+    Manual,
+    /// A quarter of the host memory, clamped to a sane range.
+    Auto,
 }
 
 impl Default for JavaSettings {
@@ -176,6 +190,7 @@ impl Default for JavaSettings {
             auto_download: true,
             default_path: None,
             memory: MemorySettings::default(),
+            memory_mode: MemoryMode::Manual,
         }
     }
 }

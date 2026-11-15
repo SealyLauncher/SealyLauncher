@@ -30,7 +30,7 @@ pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyEle
     let memory = instance
         .launch
         .max_mb
-        .unwrap_or(state.settings.java.memory.max_mb);
+        .unwrap_or_else(|| state.effective_memory_mb());
     let width = instance.launch.width.unwrap_or(state.settings.launch.width);
     let height = instance
         .launch

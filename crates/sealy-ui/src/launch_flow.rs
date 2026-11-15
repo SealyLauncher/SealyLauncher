@@ -48,7 +48,7 @@ pub(crate) fn start(state: &mut ShellState, instance: Instance, cx: &mut Context
     let overrides = instance.launch.clone();
     let memory = overrides
         .max_mb
-        .unwrap_or(state.settings.java.memory.max_mb);
+        .unwrap_or_else(|| state.effective_memory_mb());
     let width = overrides.width.unwrap_or(state.settings.launch.width);
     let height = overrides.height.unwrap_or(state.settings.launch.height);
     let user_jvm: Vec<String> = overrides

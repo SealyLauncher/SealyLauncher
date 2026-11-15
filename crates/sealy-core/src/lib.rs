@@ -25,6 +25,7 @@ pub mod net;
 pub mod paths;
 pub mod shell;
 pub mod single_instance;
+pub mod system;
 pub mod update;
 pub mod version;
 

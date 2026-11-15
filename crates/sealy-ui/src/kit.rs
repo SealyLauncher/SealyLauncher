@@ -4,6 +4,8 @@
 //! `gpui_kit`, so a future backend swap stays localized.
 
 pub use gpui_kit::assets::IconName;
+pub use gpui_kit::base::slider::{SliderEvent, SliderState};
+pub use gpui_kit::base::{Slider as BaseSlider, SliderIndicator, SliderThumb, SliderTrack};
 pub use gpui_kit::component::Icon;
 pub use gpui_kit::prelude::*;
 pub use gpui_kit::{
@@ -12,6 +14,8 @@ pub use gpui_kit::{
     PathPromptOptions, Render, Rgba, Role, SharedString, Window, WindowBounds, WindowOptions, div,
     img, relative, rgb, rgba, size,
 };
+pub use gpui_kit::{AnyWindowHandle, Entity, Subscription, WindowHandle};
+pub use gpui_kit::{KeyBinding, Menu, MenuItem, NoAction, OsAction, SystemMenuType};
 
 /// Global interface scale (1.0 = default).
 static UI_SCALE: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0x3F80_0000);

@@ -1,11 +1,11 @@
 //! UI shell state and navigation routes.
 
 use sealy_core::Bootstrap;
-use sealy_core::config::{Language, Settings, ThemeName, save_settings};
+use sealy_core::config::{Language, MemoryMode, Settings, ThemeName, save_settings};
 use sealy_core::paths::LauncherPaths;
 
 use crate::i18n;
-use crate::kit::IconName;
+use crate::kit::{Entity, IconName, SliderState};
 use crate::theme::ThemeTokens;
 
 /// Number of first-run wizard steps.
@@ -318,6 +318,14 @@ pub struct ShellState {
     pub delete_confirm_open: bool,
     /// Sidebar section shown on the instance detail page.
     pub instance_section: InstanceSection,
+    /// Selected settings category in the settings sidebar.
+    pub settings_section: SettingsSection,
+    /// Slider bound to the game memory cap.
+    pub memory_slider: Option<Entity<SliderState>>,
+    /// Inline numeric editor for the memory cap.
+    pub memory_draft: Option<String>,
+    /// Physical memory detected at startup, in MiB.
+    pub total_ram_mb: Option<u64>,
     /// Inline proxy editor in the settings page.
     pub proxy_draft: Option<String>,
     /// Inline game-directory editor in the settings page.
@@ -363,6 +371,45 @@ impl InstanceSection {
             Self::Mods => tr(lang, "模组", "Mods"),
             Self::ResourcePacks => tr(lang, "资源包", "Resource packs"),
             Self::Shaders => tr(lang, "光影", "Shaders"),
+        }
+    }
+}
+
+/// Category shown in the settings sidebar.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SettingsSection {
+    /// Theme, language, scale, motion.
+    #[default]
+    Appearance,
+    /// Download sources.
+    Downloads,
+    /// Java runtimes and the heap cap.
+    JavaMemory,
+    /// Proxy and game folder.
+    Network,
+    /// Update, version and maintenance.
+    Launcher,
+}
+
+impl SettingsSection {
+    /// Every section, in sidebar order.
+    pub const ALL: [Self; 5] = [
+        Self::Appearance,
+        Self::Downloads,
+        Self::JavaMemory,
+        Self::Network,
+        Self::Launcher,
+    ];
+
+    /// Sidebar label.
+    pub fn label(self, lang: sealy_core::config::Language) -> &'static str {
+        use crate::i18n::tr;
+        match self {
+            Self::Appearance => tr(lang, "外观", "Appearance"),
+            Self::Downloads => tr(lang, "下载", "Downloads"),
+            Self::JavaMemory => tr(lang, "Java 与内存", "Java & memory"),
+            Self::Network => tr(lang, "网络与目录", "Network & folders"),
+            Self::Launcher => tr(lang, "启动器", "Launcher"),
         }
     }
 }
@@ -503,6 +550,10 @@ impl ShellState {
             last_instance_click: None,
             delete_confirm_open: false,
             instance_section: InstanceSection::default(),
+            settings_section: SettingsSection::default(),
+            memory_slider: None,
+            memory_draft: None,
+            total_ram_mb: sealy_core::system::total_memory_mb(),
             proxy_draft: None,
             game_dir_draft: None,
             crash_open: false,
@@ -1418,8 +1469,58 @@ impl ShellState {
 
     /// Changes the maximum heap and persists settings.
     pub fn set_max_memory(&mut self, mb: u32) {
-        self.settings.java.memory.max_mb = mb;
+        self.settings.java.memory_mode = MemoryMode::Manual;
+        self.settings.java.memory.max_mb = mb.clamp(512, 32768);
         self.persist();
+    }
+
+    /// Applies a value dragged on the memory slider; `commit` persists it.
+    pub fn apply_slider_memory(&mut self, mb: u32, commit: bool) {
+        self.settings.java.memory_mode = MemoryMode::Manual;
+        self.settings.java.memory.max_mb = mb.clamp(512, 32768);
+        if commit {
+            self.persist();
+        }
+    }
+
+    /// Switches between the manual cap and the launcher-chosen one.
+    pub fn set_memory_mode(&mut self, mode: MemoryMode) {
+        if self.settings.java.memory_mode == mode {
+            return;
+        }
+        self.settings.java.memory_mode = mode;
+        self.persist();
+    }
+
+    /// Heap cap actually used on launch.
+    pub fn effective_memory_mb(&self) -> u32 {
+        match self.settings.java.memory_mode {
+            MemoryMode::Auto => sealy_core::system::auto_memory_mb(self.total_ram_mb),
+            MemoryMode::Manual => self.settings.java.memory.max_mb.clamp(512, 32768),
+        }
+    }
+
+    /// Opens the inline numeric memory editor with the current value.
+    pub fn begin_memory_draft(&mut self) {
+        // Start empty so the first keystroke replaces the current cap.
+        self.memory_draft = Some(String::new());
+    }
+
+    /// Parses and applies the inline numeric memory editor.
+    pub fn commit_memory_draft(&mut self) {
+        let Some(text) = self.memory_draft.take() else {
+            return;
+        };
+        let Ok(value) = text.trim().parse::<u32>() else {
+            let lang = self.language();
+            self.notify(crate::i18n::tr(
+                lang,
+                "请输入 512-32768 之间的整数（MB）",
+                "Enter an integer between 512 and 32768 (MB)",
+            ));
+            return;
+        };
+        self.set_max_memory(value);
     }
 
     /// Changes the motion preference and persists settings.
@@ -1494,6 +1595,32 @@ impl ShellState {
     }
 
     /// Reveals the data directory in the platform file manager.
+    /// Reveals the shared `.minecraft` folder.
+    pub fn open_game_folder(&mut self) {
+        if let Err(err) = sealy_core::shell::spawn_open_helper(&self.paths.game) {
+            self.notify(err.to_string());
+        }
+    }
+
+    /// Starts the self-update query and stores its result for the settings page.
+    pub(crate) fn start_update_check(
+        &mut self,
+        cx: &mut crate::kit::Context<crate::app::SealyShell>,
+    ) {
+        self.update_check = None;
+        cx.spawn(async move |this, cx| {
+            let result = cx
+                .background_executor()
+                .spawn(async move { sealy_core::update::check(sealy_core::version()) })
+                .await
+                .map_err(|err| err.to_string());
+            let _ = this.update(cx, |shell, cx| {
+                shell.state.update_check = Some(result);
+                cx.notify();
+            });
+        })
+        .detach();
+    }
     pub fn open_data_folder(&mut self) {
         let _ = std::fs::create_dir_all(&self.paths.data);
         let dir = self.paths.data.clone();

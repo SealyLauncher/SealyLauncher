@@ -1048,6 +1048,14 @@ pub trait SkinProvider: Send + Sync;
 | B6 | 主题包/背景、皮肤、Quick Play、世界管理 | B5 | 对标 HMCL 体验 |
 | 不做 | Terracotta 联机、NBT 编辑器、整合包在线更新 | — | 记录在案 |
 
+### 20.16 设置侧栏、内存控制与 macOS 窗口（2026-11-15）
+
+- 设置页分区侧栏：外观 / 下载 / Java 与内存 / 网络与目录 / 启动器，每类配图标；内容改为单类渲染，侧栏选中态沿用实例页样式（左侧强调线 + 表面色）。
+- 内存控制：`MemoryMode::{Manual, Auto}` 持久化；手动模式用滑块 + 数值输入 + 常用值；自动模式按物理内存 1/4（512 MB 对齐，1–8 GB）动态决定，UI 显示推荐值与系统内存。`sealy-core::system` 三平台读取物理内存。
+- macOS 生命周期：`Application::on_reopen` 注册后，关闭窗口再点 Dock 图标会激活或新建 shell 窗口（窗口句柄保存在 `Rc<RefCell<Option<AnyWindowHandle>>>`，失效则新建）；`QuitMode::Default` 在 macOS 保持进程存活，是该修复成立的前提。
+- macOS 菜单栏：`sealy-ui::menu` 定义 13 个动作与四组菜单（App/文件/编辑/视图/帮助），菜单项经根元素 `on_action` 分发到页面导航、实例面板、整合包导入、目录打开、更新检查与退出；同时注册 ⌘ 系列快捷键与 Dock 右键菜单。
+- 自更新验证：沙箱 v0.1.34 → v0.1.35 全流程（检查 → 下载 8.7 MB → 自动替换 exe → 重启）实测通过；重启后版本与更新查询一致。
+- 待办：macOS/Linux 自动替换、更新下载进度显示、旧安装包清理。
 ### 20.15 B5 交付记录（2026-11-15）
 
 - 代理：`Settings.network.proxy` + `net::set_proxy`，`agent()` 统一走 ureq 代理；启动游戏时注入 JVM `-Dhttp/https.proxyHost/proxyPort`。设置页「HTTP 代理」输入 + 保存，非法格式会提示。

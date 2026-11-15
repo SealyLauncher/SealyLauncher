@@ -55,6 +55,28 @@ pub(crate) fn start(state: &mut ShellState, id: String, cx: &mut Context<SealySh
     spawn(state, cx, format!("安装 {id}"), vec![Job::Version(id)]);
 }
 
+/// Opens the native picker and imports the chosen modpack archive.
+pub(crate) fn prompt_modpack(cx: &mut crate::kit::Context<crate::app::SealyShell>) {
+    let receiver = cx.prompt_for_paths(crate::kit::PathPromptOptions {
+        files: true,
+        directories: false,
+        multiple: false,
+        prompt: Some("选择整合包（.mrpack / .zip）".into()),
+    });
+    cx.spawn(async move |this, cx| {
+        let Ok(Ok(Some(paths))) = receiver.await else {
+            return;
+        };
+        let Some(path) = paths.into_iter().next() else {
+            return;
+        };
+        let _ = this.update(cx, |shell, cx| {
+            start_modpack(&mut shell.state, path, cx);
+            cx.notify();
+        });
+    })
+    .detach();
+}
 /// Imports a modpack archive as a new instance.
 pub(crate) fn start_modpack(
     state: &mut ShellState,
