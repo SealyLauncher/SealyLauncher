@@ -1053,7 +1053,7 @@ pub trait SkinProvider: Send + Sync;
 - `sealy-core::loader`：`LoaderKind` 扩到 Fabric / Quilt / Forge / NeoForge / OptiFine；`versions()` 拉取 Forge promotions、NeoForge Maven 元数据（含 1.20.1 的 `net.neoforged.forge` 旧坐标）、Fabric/Quilt 构建列表。
 - 安装器路径：下载官方 installer jar 到 `<game>/installers/`，准备 `launcher_profiles.json` 与可写 `java.io.tmpdir`，执行 `java -Djava.io.tmpdir=… -jar <installer> --installClient <game>`，随后按预期 id 或目录扫描定位安装结果；安装器在 vanilla 校验失败时仍保留已写好的版本文件，此时交给后续安装流程补齐。
 - 实测：`cargo run -p sealy-core --example install_loader -- <root> <java> forge 1.20.1 47.2.0` 输出 `ok id=1.20.1-forge-47.2.0`；NeoForge 21.1.266 输出 `ok id=neoforge-21.1.266`。
-- OptiFine 无公开直链：在新建实例面板选择本地安装包（`prompt_for_paths`），走同一条安装器路径。
+- OptiFine：官方安装器只有 GUI、没有静默参数，因此选择本地安装包后会启动安装器窗口，提示用户在窗口中选择游戏目录并点击 Install，安装完成后再创建实例；自动打补丁（xdelta/Patcher 复刻）留待后续。
 - UI：新建实例面板改为「选版本 → 选加载器（含版本）→ 安装并自动建实例」；下载页和实例页移除 Fabric/Quilt 快捷按钮；下载页版本列表无限滚动。
 ### 20.12 B2 交付记录（2026-11-15）
 

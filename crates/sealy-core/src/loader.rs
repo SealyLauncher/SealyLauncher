@@ -234,6 +234,21 @@ fn install_with_installer(
 
     prepare_install_target(root)?;
 
+    // OptiFine ships a GUI-only installer, so run it for the user and explain
+    // what to do instead of failing silently in a headless run.
+    if kind == LoaderKind::OptiFine {
+        std::process::Command::new(&java)
+            .arg("-jar")
+            .arg(&jar)
+            .current_dir(root)
+            .spawn()
+            .map_err(|err| CoreError::Invalid(format!("无法启动 OptiFine 安装器: {err}")))?;
+        return Err(CoreError::Invalid(format!(
+            "已打开 OptiFine 安装器，请在窗口中选择游戏目录 {} 并点击 Install；完成后重新创建实例即可",
+            root.display()
+        )));
+    }
+
     let status = std::process::Command::new(&java)
         .arg(format!("-Djava.io.tmpdir={}", root.join("tmp").display()))
         .arg("-jar")
