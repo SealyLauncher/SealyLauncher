@@ -1064,6 +1064,13 @@ pub trait SkinProvider: Send + Sync;
 - 失败恢复与清理：`write_pending`/`reconcile_pending`/`clear_update_cache`；更新脚本删除安装包与暂存目录。
 - 启动检查：`update.auto_check`（默认开）+ 设置页开关；发现新版本用 toast 提示并预填更新卡片。
 - 签名：新增 `docs/SIGNING.md`（Windows OV/EV、Azure Trusted Signing、SignPath/Certum；macOS Developer ID + notarytool；Linux GPG 校验）。当前发布仍未做商业签名。
+### 20.24 toast 迁移到组件 Notification（2026-11-15）
+
+- `ShellState.toast` 仍是唯一状态源（id/文本/可选撤销/5 秒 deadline）；`SealyShell::sync_toast_notification` 在渲染帧比较 `notified_toast`，用 `window.defer` 调 `push_notification` / `remove_notification1::<ToastNote>(id)`，实现原位替换与到期移除。
+- Notification 使用 `id1::<ToastNote>(toast_id)`、`on_close` 回写 `dismiss_toast`；普通提示保留组件自动隐藏，撤销提示通过 `action` 放一个组件 Button，点击调用 `ShellState::undo`。
+- 验证：设置保存提示、删除账号的撤销提示（含「撤销」按钮）均实测；点击撤销后账号恢复。截图 `design/preview/gpui-components-notification{,-undo}.png`。
+- 测试数据已恢复（10 个账号、Tester 选中、背景音乐开启）。
+- 待办：首页导航磁贴、主题预览卡片仍是自定义按钮；完成后做全站盘点并结束目标。
 ### 20.23 OOBE RadioGroup 与账号卡片（2026-11-15）
 
 - 音频步骤：删除自定义 `radio_card`，改用组件 `RadioGroup::vertical` + `Radio`；受控 `selected_index` + `on_change` 写 `appearance.background_music`，选项标签包含「关/开 + 说明」，实测点击可切换单选。

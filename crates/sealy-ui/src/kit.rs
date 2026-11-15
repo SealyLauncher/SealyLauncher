@@ -15,6 +15,7 @@ pub use gpui_kit::component::avatar::Avatar;
 pub use gpui_kit::component::button::{Button, ButtonCustomVariant, ButtonVariants};
 pub use gpui_kit::component::dialog::Dialog;
 pub use gpui_kit::component::input::Escape as InputEscape;
+pub use gpui_kit::component::notification::Notification;
 pub use gpui_kit::component::progress::Progress;
 pub use gpui_kit::component::radio::{Radio, RadioGroup};
 pub use gpui_kit::component::scroll::ScrollableElement;

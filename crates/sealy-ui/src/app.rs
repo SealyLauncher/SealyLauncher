@@ -75,6 +75,8 @@ pub(crate) struct SealyShell {
     _input_subscriptions: Vec<Subscription>,
     /// Download-source dropdown selection.
     _source_subscription: Subscription,
+    /// Toast id most recently mirrored into a component notification.
+    notified_toast: Option<u64>,
     /// Set when the slider value changed without a window at hand.
     memory_sync_pending: bool,
     /// Input that should receive focus on the next frame.
@@ -82,6 +84,9 @@ pub(crate) struct SealyShell {
     /// Restore focus to the shell after a field closed.
     refocus_pending: bool,
 }
+
+/// Notification id type used to replace the previous toast in place.
+struct ToastNote;
 
 impl SealyShell {
     fn new(
@@ -153,6 +158,7 @@ impl SealyShell {
             _memory_subscription: memory_subscription,
             _input_subscriptions: input_subscriptions,
             _source_subscription: source_subscription,
+            notified_toast: None,
             memory_sync_pending: false,
             pending_focus: None,
             refocus_pending: false,
@@ -276,13 +282,9 @@ impl Render for SealyShell {
         }
 
         self.sync_message_sheet(window, cx);
+        self.sync_toast_notification(window, cx);
         let tokens = self.state.theme();
         let page = pages::render(&mut self.state, cx);
-        let notice = self
-            .state
-            .toast
-            .clone()
-            .map(|toast| toast_element(toast, &tokens, self.state.language(), cx));
 
         div()
             .id("shell")
@@ -356,7 +358,6 @@ impl Render for SealyShell {
                     .child(message_button(&tokens, self.state.running_messages(), cx)),
             )
             .child(div().flex_1().relative().overflow_hidden().child(page))
-            .children(notice)
             .on_key_down(cx.listener(|shell, event: &KeyDownEvent, _, cx| {
                 shell.handle_key(&event.keystroke, cx);
             }))
@@ -756,6 +757,75 @@ impl SealyShell {
         false
     }
 
+    /// Mirrors the transient toast into a component notification.
+    fn sync_toast_notification(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let current = self.state.toast.as_ref().map(|toast| toast.id);
+        if current == self.notified_toast {
+            return;
+        }
+        let previous = self.notified_toast.take();
+        self.notified_toast = current;
+        let toast = self.state.toast.clone();
+        let weak = cx.entity().downgrade();
+        window.defer(cx, move |window, cx| {
+            if let Some(id) = previous {
+                window.remove_notification1::<ToastNote>(id as usize, cx);
+            }
+            let Some(toast) = toast else {
+                return;
+            };
+            if weak.upgrade().is_none() {
+                return;
+            }
+            let lang = weak
+                .upgrade()
+                .map(|shell| shell.update(cx, |this, _| this.state.language()))
+                .unwrap_or(sealy_core::config::Language::ZhCn);
+            let click_shell = weak.clone();
+            let close_shell = weak.clone();
+            let mut note = Notification::new()
+                .message(crate::panel::soft_wrap(&toast.message))
+                .id1::<ToastNote>(toast.id as usize)
+                .autohide(toast.action.is_none())
+                .on_click(move |_, _, cx| {
+                    if let Some(shell) = click_shell.upgrade() {
+                        shell.update(cx, |this, cx| {
+                            this.state.dismiss_toast();
+                            cx.notify();
+                        });
+                    }
+                })
+                .on_close(move |_, cx| {
+                    if let Some(shell) = close_shell.upgrade() {
+                        shell.update(cx, |this, cx| {
+                            this.state.dismiss_toast();
+                            cx.notify();
+                        });
+                    }
+                });
+            if toast.action == Some(crate::state::ToastAction::Undo) {
+                let undo_shell = weak.clone();
+                let label = tr(lang, "撤销", "Undo").to_owned();
+                note = note.action(move |_, _, _| {
+                    let target = undo_shell.clone();
+                    let text = label.clone();
+                    Button::new("toast-undo")
+                        .small()
+                        .label(text)
+                        .on_click(move |_, _, cx| {
+                            if let Some(shell) = target.upgrade() {
+                                shell.update(cx, |this, cx| {
+                                    this.state.undo();
+                                    cx.notify();
+                                });
+                            }
+                        })
+                });
+            }
+            window.push_notification(note, cx);
+        });
+    }
+
     /// Rebuilds the download-source dropdown after a language switch.
     pub(crate) fn refresh_source_select(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(select) = self.state.source_select.clone() else {
@@ -1019,69 +1089,4 @@ fn brand(tokens: &theme::ThemeTokens) -> AnyElement {
                 .child("LAUNCHER"),
         )
         .into_any_element()
-}
-
-fn toast_element(
-    toast: crate::state::Toast,
-    tokens: &theme::ThemeTokens,
-    lang: sealy_core::config::Language,
-    cx: &mut Context<SealyShell>,
-) -> AnyElement {
-    let action = toast.action;
-    let mut card = div()
-        .id("notice")
-        .role(Role::Button)
-        .aria_label(toast.message.clone())
-        .absolute()
-        .bottom(px(theme::ACTION_BAR_HEIGHT + 16.0))
-        .right(px(24.0))
-        .max_w(px(420.0))
-        .px(px(14.0))
-        .py(px(10.0))
-        .flex()
-        .items_start()
-        .gap(px(12.0))
-        .rounded(px(theme::RADIUS_TILE))
-        .bg(rgb(tokens.block))
-        .cursor_pointer()
-        .child(
-            div()
-                .flex_1()
-                .min_w(px(0.0))
-                .text_size(px(12.0))
-                .line_height(relative(1.4))
-                .text_color(rgb(tokens.block_text))
-                .child(crate::panel::soft_wrap(&toast.message)),
-        )
-        .on_click(cx.listener(|shell, _, _, cx| {
-            shell.state.dismiss_toast();
-            cx.notify();
-        }));
-
-    if action == Some(crate::state::ToastAction::Undo) {
-        card = card.child(
-            div()
-                .id("notice-undo")
-                .role(Role::Button)
-                .aria_label("undo")
-                .px(px(8.0))
-                .h(px(22.0))
-                .flex()
-                .items_center()
-                .rounded(px(theme::RADIUS_TILE))
-                .border_1()
-                .border_color(rgb(tokens.faint))
-                .text_size(px(11.0))
-                .font_weight(FontWeight::SEMIBOLD)
-                .text_color(rgb(tokens.block_text))
-                .cursor_pointer()
-                .child(crate::i18n::tr(lang, "撤销", "Undo"))
-                .on_click(cx.listener(|shell, _, _, cx| {
-                    shell.state.undo();
-                    cx.notify();
-                })),
-        );
-    }
-
-    card.into_any_element()
 }

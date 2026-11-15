@@ -16,6 +16,15 @@
 
 ## [Unreleased]
 
+- 2026-11-15 — toast 迁移到组件 Notification：
+  - 应用内提示从自定义底部浮层改为 gpui-component `Notification`（右上角浮层、组件关闭按钮、自动隐藏、点击关闭），状态仍由 `ShellState.toast` 驱动；渲染帧用 `defer` 推送并按 toast id 原位替换，关闭时回写状态。
+  - 撤销操作改用组件 Button 作为 Notification action；实测删除账号后出现「已删除账号 … / 撤销」通知，点击「撤销」后账号恢复（10 个）。
+  - 验证：普通提示「设置已保存」与带操作提示「已删除账号 + 撤销」均实机截图；`cargo fmt`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace` 全绿（80 通过 / 2 忽略）；截图 design/preview/gpui-components-notification{,-undo}.png。
+  - 测试数据已恢复：10 个账号、`Tester` 选中、背景音乐重新开启。
+  - 待办：首页导航磁贴与主题预览卡片仍为自定义按钮，可继续迁移；之后做一次全站控件盘点。
+
+
+
 - 2026-11-15 — OOBE 音频选项与账号卡片改用组件：
   - OOBE「音乐与音效」从自定义 `radio_card` 卡片改为 gpui-component `RadioGroup` + `Radio`（vertical、受控 `selected_index`、`on_change` 写 `background_music`），说明文案合并进选项标签。
   - OOBE 账号步骤的「离线账号 / Microsoft 登录」卡片改用组件 Button：新增 `components::card_button` 适配层（保留纸感卡片外观与 `.id/.aria_label/.on_click` 链），获得组件悬停/焦点态；实测点击离线卡片可打开用户名输入。
