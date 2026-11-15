@@ -265,6 +265,13 @@ impl SealyShell {
             return;
         }
 
+        // Escape returns from an instance's detail page to the list.
+        if keystroke.key == "escape" && self.state.route == Route::Instance {
+            self.state.close_instance_detail();
+            cx.notify();
+            return;
+        }
+
         // The instance launch-settings panel captures typing while it is open.
         if self.state.inst_launch_draft.is_some() {
             match keystroke.key.as_str() {

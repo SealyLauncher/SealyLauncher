@@ -169,6 +169,8 @@ pub enum Route {
     Home,
     /// Instance list.
     Instances,
+    /// Detail page of the selected instance.
+    Instance,
     /// Version browser.
     Downloads,
     /// Account methods.
@@ -191,7 +193,7 @@ impl Route {
     pub fn index(self) -> usize {
         match self {
             Self::Home => 0,
-            Self::Instances => 1,
+            Self::Instances | Self::Instance => 1,
             Self::Downloads => 2,
             Self::Accounts => 3,
             Self::Settings => 4,
@@ -202,7 +204,7 @@ impl Route {
     pub fn ordinal(self) -> &'static str {
         match self {
             Self::Home => "01",
-            Self::Instances => "02",
+            Self::Instances | Self::Instance => "02",
             Self::Downloads => "03",
             Self::Accounts => "04",
             Self::Settings => "05",
@@ -216,6 +218,8 @@ impl Route {
             (Self::Home, Language::EnUs) => "Home",
             (Self::Instances, Language::ZhCn) => "实例",
             (Self::Instances, Language::EnUs) => "Instances",
+            (Self::Instance, Language::ZhCn) => "实例详情",
+            (Self::Instance, Language::EnUs) => "Instance",
             (Self::Downloads, Language::ZhCn) => "下载",
             (Self::Downloads, Language::EnUs) => "Downloads",
             (Self::Accounts, Language::ZhCn) => "账号",
@@ -229,7 +233,7 @@ impl Route {
     pub fn icon(self) -> IconName {
         match self {
             Self::Home => IconName::LayoutDashboard,
-            Self::Instances => IconName::FolderClosed,
+            Self::Instances | Self::Instance => IconName::FolderClosed,
             Self::Downloads => IconName::Inbox,
             Self::Accounts => IconName::CircleUser,
             Self::Settings => IconName::Settings2,
@@ -304,6 +308,8 @@ pub struct ShellState {
     pub logs_path: Option<std::path::PathBuf>,
     /// Last lines read from [`logs_path`](Self::logs_path).
     pub logs_lines: Vec<String>,
+    /// Last instance row click, used to detect double clicks.
+    pub last_instance_click: Option<(String, std::time::Instant)>,
 }
 
 /// Editable copy of one instance's launch overrides.
@@ -404,6 +410,7 @@ impl ShellState {
             logs_title: String::new(),
             logs_path: None,
             logs_lines: Vec::new(),
+            last_instance_click: None,
         }
     }
 
@@ -726,6 +733,32 @@ impl ShellState {
         Ok(())
     }
 
+    /// Opens the detail page for the selected instance.
+    pub fn open_instance_detail(&mut self) {
+        if self.instances.current().is_some() {
+            self.route = Route::Instance;
+        }
+    }
+
+    /// Returns to the instance list.
+    pub fn close_instance_detail(&mut self) {
+        self.route = Route::Instances;
+    }
+
+    /// Records a row click and reports whether it completes a double click.
+    pub fn register_instance_click(&mut self, name: &str) -> bool {
+        let now = std::time::Instant::now();
+        let double = self.last_instance_click.as_ref().is_some_and(|(last, at)| {
+            last == name && now.duration_since(*at) < std::time::Duration::from_millis(450)
+        });
+        self.last_instance_click = if double {
+            None
+        } else {
+            Some((name.to_owned(), now))
+        };
+        double
+    }
+
     /// Opens the log viewer for the selected instance.
     pub fn open_logs(&mut self) {
         let Some(instance) = self.instances.current() else {
@@ -765,7 +798,7 @@ impl ShellState {
     pub fn open_log_folder(&mut self) {
         let dir = self.paths.game.join("logs");
         let _ = std::fs::create_dir_all(&dir);
-        reveal(&dir);
+        self.reveal_with_feedback(&dir.clone());
     }
 
     /// Appends a character to the Java path input.
@@ -864,7 +897,7 @@ impl ShellState {
         };
         let dir = sealy_core::instances::directory(&self.paths.game, &current);
         let _ = std::fs::create_dir_all(&dir);
-        reveal(&dir);
+        self.reveal_with_feedback(&dir.clone());
     }
 
     /// Adds a message and returns its id.
@@ -1058,13 +1091,26 @@ impl ShellState {
     /// Reveals the data directory in the platform file manager.
     pub fn open_data_folder(&mut self) {
         let _ = std::fs::create_dir_all(&self.paths.data);
-        reveal(&self.paths.data);
+        let dir = self.paths.data.clone();
+        self.reveal_with_feedback(&dir);
     }
 
     /// Reveals SealyData/logs in the platform file manager.
     pub fn open_logs_folder(&mut self) {
         let _ = std::fs::create_dir_all(&self.paths.logs);
-        reveal(&self.paths.logs);
+        let dir = self.paths.logs.clone();
+        self.reveal_with_feedback(&dir);
+    }
+
+    /// Reveals a folder and reports the outcome in a toast.
+    pub fn reveal_with_feedback(&mut self, path: &std::path::Path) {
+        match reveal_inner(path) {
+            Ok(()) => self.notify(format!("已打开 {}", path.display())),
+            Err(err) => {
+                tracing::warn!(path = %path.display(), error = %err, "could not open folder");
+                self.notify(format!("无法打开目录：{err}"));
+            }
+        }
     }
 
     /// Dismisses the toast immediately.
@@ -1126,12 +1172,98 @@ fn copy_directory(from: &std::path::Path, to: &std::path::Path) -> std::io::Resu
     Ok(())
 }
 
-/// Opens a directory in the platform file manager.
-fn reveal(path: &std::path::Path) {
+/// Per-platform launcher for the file manager.
+fn reveal_inner(path: &std::path::Path) -> std::io::Result<()> {
     #[cfg(target_os = "windows")]
-    let _ = std::process::Command::new("explorer").arg(path).spawn();
+    {
+        // `explorer.exe <path>` and PowerShell-based helpers silently fail for
+        // some users; the shell "open" verb is the reliable route.
+        return windows_shell::open_folder(path).map_err(std::io::Error::other);
+    }
+
     #[cfg(target_os = "macos")]
-    let _ = std::process::Command::new("open").arg(path).spawn();
+    {
+        return std::process::Command::new("open")
+            .arg(path)
+            .spawn()
+            .map(|_| ());
+    }
+
     #[cfg(all(unix, not(target_os = "macos")))]
-    let _ = std::process::Command::new("xdg-open").arg(path).spawn();
+    {
+        return std::process::Command::new("xdg-open")
+            .arg(path)
+            .spawn()
+            .map(|_| ());
+    }
+
+    #[allow(unreachable_code)]
+    Ok(())
+}
+
+/// Minimal `ShellExecuteW` binding used to reveal folders on Windows.
+#[cfg(target_os = "windows")]
+#[allow(unsafe_code)]
+mod windows_shell {
+    use std::ffi::OsStr;
+    use std::os::windows::ffi::OsStrExt;
+
+    /// `ShellExecuteW` returns an `HINSTANCE`; values above 32 mean success.
+    const SUCCESS_THRESHOLD: isize = 32;
+    /// `SW_SHOWNORMAL`.
+    const SW_SHOWNORMAL: i32 = 1;
+
+    #[link(name = "shell32")]
+    unsafe extern "system" {
+        fn ShellExecuteW(
+            hwnd: *mut core::ffi::c_void,
+            operation: *const u16,
+            file: *const u16,
+            parameters: *const u16,
+            directory: *const u16,
+            show_cmd: i32,
+        ) -> *mut core::ffi::c_void;
+    }
+
+    fn wide(value: &OsStr) -> Vec<u16> {
+        value.encode_wide().chain(std::iter::once(0)).collect()
+    }
+
+    /// Opens a folder with the shell's default verb.
+    pub(super) fn open_folder(path: &std::path::Path) -> Result<(), String> {
+        let operation = wide(OsStr::new("open"));
+        let file = wide(path.as_os_str());
+        // SAFETY: every pointer refers to a null-terminated UTF-16 buffer that
+        // outlives the call; the remaining arguments are plain OS API values.
+        let result = unsafe {
+            ShellExecuteW(
+                std::ptr::null_mut(),
+                operation.as_ptr(),
+                file.as_ptr(),
+                std::ptr::null(),
+                std::ptr::null(),
+                SW_SHOWNORMAL,
+            )
+        };
+
+        if result as isize > SUCCESS_THRESHOLD {
+            return Ok(());
+        }
+
+        // Fall back to spawning Explorer directly: some shells refuse the
+        // `open` verb for folders inside a job object.
+        if std::process::Command::new("explorer.exe")
+            .arg(path)
+            .spawn()
+            .is_ok()
+        {
+            return Ok(());
+        }
+
+        Err(format!(
+            "ShellExecuteW failed for {} (code {})",
+            path.display(),
+            result as isize
+        ))
+    }
 }

@@ -43,6 +43,16 @@ pub(crate) fn head_band_back(
     t: &ThemeTokens,
     cx: &mut Context<crate::app::SealyShell>,
 ) -> Div {
+    head_band_back_to(title, crate::state::Route::Home, t, cx)
+}
+
+/// Head band with a back arrow that returns to the given route.
+pub(crate) fn head_band_back_to(
+    title: impl Into<SharedString>,
+    route: crate::state::Route,
+    t: &ThemeTokens,
+    cx: &mut Context<crate::app::SealyShell>,
+) -> Div {
     let title: SharedString = title.into();
     let muted = t.muted;
     let line_soft = t.line_soft;
@@ -78,8 +88,8 @@ pub(crate) fn head_band_back(
                         .h(px(16.0))
                         .text_color(rgb(muted)),
                 )
-                .on_click(cx.listener(|shell, _, _, cx| {
-                    shell.state.route = crate::state::Route::Home;
+                .on_click(cx.listener(move |shell, _, _, cx| {
+                    shell.state.route = route;
                     cx.notify();
                 })),
         )

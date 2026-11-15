@@ -308,15 +308,26 @@ fn action_bar_content(
         .flex()
         .items_center()
         .gap(px(16.0))
-        .child(instance_block(t, instance, meta))
+        .child(
+            div()
+                .id("home-instance")
+                .role(Role::Button)
+                .aria_label("home-instance")
+                .cursor_pointer()
+                .on_click(cx.listener(|shell, _, _, cx| {
+                    shell.state.open_instance_detail();
+                    cx.notify();
+                }))
+                .child(instance_block(t, instance, meta)),
+        )
         .child(div().flex_1())
         .child(
             icon_button(IconName::FileText, t)
-                .id("open-logs")
-                .on_click(cx.listener(move |shell, _, _, cx| {
-                    shell
-                        .state
-                        .notify(tr(lang, "日志将在 Phase 2 接入", "Logs arrive in Phase 2"));
+                .id("open-instance-details")
+                .role(Role::Button)
+                .aria_label("open-instance-details")
+                .on_click(cx.listener(|shell, _, _, cx| {
+                    shell.state.open_instance_detail();
                     cx.notify();
                 })),
         )

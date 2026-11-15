@@ -195,7 +195,7 @@ pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyEle
 }
 
 /// Per-instance launch settings editor (window size, memory, JVM args).
-fn launch_settings_panel(
+pub(crate) fn launch_settings_panel(
     state: &ShellState,
     t: &ThemeTokens,
     lang: sealy_core::config::Language,
@@ -359,7 +359,7 @@ fn launch_settings_panel(
 }
 
 /// Read-only viewer for the selected instance's latest game log.
-fn log_panel(
+pub(crate) fn log_panel(
     state: &ShellState,
     t: &ThemeTokens,
     lang: sealy_core::config::Language,
@@ -922,6 +922,9 @@ fn row(
         )
         .on_click(cx.listener(move |shell, _, _, cx| {
             shell.state.select_instance(&name);
+            if shell.state.register_instance_click(&name) {
+                shell.state.open_instance_detail();
+            }
             cx.notify();
         }))
         .into_any_element()

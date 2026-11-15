@@ -3,6 +3,7 @@
 mod accounts;
 mod downloads;
 mod home;
+mod instance;
 mod instances;
 mod oobe;
 mod settings;
@@ -20,6 +21,7 @@ pub(crate) fn render(state: &mut ShellState, cx: &mut Context<SealyShell>) -> An
     match state.route {
         Route::Home => home::render(state, cx),
         Route::Instances => instances::render(state, cx),
+        Route::Instance => instance::render(state, cx),
         Route::Downloads => downloads::render(state, cx),
         Route::Accounts => accounts::render(state, cx),
         Route::Settings => settings::render(state, cx),
