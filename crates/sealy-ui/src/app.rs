@@ -311,29 +311,6 @@ impl SealyShell {
             return;
         }
 
-        // The addon import input captures typing while it is open.
-        if self.state.addon_draft.is_some() {
-            match keystroke.key.as_str() {
-                "escape" => self.state.addon_draft = None,
-                "enter" => match self.state.commit_addon_import() {
-                    Ok(name) if !name.is_empty() => {
-                        self.state.notify(format!("已导入 {name}"));
-                    }
-                    Ok(_) => {}
-                    Err(err) => self.state.notify(err),
-                },
-                "backspace" => self.state.addon_draft_pop_char(),
-                key if key.chars().count() == 1 => {
-                    if let Some(ch) = key.chars().next() {
-                        self.state.addon_draft_push_char(ch);
-                    }
-                }
-                _ => {}
-            }
-            cx.notify();
-            return;
-        }
-
         // The "add Java" input captures typing while it is open.
         if self.state.java_path_draft.is_some() {
             match keystroke.key.as_str() {

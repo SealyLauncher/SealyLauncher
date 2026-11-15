@@ -321,80 +321,13 @@ fn step_account(state: &ShellState, t: &ThemeTokens, cx: &mut Context<SealyShell
         .into_any_element()
 }
 
-/// Device-code card shown while the wizard waits for the browser sign-in.
 fn step_account_code(
     login: &crate::state::MicrosoftLogin,
     t: &ThemeTokens,
     lang: Language,
     cx: &mut Context<SealyShell>,
 ) -> AnyElement {
-    let code = if login.user_code.is_empty() {
-        "……".to_owned()
-    } else {
-        login.user_code.clone()
-    };
-    let url = if login.verification_uri.is_empty() {
-        "microsoft.com/link".to_owned()
-    } else {
-        login
-            .verification_uri
-            .trim_start_matches("https://")
-            .to_owned()
-    };
-
-    div()
-        .flex()
-        .flex_col()
-        .items_center()
-        .gap(px(14.0))
-        .child(
-            div()
-                .text_size(px(16.0))
-                .font_weight(FontWeight::SEMIBOLD)
-                .text_color(rgb(t.text))
-                .child(tr(lang, "在浏览器中打开", "Open in your browser")),
-        )
-        .child(div().text_size(px(20.0)).text_color(rgb(t.text)).child(url))
-        .child(
-            div()
-                .mt(px(4.0))
-                .px(px(26.0))
-                .h(px(72.0))
-                .flex()
-                .items_center()
-                .rounded(px(theme::RADIUS_TILE))
-                .border_1()
-                .border_color(rgb(t.line))
-                .bg(rgb(t.surface))
-                .child(
-                    div()
-                        .text_size(px(32.0))
-                        .font_weight(FontWeight::BOLD)
-                        .text_color(rgb(t.text))
-                        .child(code),
-                ),
-        )
-        .child(div().text_size(px(12.0)).text_color(rgb(t.muted)).child(tr(
-            lang,
-            "输入上方代码并完成登录，完成后自动继续",
-            "Enter the code above; the wizard continues automatically",
-        )))
-        .child(
-            quiet_button(tr(lang, "取消登录", "Cancel"), t)
-                .id("oobe-microsoft-cancel")
-                .role(Role::Button)
-                .aria_label("oobe-microsoft-cancel")
-                .on_click(cx.listener(|shell, _, _, cx| {
-                    if let Some(login) = &shell.state.microsoft_login {
-                        login
-                            .cancel
-                            .store(true, std::sync::atomic::Ordering::Relaxed);
-                    }
-                    shell.state.microsoft_login = None;
-                    cx.notify();
-                })),
-        )
-        .into_any_element()
+    crate::components::microsoft_login_card(login, t, lang, cx)
 }
 
 /// Inline name editor used for the offline account.

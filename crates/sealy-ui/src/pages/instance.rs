@@ -68,12 +68,7 @@ pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyEle
         })
         .collect::<Vec<_>>();
 
-    let body = div()
-        .flex_1()
-        .min_h(px(0.0))
-        .id("instance-detail-body")
-        .overflow_y_scroll()
-        .p(px(theme::PAGE_PADDING))
+    let overview = div()
         .flex()
         .flex_col()
         .gap(px(18.0))
@@ -162,12 +157,38 @@ pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyEle
                         .child(div().flex().gap(px(8.0)).children(icon_choices)),
                 ),
         )
+        .into_any_element();
+
+    let content: AnyElement = match state.instance_section {
+        crate::state::InstanceSection::Overview => overview,
+        crate::state::InstanceSection::Mods => {
+            addon_section(state, sealy_core::addons::AddonKind::Mod, &t, lang, cx)
+        }
+        crate::state::InstanceSection::ResourcePacks => addon_section(
+            state,
+            sealy_core::addons::AddonKind::ResourcePack,
+            &t,
+            lang,
+            cx,
+        ),
+        crate::state::InstanceSection::Shaders => {
+            addon_section(state, sealy_core::addons::AddonKind::Shader, &t, lang, cx)
+        }
+    };
+
+    let body = div()
+        .flex_1()
+        .min_h(px(0.0))
+        .flex()
+        .child(instance_sidebar(state, &t, lang, cx))
         .child(
-            div().flex().flex_col().gap(px(14.0)).children(
-                sealy_core::addons::AddonKind::ALL
-                    .into_iter()
-                    .map(|kind| addon_section(state, kind, &t, lang, cx)),
-            ),
+            div()
+                .flex_1()
+                .min_w(px(0.0))
+                .id("instance-detail-body")
+                .overflow_y_scroll()
+                .p(px(theme::PAGE_PADDING))
+                .child(content),
         )
         .into_any_element();
 
@@ -280,6 +301,60 @@ fn empty(
         .into_any_element()
 }
 
+/// Left navigation of the instance page.
+fn instance_sidebar(
+    state: &ShellState,
+    t: &ThemeTokens,
+    lang: sealy_core::config::Language,
+    cx: &mut Context<SealyShell>,
+) -> AnyElement {
+    let current = state.instance_section;
+    let items = crate::state::InstanceSection::ALL
+        .into_iter()
+        .enumerate()
+        .map(|(index, section)| {
+            let selected = section == current;
+            div()
+                .id(("instance-section", index))
+                .role(Role::Button)
+                .aria_label(format!("instance-section-{index}"))
+                .h(px(40.0))
+                .w_full()
+                .px(px(16.0))
+                .flex()
+                .items_center()
+                .gap(px(10.0))
+                .cursor_pointer()
+                .border_l_1()
+                .border_color(rgb(if selected { t.accent } else { t.surface }))
+                .bg(rgb(if selected { t.surface } else { t.bg }))
+                .hover({
+                    let hover = t.line_soft;
+                    move |this| this.bg(rgb(hover))
+                })
+                .text_size(px(12.0))
+                .text_color(rgb(if selected { t.accent } else { t.text }))
+                .on_click(cx.listener(move |shell, _, _, cx| {
+                    shell.state.instance_section = section;
+                    cx.notify();
+                }))
+                .child(section.label(lang))
+        })
+        .collect::<Vec<_>>();
+
+    div()
+        .w(px(176.0))
+        .flex_shrink_0()
+        .h_full()
+        .py(px(12.0))
+        .flex()
+        .flex_col()
+        .gap(px(2.0))
+        .border_r_1()
+        .border_color(rgb(t.line))
+        .children(items)
+        .into_any_element()
+}
 /// One addon section: title, count, import action and the entry list.
 fn addon_section(
     state: &ShellState,
@@ -299,12 +374,6 @@ fn addon_section(
         .as_ref()
         .map(|dir| sealy_core::addons::list(dir, kind))
         .unwrap_or_default();
-    let draft = state
-        .addon_draft
-        .as_ref()
-        .filter(|(draft_kind, _)| *draft_kind == kind)
-        .map(|(_, text)| text.clone());
-
     let rows = items
         .iter()
         .enumerate()
@@ -439,56 +508,35 @@ fn addon_section(
                         .id(("addon-import", kind as usize))
                         .role(Role::Button)
                         .aria_label(format!("import-addons-{}", kind.folder()))
-                        .on_click(cx.listener(move |shell, _, _, cx| {
-                            shell.state.begin_addon_import(kind);
-                            cx.notify();
+                        .on_click(cx.listener(move |_shell, _, _, cx| {
+                            let receiver = cx.prompt_for_paths(PathPromptOptions {
+                                files: true,
+                                directories: true,
+                                multiple: true,
+                                prompt: Some("选择要导入的文件或文件夹".into()),
+                            });
+                            cx.spawn(async move |this, cx| {
+                                let Ok(Ok(Some(paths))) = receiver.await else {
+                                    return;
+                                };
+                                let _ = this.update(cx, |shell, cx| {
+                                    match shell.state.import_addons(kind, &paths) {
+                                        Ok(count) => {
+                                            let lang = shell.state.language();
+                                            shell.state.notify(format!(
+                                                "{} {count}",
+                                                tr(lang, "已导入", "Imported")
+                                            ));
+                                        }
+                                        Err(err) => shell.state.notify(err),
+                                    }
+                                    cx.notify();
+                                });
+                            })
+                            .detach();
                         })),
                 ),
         )
-        .child(if let Some(text) = draft {
-            div()
-                .h(px(40.0))
-                .flex()
-                .items_center()
-                .gap(px(8.0))
-                .child(
-                    div()
-                        .flex_1()
-                        .min_w(px(0.0))
-                        .h(px(28.0))
-                        .px(px(8.0))
-                        .flex()
-                        .items_center()
-                        .rounded(px(theme::RADIUS_TILE))
-                        .border_1()
-                        .border_color(rgb(t.text))
-                        .text_size(px(11.0))
-                        .text_color(rgb(if text.is_empty() { t.faint } else { t.text }))
-                        .child(if text.is_empty() {
-                            tr(
-                                lang,
-                                "粘贴文件或文件夹路径，回车导入",
-                                "Paste a file or folder path, then Enter",
-                            )
-                            .to_owned()
-                        } else {
-                            text
-                        }),
-                )
-                .child(
-                    quiet_button(tr(lang, "取消", "Cancel"), t)
-                        .id(("addon-cancel", kind as usize))
-                        .role(Role::Button)
-                        .aria_label("cancel-addon-import")
-                        .on_click(cx.listener(|shell, _, _, cx| {
-                            shell.state.addon_draft = None;
-                            cx.notify();
-                        })),
-                )
-                .into_any_element()
-        } else {
-            div().into_any_element()
-        })
         .child(body)
         .into_any_element()
 }

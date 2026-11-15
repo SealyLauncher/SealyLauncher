@@ -235,6 +235,16 @@ pub(crate) fn launch_settings_panel(
                 )
                 .child(
                     div()
+                        .id(("inst-field", index))
+                        .role(Role::Button)
+                        .aria_label(format!("inst-field-{index}"))
+                        .cursor_pointer()
+                        .on_click(cx.listener(move |shell, _, _, cx| {
+                            if let Some(draft) = &mut shell.state.inst_launch_draft {
+                                draft.field = index;
+                            }
+                            cx.notify();
+                        }))
                         .flex_1()
                         .min_w(px(0.0))
                         .h(px(30.0))
@@ -581,6 +591,9 @@ fn create_panel(
     lang: sealy_core::config::Language,
     cx: &mut Context<SealyShell>,
 ) -> AnyElement {
+    let picker = &state.new_instance;
+    let chosen_game = picker.game.clone();
+
     let mut list = div()
         .id("create-list")
         .flex_1()
@@ -603,44 +616,48 @@ fn create_panel(
                 )),
         );
     } else {
-        for (index, version) in state.installed.iter().take(40).enumerate() {
+        // Base versions first: those are the usual starting points for a new
+        // instance, loader builds follow with their parent in the subtitle.
+        let mut ordered: Vec<&sealy_core::version::InstalledVersion> =
+            state.installed.iter().collect();
+        ordered.sort_by(|left, right| {
+            let left_is_base = version_parent(&left.document).is_none();
+            let right_is_base = version_parent(&right.document).is_none();
+            right_is_base
+                .cmp(&left_is_base)
+                .then_with(|| left.id.cmp(&right.id))
+        });
+        for (index, version) in ordered.into_iter().take(60).enumerate() {
             let id = version.id.clone();
             let (kind, inherits) = version_meta(&version.document, lang);
             let subtitle = match &inherits {
                 Some(parent) => format!("{kind} · {parent}"),
                 None => kind.clone(),
             };
+            let selected = chosen_game.as_deref() == Some(id.as_str());
 
             let pick = {
                 let id = id.clone();
                 cx.listener(move |shell, _, _, cx| {
-                    shell.state.create_instance(&id);
-                    shell.state.new_instance_open = false;
+                    let changed = shell.state.new_instance.game.as_deref() != Some(id.as_str());
+                    shell.state.pick_new_instance_game(&id);
+                    if changed
+                        && let Some(loader) = shell.state.new_instance.loader
+                        && !loader.needs_local_installer()
+                    {
+                        fetch_loader_choices(cx, loader, id.clone());
+                    }
                     cx.notify();
                 })
             };
-            let fabric = {
+            let create_vanilla = {
                 let id = id.clone();
                 cx.listener(move |shell, _, _, cx| {
-                    cx.stop_propagation();
-                    crate::install_flow::start_loader(
-                        &mut shell.state,
-                        id.clone(),
-                        sealy_core::loader::LoaderKind::Fabric,
-                        cx,
-                    );
-                })
-            };
-            let quilt = {
-                let id = id.clone();
-                cx.listener(move |shell, _, _, cx| {
-                    cx.stop_propagation();
-                    crate::install_flow::start_loader(
-                        &mut shell.state,
-                        id.clone(),
-                        sealy_core::loader::LoaderKind::Quilt,
-                        cx,
-                    );
+                    shell.state.pick_new_instance_game(&id);
+                    shell.state.new_instance.loader = None;
+                    shell.state.create_instance(&id);
+                    shell.state.new_instance_open = false;
+                    cx.notify();
                 })
             };
 
@@ -649,15 +666,15 @@ fn create_panel(
                     .id(("create-row", index))
                     .role(Role::Button)
                     .aria_label(format!("pick {id}"))
-                    .h(px(64.0))
+                    .h(px(56.0))
                     .w_full()
                     .flex_shrink_0()
                     .px(px(8.0))
                     .flex()
                     .items_center()
-                    .gap(px(14.0))
-                    .border_b_1()
-                    .border_color(rgb(t.line_soft))
+                    .gap(px(12.0))
+                    .border_1()
+                    .border_color(rgb(if selected { t.accent } else { t.line_soft }))
                     .cursor_pointer()
                     .hover({
                         let hover = t.line_soft;
@@ -666,8 +683,9 @@ fn create_panel(
                     .on_click(pick)
                     .child(
                         div()
-                            .w(px(30.0))
-                            .h(px(30.0))
+                            .w(px(26.0))
+                            .h(px(26.0))
+                            .flex_shrink_0()
                             .flex()
                             .items_center()
                             .justify_center()
@@ -676,8 +694,8 @@ fn create_panel(
                             .border_color(rgb(t.line))
                             .child(
                                 Icon::new(IconName::Box)
-                                    .w(px(15.0))
-                                    .h(px(15.0))
+                                    .w(px(14.0))
+                                    .h(px(14.0))
                                     .text_color(rgb(t.text)),
                             ),
                     )
@@ -690,42 +708,50 @@ fn create_panel(
                             .gap(px(2.0))
                             .child(
                                 div()
-                                    .text_size(px(14.0))
+                                    .text_size(px(13.0))
                                     .font_weight(FontWeight::MEDIUM)
-                                    .text_color(rgb(t.text))
+                                    .text_color(rgb(if selected { t.accent } else { t.text }))
                                     .child(id.clone()),
                             )
                             .child(
                                 div()
-                                    .text_size(px(11.0))
+                                    .text_size(px(10.0))
                                     .text_color(rgb(t.muted))
                                     .child(subtitle),
                             ),
                     )
-                    .child(
-                        quiet_button(tr(lang, "Fabric", "Fabric"), t)
-                            .id(("create-fabric", index))
-                            .role(Role::Button)
-                            .aria_label(format!("fabric {id}"))
-                            .on_click(fabric),
-                    )
-                    .child(
-                        quiet_button(tr(lang, "Quilt", "Quilt"), t)
-                            .id(("create-quilt", index))
-                            .role(Role::Button)
-                            .aria_label(format!("quilt {id}"))
-                            .on_click(quilt),
-                    ),
+                    .when(selected, |this| {
+                        this.child(
+                            quiet_button(tr(lang, "直接新建", "Create"), t)
+                                .id(("create-vanilla", index))
+                                .role(Role::Button)
+                                .aria_label(format!("create-vanilla {id}"))
+                                .on_click(create_vanilla),
+                        )
+                    }),
             );
         }
     }
+
+    let loader_section = match &chosen_game {
+        Some(game) => loader_section(state, game, t, lang, cx),
+        None => div()
+            .text_size(px(11.0))
+            .text_color(rgb(t.muted))
+            .child(tr(
+                lang,
+                "先在上面选择要基于哪个版本",
+                "Pick a version above first",
+            ))
+            .into_any_element(),
+    };
 
     div()
         .flex_1()
         .min_h(px(0.0))
         .flex()
         .flex_col()
-        .gap(px(12.0))
+        .gap(px(10.0))
         .pt(px(6.0))
         .child(
             div()
@@ -741,11 +767,12 @@ fn create_panel(
                 )
                 .child(div().text_size(px(11.0)).text_color(rgb(t.muted)).child(tr(
                     lang,
-                    "点版本直接创建，或先装 Fabric / Quilt",
-                    "Click a version to create, or add Fabric / Quilt first",
+                    "点一次选中，再在下方选择加载器",
+                    "Pick one, then choose a loader below",
                 ))),
         )
-        .child(list)
+        .child(div().max_h(px(210.0)).flex().child(list))
+        .child(loader_section)
         .child(
             div()
                 .flex_shrink_0()
@@ -777,6 +804,319 @@ fn create_panel(
         .into_any_element()
 }
 
+/// Loader choices for the selected version plus the create button.
+fn loader_section(
+    state: &ShellState,
+    game: &str,
+    t: &ThemeTokens,
+    lang: sealy_core::config::Language,
+    cx: &mut Context<SealyShell>,
+) -> AnyElement {
+    let picker = &state.new_instance;
+    let current = picker.loader;
+
+    let mut chips = Vec::new();
+    chips.push(loader_chip(
+        "loader-vanilla",
+        tr(lang, "原版", "Vanilla"),
+        current.is_none(),
+        t,
+        cx.listener(|shell, _, _, cx| {
+            shell.state.set_new_instance_loader(None);
+            cx.notify();
+        }),
+    ));
+    for kind in sealy_core::loader::LoaderKind::ALL {
+        let game = game.to_owned();
+        chips.push(loader_chip(
+            ("loader-kind", kind as usize),
+            kind.label(),
+            current == Some(kind),
+            t,
+            cx.listener(move |shell, _, _, cx| {
+                shell.state.set_new_instance_loader(Some(kind));
+                if !kind.needs_local_installer() {
+                    fetch_loader_choices(cx, kind, game.clone());
+                }
+                cx.notify();
+            }),
+        ));
+    }
+
+    let body: AnyElement = match current {
+        None => div()
+            .text_size(px(11.0))
+            .text_color(rgb(t.muted))
+            .child(tr(
+                lang,
+                "创建纯原版实例，不安装加载器",
+                "Create a vanilla instance without a loader",
+            ))
+            .into_any_element(),
+        Some(kind) if kind.needs_local_installer() => {
+            let chosen = picker
+                .optifine_jar
+                .as_ref()
+                .map(|jar| jar.display().to_string())
+                .unwrap_or_default();
+            div()
+                .flex()
+                .items_center()
+                .gap(px(8.0))
+                .child(
+                    quiet_button(tr(lang, "选择安装包", "Choose installer"), t)
+                        .id("pick-optifine")
+                        .role(Role::Button)
+                        .aria_label("pick-optifine")
+                        .on_click(cx.listener(|_shell, _, _, cx| {
+                            let receiver = cx.prompt_for_paths(PathPromptOptions {
+                                files: true,
+                                directories: false,
+                                multiple: false,
+                                prompt: Some("选择 OptiFine 安装包".into()),
+                            });
+                            cx.spawn(async move |this, cx| {
+                                if let Ok(Ok(Some(paths))) = receiver.await
+                                    && let Some(path) = paths.into_iter().next()
+                                {
+                                    let _ = this.update(cx, |shell, cx| {
+                                        shell.state.new_instance.optifine_jar = Some(path);
+                                        cx.notify();
+                                    });
+                                }
+                            })
+                            .detach();
+                        })),
+                )
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w(px(0.0))
+                        .text_size(px(10.0))
+                        .text_color(rgb(if chosen.is_empty() { t.faint } else { t.text }))
+                        .child(if chosen.is_empty() {
+                            tr(
+                                lang,
+                                "需要本地 OptiFine 安装包",
+                                "A local OptiFine installer is required",
+                            )
+                            .to_owned()
+                        } else {
+                            chosen
+                        }),
+                )
+                .into_any_element()
+        }
+        Some(_) if picker.loader_loading => div()
+            .text_size(px(11.0))
+            .text_color(rgb(t.muted))
+            .child(tr(lang, "正在获取版本列表…", "Loading versions…"))
+            .into_any_element(),
+        Some(kind) => {
+            let mut entries = Vec::new();
+            entries.push(loader_chip(
+                "loader-version-latest",
+                tr(lang, "最新", "Latest"),
+                picker.loader_version.is_none(),
+                t,
+                cx.listener(|shell, _, _, cx| {
+                    shell.state.new_instance.loader_version = None;
+                    cx.notify();
+                }),
+            ));
+            for (index, choice) in picker.loader_choices.iter().take(10).enumerate() {
+                let version = choice.version.clone();
+                let stable = choice.stable;
+                let selected = picker.loader_version.as_deref() == Some(version.as_str());
+                entries.push(loader_chip(
+                    ("loader-version", index),
+                    if stable {
+                        version.clone()
+                    } else {
+                        format!("{version} *")
+                    },
+                    selected,
+                    t,
+                    cx.listener(move |shell, _, _, cx| {
+                        shell.state.new_instance.loader_version = Some(version.clone());
+                        cx.notify();
+                    }),
+                ));
+                let _ = index;
+            }
+            let hint = match &picker.loader_error {
+                Some(err) => err.clone(),
+                None => format!("{} · {game}", kind.label()),
+            };
+            div()
+                .flex()
+                .flex_col()
+                .gap(px(8.0))
+                .child(div().flex().flex_wrap().gap(px(6.0)).children(entries))
+                .child(
+                    div()
+                        .text_size(px(10.0))
+                        .text_color(rgb(t.muted))
+                        .child(hint),
+                )
+                .into_any_element()
+        }
+    };
+
+    let can_create = match current {
+        None => true,
+        Some(kind) if kind.needs_local_installer() => picker.optifine_jar.is_some(),
+        Some(_) => true,
+    };
+    let create_label = match current {
+        None => tr(lang, "创建实例", "Create instance").to_owned(),
+        Some(kind) => format!("{} {}", tr(lang, "安装", "Install"), kind.label()),
+    };
+
+    div()
+        .flex()
+        .flex_col()
+        .gap(px(10.0))
+        .child(div().h(px(1.0)).w_full().bg(rgb(t.line)))
+        .child(
+            div()
+                .flex()
+                .items_center()
+                .gap(px(10.0))
+                .child(
+                    div()
+                        .text_size(px(12.0))
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_color(rgb(t.text))
+                        .child(tr(lang, "加载器", "Loader")),
+                )
+                .children(chips),
+        )
+        .child(body)
+        .child(
+            div().flex().justify_end().child(
+                primary_button(create_label, t)
+                    .id("create-confirm")
+                    .role(Role::Button)
+                    .aria_label("create-confirm")
+                    .when(!can_create, |this| this.opacity(0.5))
+                    .on_click(cx.listener(move |shell, _, _, cx| {
+                        let Some(game) = shell.state.new_instance.game.clone() else {
+                            shell.state.notify(tr(
+                                shell.state.language(),
+                                "请先选择版本",
+                                "Pick a version first",
+                            ));
+                            return;
+                        };
+                        let loader = shell.state.new_instance.loader;
+                        match loader {
+                            None => {
+                                shell.state.create_instance(&game);
+                                shell.state.new_instance_open = false;
+                                cx.notify();
+                            }
+                            Some(kind) => {
+                                let jar = shell.state.new_instance.optifine_jar.clone();
+                                if kind.needs_local_installer() && jar.is_none() {
+                                    shell.state.notify(tr(
+                                        shell.state.language(),
+                                        "请先选择 OptiFine 安装包",
+                                        "Choose the OptiFine installer first",
+                                    ));
+                                    return;
+                                }
+                                let request = crate::install_flow::LoaderRequest {
+                                    game,
+                                    kind,
+                                    version: shell.state.new_instance.loader_version.clone(),
+                                    jar,
+                                    instance_name: Some("new".to_owned()),
+                                };
+                                shell.state.new_instance_open = false;
+                                crate::install_flow::start_loader_request(
+                                    &mut shell.state,
+                                    request,
+                                    cx,
+                                );
+                            }
+                        }
+                    })),
+            ),
+        )
+        .into_any_element()
+}
+
+/// Small selectable chip used by the loader pickers.
+fn loader_chip(
+    id: impl Into<ElementId>,
+    label: impl Into<SharedString>,
+    selected: bool,
+    t: &ThemeTokens,
+    listener: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> AnyElement {
+    let label: SharedString = label.into();
+    div()
+        .id(id)
+        .role(Role::Button)
+        .aria_label(label.clone())
+        .h(px(26.0))
+        .px(px(10.0))
+        .flex()
+        .items_center()
+        .rounded(px(theme::RADIUS_TILE))
+        .border_1()
+        .border_color(rgb(if selected { t.accent } else { t.line }))
+        .cursor_pointer()
+        .text_size(px(11.0))
+        .text_color(rgb(if selected { t.accent } else { t.text }))
+        .on_click(listener)
+        .child(label)
+        .into_any_element()
+}
+
+/// Fetches the loader builds for `game` in the background.
+fn fetch_loader_choices(
+    cx: &mut Context<SealyShell>,
+    kind: sealy_core::loader::LoaderKind,
+    game: String,
+) {
+    cx.spawn(async move |this, cx| {
+        let _ = this.update(cx, |shell, cx| {
+            shell.state.new_instance.loader_loading = true;
+            shell.state.new_instance.loader_error = None;
+            cx.notify();
+        });
+        let result = cx
+            .background_executor()
+            .spawn({
+                let game = game.clone();
+                async move { sealy_core::loader::versions(kind, &game) }
+            })
+            .await;
+        let _ = this.update(cx, |shell, cx| {
+            shell.state.new_instance.loader_loading = false;
+            match result {
+                Ok(choices) => {
+                    if shell.state.new_instance.loader == Some(kind) {
+                        shell.state.new_instance.loader_choices = choices;
+                    }
+                }
+                Err(err) => {
+                    shell.state.new_instance.loader_error = Some(err.to_string());
+                }
+            }
+            cx.notify();
+        });
+    })
+    .detach();
+}
+/// Parent version id of an installed document, if it inherits one.
+fn version_parent(document: &std::path::Path) -> Option<String> {
+    let text = std::fs::read_to_string(document).ok()?;
+    let json = serde_json::from_str::<serde_json::Value>(&text).ok()?;
+    json["inheritsFrom"].as_str().map(str::to_owned)
+}
 /// Reads the version type and parent id from an installed document.
 fn version_meta(
     document: &std::path::Path,

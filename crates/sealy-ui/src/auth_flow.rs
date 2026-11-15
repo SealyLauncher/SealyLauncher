@@ -29,6 +29,7 @@ pub(crate) fn start(state: &mut ShellState, cx: &mut Context<SealyShell>) {
         user_code: String::new(),
         verification_uri: String::new(),
         cancel: cancel.clone(),
+        code_copied: false,
     });
 
     cx.spawn(async move |this, cx| {
@@ -66,6 +67,11 @@ pub(crate) fn start(state: &mut ShellState, cx: &mut Context<SealyShell>) {
                 if let Some(login) = &mut shell.state.microsoft_login {
                     login.user_code = user_code;
                     login.verification_uri = verification_uri;
+                    // Make the code pasteable straight into microsoft.com/link.
+                    cx.write_to_clipboard(crate::kit::ClipboardItem::new_string(
+                        login.user_code.clone(),
+                    ));
+                    login.code_copied = true;
                 }
                 shell.state.update_message(message_id, |row| {
                     row.detail = detail;

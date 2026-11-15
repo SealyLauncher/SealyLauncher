@@ -965,9 +965,9 @@ pub trait SkinProvider: Send + Sync;
 
 | 功能 | HMCL 参考 | 我们 | 优先级 | 量 |
 | --- | --- | --- | --- | --- |
-| Forge（新/旧两类安装器） | `download/forge/*` | ❌ | **P0** | L |
-| NeoForge | `download/NeoForgeInstallTask` | ❌ | P1 | M |
-| OptiFine | `download/OptiFineInstallTask` | ❌ | P1 | M |
+| Forge（新/旧两类安装器） | `download/forge/*` | ✅ B3（安装器 jar） | **P0** | L |
+| NeoForge | `download/NeoForgeInstallTask` | ✅ B3（安装器 jar） | P1 | M |
+| OptiFine | `download/OptiFineInstallTask` | ✅ B3（本地安装包） | P1 | M |
 | LiteLoader | `download/LiteLoaderInstallTask` | ❌ | P3 | M |
 | Fabric API / Quilt API 一键装 | `download/fabric/FabricAPIInstallTask` | ❌ | P2 | S |
 | 加载器版本下拉列表（按 MC 版本） | `*RemoteVersion` | ◐ 只取 latest | P1 | M |
@@ -1042,12 +1042,19 @@ pub trait SkinProvider: Send + Sync;
 | --- | --- | --- | --- |
 | **B1（已完成）** | ~~Java 管理页~~ ✅ → ~~游戏日志查看器~~ ✅ → ~~实例启动设置~~ ✅ | — | 可在 UI 里选 Java、看日志、改参数并启动 |
 | B2 | 模组/资源包/光影列表（启用禁用、拖入、删除）+ 实例图标/删除文件 | B1 的实例目录抽象 | 已完成：详情页三个分区、图标选择、删除确认面板（见 20.12） |
-| B3 | Forge / NeoForge / OptiFine 安装 + 加载器版本列表 | 版本继承（已完成） | 能装 Forge 并启动 |
+| B3 | Forge / NeoForge / OptiFine 安装 + 加载器版本列表 | 版本继承（已完成） | 已完成：安装器 jar 静默安装 + 版本列表 + 自动建实例（见 20.13） |
 | B4 | 整合包导入（mrpack/zip/curse）与导出 | B3 的加载器安装 | 导入整合包即得可玩实例 |
 | B5 | 自更新、崩溃分析、代理、`ui_scale`、多游戏目录 | — | 设置页功能齐 |
 | B6 | 主题包/背景、皮肤、Quick Play、世界管理 | B5 | 对标 HMCL 体验 |
 | 不做 | Terracotta 联机、NBT 编辑器、整合包在线更新 | — | 记录在案 |
 
+### 20.13 B3 交付记录（2026-11-15）
+
+- `sealy-core::loader`：`LoaderKind` 扩到 Fabric / Quilt / Forge / NeoForge / OptiFine；`versions()` 拉取 Forge promotions、NeoForge Maven 元数据（含 1.20.1 的 `net.neoforged.forge` 旧坐标）、Fabric/Quilt 构建列表。
+- 安装器路径：下载官方 installer jar 到 `<game>/installers/`，准备 `launcher_profiles.json` 与可写 `java.io.tmpdir`，执行 `java -Djava.io.tmpdir=… -jar <installer> --installClient <game>`，随后按预期 id 或目录扫描定位安装结果；安装器在 vanilla 校验失败时仍保留已写好的版本文件，此时交给后续安装流程补齐。
+- 实测：`cargo run -p sealy-core --example install_loader -- <root> <java> forge 1.20.1 47.2.0` 输出 `ok id=1.20.1-forge-47.2.0`；NeoForge 21.1.266 输出 `ok id=neoforge-21.1.266`。
+- OptiFine 无公开直链：在新建实例面板选择本地安装包（`prompt_for_paths`），走同一条安装器路径。
+- UI：新建实例面板改为「选版本 → 选加载器（含版本）→ 安装并自动建实例」；下载页和实例页移除 Fabric/Quilt 快捷按钮；下载页版本列表无限滚动。
 ### 20.12 B2 交付记录（2026-11-15）
 
 - sealy-core::addons：AddonKind（Mod/ResourcePack/Shader）、list、	oggle、emove、import，禁用约定为文件名追加 .disabled，并覆盖文件与文件夹两种形态；3 个单元测试。

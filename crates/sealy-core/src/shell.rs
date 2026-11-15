@@ -10,6 +10,50 @@ use std::path::Path;
 /// Argument that turns the launcher binary into the folder-opening helper.
 pub const OPEN_FOLDER_FLAG: &str = "--open-folder";
 
+/// Argument that opens a URL in the default browser through the helper.
+pub const OPEN_URL_FLAG: &str = "--open-url";
+
+/// Opens a URL with the default browser.
+pub fn open_url(url: &str) -> Result<(), String> {
+    let result = open_url_impl(url);
+    trace_text(url, &result);
+    result
+}
+
+/// Starts the helper process that opens url instead of blocking the UI.
+pub fn spawn_open_url_helper(url: &str) -> std::io::Result<()> {
+    let executable = std::env::current_exe()?;
+    std::process::Command::new(executable)
+        .arg(OPEN_URL_FLAG)
+        .arg(url)
+        .spawn()
+        .map(|_| ())
+}
+
+fn open_url_impl(url: &str) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        return windows_shell::open_target(url);
+    }
+
+    #[cfg(any(target_os = "macos", all(unix, not(target_os = "macos"))))]
+    {
+        let program = if cfg!(target_os = "macos") {
+            "open"
+        } else {
+            "xdg-open"
+        };
+        return std::process::Command::new(program)
+            .arg(url)
+            .spawn()
+            .map(|_| ())
+            .map_err(|err| err.to_string());
+    }
+
+    #[allow(unreachable_code)]
+    Ok(())
+}
+
 /// Reveals a folder with the platform file manager.
 pub fn open_folder(path: &Path) -> Result<(), String> {
     let result = open_folder_impl(path);
@@ -19,9 +63,13 @@ pub fn open_folder(path: &Path) -> Result<(), String> {
 
 /// Appends one diagnostic line so field reports can show what the shell did.
 fn trace(path: &Path, result: &Result<(), String>) {
+    trace_text(&path.display().to_string(), result);
+}
+
+fn trace_text(target: &str, result: &Result<(), String>) {
     let line = match result {
-        Ok(()) => format!("ok {}", path.display()),
-        Err(err) => format!("error {}: {err}", path.display()),
+        Ok(()) => format!("ok {target}"),
+        Err(err) => format!("error {target}: {err}"),
     };
     let file = std::env::temp_dir().join("sealy-open-folder.log");
     if let Ok(mut handle) = std::fs::OpenOptions::new()
@@ -117,6 +165,47 @@ mod windows_shell {
             unsafe { CoUninitialize() };
         }
         result
+    }
+
+    pub(super) fn open_target(target: &str) -> Result<(), String> {
+        let com = unsafe { CoInitializeEx(std::ptr::null_mut(), 0x2) } >= 0;
+        let result = open_target_inner(target);
+        if com {
+            unsafe { CoUninitialize() };
+        }
+        result
+    }
+
+    fn open_target_inner(target: &str) -> Result<(), String> {
+        if std::process::Command::new("cmd")
+            .args(["/c", "start", "", target])
+            .spawn()
+            .is_ok()
+        {
+            return Ok(());
+        }
+
+        let operation = wide(OsStr::new("open"));
+        let file = wide(OsStr::new(target));
+        // SAFETY: both pointers reference null-terminated UTF-16 buffers that
+        // outlive the call; the remaining arguments are plain OS values.
+        let result = unsafe {
+            ShellExecuteW(
+                std::ptr::null_mut(),
+                operation.as_ptr(),
+                file.as_ptr(),
+                std::ptr::null(),
+                std::ptr::null(),
+                SW_SHOWNORMAL,
+            )
+        };
+        if result as isize > SUCCESS_THRESHOLD {
+            return Ok(());
+        }
+        Err(format!(
+            "shell open failed for {target} (code {})",
+            result as isize
+        ))
     }
 
     fn open_folder_inner(path: &std::path::Path) -> Result<(), String> {

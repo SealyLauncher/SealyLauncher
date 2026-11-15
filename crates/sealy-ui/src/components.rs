@@ -46,6 +46,159 @@ pub(crate) fn head_band_back(
     head_band_back_to(title, crate::state::Route::Home, t, cx)
 }
 
+/// Device-code card shared by the accounts page and the first-run wizard.
+///
+/// Shows the code the user types on `microsoft.com/link`, a button that opens
+/// the page, a copy button and the cancel action.
+pub(crate) fn microsoft_login_card(
+    login: &crate::state::MicrosoftLogin,
+    t: &ThemeTokens,
+    lang: sealy_core::config::Language,
+    cx: &mut Context<crate::app::SealyShell>,
+) -> AnyElement {
+    use crate::i18n::tr;
+
+    let code = if login.user_code.is_empty() {
+        "……".to_owned()
+    } else {
+        login.user_code.clone()
+    };
+    let url = if login.verification_uri.is_empty() {
+        "https://microsoft.com/link".to_owned()
+    } else {
+        login.verification_uri.clone()
+    };
+    let shown_url = url
+        .trim_start_matches("https://")
+        .trim_start_matches("http://")
+        .to_owned();
+
+    let copy_code = code.clone();
+    let open_url = url.clone();
+
+    div()
+        .flex_1()
+        .flex()
+        .flex_col()
+        .items_center()
+        .justify_center()
+        .gap(px(12.0))
+        .child(
+            div()
+                .text_size(px(13.0))
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(rgb(t.text))
+                .child(tr(lang, "在浏览器中打开", "Open in your browser")),
+        )
+        .child(
+            div()
+                .text_size(px(18.0))
+                .text_color(rgb(t.text))
+                .child(shown_url),
+        )
+        .child(
+            div()
+                .mt(px(6.0))
+                .px(px(22.0))
+                .h(px(64.0))
+                .flex()
+                .items_center()
+                .rounded(px(theme::RADIUS_TILE))
+                .border_1()
+                .border_color(rgb(t.line))
+                .bg(rgb(t.surface))
+                .child(
+                    div()
+                        .text_size(px(28.0))
+                        .font_weight(FontWeight::BOLD)
+                        .text_color(rgb(t.text))
+                        .child(code.clone()),
+                ),
+        )
+        .child(div().text_size(px(11.0)).text_color(rgb(t.muted)).child(tr(
+            lang,
+            "输入上方代码并完成登录",
+            "Enter the code above to finish",
+        )))
+        .child(
+            div()
+                .flex()
+                .items_center()
+                .gap(px(8.0))
+                .child(
+                    crate::components::quiet_button(
+                        tr(lang, "打开 microsoft.com/link", "Open microsoft.com/link"),
+                        t,
+                    )
+                    .id("microsoft-open-link")
+                    .role(Role::Button)
+                    .aria_label("microsoft-open-link")
+                    .on_click(cx.listener(move |_, _, _, cx| {
+                        let _ = sealy_core::shell::spawn_open_url_helper(&open_url);
+                        cx.notify();
+                    })),
+                )
+                .child(
+                    crate::components::quiet_button(tr(lang, "复制代码", "Copy code"), t)
+                        .id("microsoft-copy-code")
+                        .role(Role::Button)
+                        .aria_label("microsoft-copy-code")
+                        .on_click(cx.listener(move |shell, _, _, cx| {
+                            cx.write_to_clipboard(crate::kit::ClipboardItem::new_string(
+                                copy_code.clone(),
+                            ));
+                            if let Some(login) = &mut shell.state.microsoft_login {
+                                login.code_copied = true;
+                            }
+                            let lang = shell.state.language();
+                            shell
+                                .state
+                                .notify(tr(lang, "已复制登录代码", "Login code copied"));
+                            cx.notify();
+                        })),
+                ),
+        )
+        .child(
+            crate::components::quiet_button(tr(lang, "取消登录", "Cancel"), t)
+                .id("microsoft-cancel")
+                .role(Role::Button)
+                .aria_label("microsoft-cancel")
+                .on_click(cx.listener(|shell, _, _, cx| {
+                    if let Some(login) = &shell.state.microsoft_login {
+                        login
+                            .cancel
+                            .store(true, std::sync::atomic::Ordering::Relaxed);
+                        let message_id = login.message_id;
+                        shell.state.update_message(message_id, |row| {
+                            row.tone = crate::state::MessageTone::Failed;
+                            row.progress = None;
+                            row.detail = "已取消登录".to_owned();
+                        });
+                    }
+                    shell.state.microsoft_login = None;
+                    cx.notify();
+                })),
+        )
+        .child(
+            div()
+                .text_size(px(10.0))
+                .text_color(rgb(t.faint))
+                .child(if login.code_copied {
+                    tr(
+                        lang,
+                        "代码已自动复制到剪贴板",
+                        "Code copied to the clipboard",
+                    )
+                } else {
+                    tr(
+                        lang,
+                        "代码会自动复制到剪贴板",
+                        "The code is copied automatically",
+                    )
+                }),
+        )
+        .into_any_element()
+}
 /// Head band with a back arrow that returns to the given route.
 pub(crate) fn head_band_back_to(
     title: impl Into<SharedString>,

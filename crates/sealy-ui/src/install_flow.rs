@@ -21,8 +21,23 @@ use crate::state::{InstallTask, MessageTone, ShellState};
 enum Job {
     /// A version that already has a document on disk (vanilla or loader).
     Version(String),
-    /// A loader profile for `game`, written before its libraries are fetched.
-    Loader { game: String, kind: LoaderKind },
+    /// A loader install for `game`, optionally tied to a new instance.
+    Loader(LoaderRequest),
+}
+
+/// Everything needed to install a loader.
+#[derive(Clone)]
+pub(crate) struct LoaderRequest {
+    /// Minecraft version the loader extends.
+    pub game: String,
+    /// Loader to install.
+    pub kind: LoaderKind,
+    /// Specific loader build; `None` picks the newest stable one.
+    pub version: Option<String>,
+    /// Local installer jar, required for OptiFine.
+    pub jar: Option<std::path::PathBuf>,
+    /// Instance to create once the loader is installed.
+    pub instance_name: Option<String>,
 }
 
 /// Settings shared by every phase of one flow.
@@ -38,15 +53,17 @@ pub(crate) fn start(state: &mut ShellState, id: String, cx: &mut Context<SealySh
     spawn(state, cx, format!("安装 {id}"), vec![Job::Version(id)]);
 }
 
-/// Installs `kind` for `game`, then fetches the loader libraries.
-pub(crate) fn start_loader(
+/// Runs one loader install and, when asked, creates its instance afterwards.
+pub(crate) fn start_loader_request(
     state: &mut ShellState,
-    game: String,
-    kind: LoaderKind,
+    request: LoaderRequest,
     cx: &mut Context<SealyShell>,
 ) {
-    let title = format!("安装 {} · {game}", kind.label());
-    spawn(state, cx, title, vec![Job::Loader { game, kind }]);
+    let title = match &request.instance_name {
+        Some(name) => format!("安装 {} · {name}", request.kind.label()),
+        None => format!("安装 {} · {}", request.kind.label(), request.game),
+    };
+    spawn(state, cx, title, vec![Job::Loader(request)]);
 }
 
 fn spawn(state: &mut ShellState, cx: &mut Context<SealyShell>, title: String, jobs: Vec<Job>) {
@@ -66,6 +83,16 @@ fn spawn(state: &mut ShellState, cx: &mut Context<SealyShell>, title: String, jo
         auto_java: state.settings.java.auto_download,
     };
     let lang = state.language();
+    // Installer jars have to run on a real JVM; prefer a detected runtime.
+    let java = state
+        .java
+        .first()
+        .map(|install| install.path.clone())
+        .or_else(|| {
+            sealy_core::java::runtime_java_candidates(&root)
+                .into_iter()
+                .next()
+        });
 
     let message_id = state.push_message(
         title,
@@ -86,31 +113,36 @@ fn spawn(state: &mut ShellState, cx: &mut Context<SealyShell>, title: String, jo
     });
 
     cx.spawn(async move |this, cx| {
+        // Instance created by this flow, once every phase succeeded.
+        let mut created: Option<(String, String)> = None;
+
         for job in jobs {
             let outcome = match job {
                 Job::Version(id) => {
                     run_version(&this, cx, message_id, &root, id, cancel.clone(), opts).await
                 }
-                Job::Loader { game, kind } => {
-                    let label = kind.label();
+                Job::Loader(request) => {
+                    let label = request.kind.label();
                     let _ = this.update(cx, |shell, cx| {
                         shell.state.update_message(message_id, |row| {
-                            row.detail = format!("正在获取 {label} 配置…");
+                            row.detail = format!("正在获取 {label} 安装文件…");
                         });
                         cx.notify();
                     });
 
                     let install = {
                         let root = root.clone();
-                        let game = game.clone();
+                        let request = request.clone();
+                        let java = java.clone();
                         cx.background_executor()
-                            .spawn(async move { sealy_core::loader::install(&root, kind, &game) })
+                            .spawn(async move { run_loader(&root, &request, java.as_deref()) })
                             .await
                     };
 
                     match install {
                         Ok(loader) => {
-                            let title = format!("安装 {} · {}", kind.label(), loader.id);
+                            let loader_id = loader.id.clone();
+                            let title = format!("安装 {} · {}", request.kind.label(), loader_id);
                             let _ = this.update(cx, |shell, cx| {
                                 let detail = format!(
                                     "{} · 正在获取库文件…",
@@ -122,16 +154,22 @@ fn spawn(state: &mut ShellState, cx: &mut Context<SealyShell>, title: String, jo
                                 });
                                 cx.notify();
                             });
-                            run_version(
+                            let result = run_version(
                                 &this,
                                 cx,
                                 message_id,
                                 &root,
-                                loader.id.clone(),
+                                loader_id.clone(),
                                 cancel.clone(),
                                 opts,
                             )
-                            .await
+                            .await;
+                            if result.is_ok()
+                                && let Some(name) = request.instance_name.clone()
+                            {
+                                created = Some((name, loader_id));
+                            }
+                            result
                         }
                         Err(err) => Err(err.to_string()),
                     }
@@ -140,19 +178,67 @@ fn spawn(state: &mut ShellState, cx: &mut Context<SealyShell>, title: String, jo
 
             if let Err(err) = outcome {
                 if err == CANCELLED {
-                    finish(&this, cx, message_id, MessageTone::Failed, "已取消", &root);
+                    finish(
+                        &this,
+                        cx,
+                        message_id,
+                        MessageTone::Failed,
+                        "已取消",
+                        &root,
+                        None,
+                    );
                 } else {
-                    finish(&this, cx, message_id, MessageTone::Failed, &err, &root);
+                    finish(
+                        &this,
+                        cx,
+                        message_id,
+                        MessageTone::Failed,
+                        &err,
+                        &root,
+                        None,
+                    );
                 }
                 return;
             }
         }
 
-        finish(&this, cx, message_id, MessageTone::Done, "安装完成", &root);
+        finish(
+            &this,
+            cx,
+            message_id,
+            MessageTone::Done,
+            "安装完成",
+            &root,
+            created,
+        );
     })
     .detach();
 }
 
+/// Installs the loader itself (profile document or official installer run).
+fn run_loader(
+    root: &Path,
+    request: &LoaderRequest,
+    java: Option<&Path>,
+) -> Result<sealy_core::loader::LoaderInstall, sealy_core::error::CoreError> {
+    match &request.jar {
+        Some(jar) => {
+            let java = java.ok_or_else(|| {
+                sealy_core::error::CoreError::Invalid(
+                    "安装加载器需要 Java，请先在设置里添加或自动下载一个 Java".to_owned(),
+                )
+            })?;
+            sealy_core::loader::install_from_jar(root, &request.game, request.kind, jar, java)
+        }
+        None => sealy_core::loader::install(
+            root,
+            request.kind,
+            &request.game,
+            request.version.as_deref(),
+            java,
+        ),
+    }
+}
 /// Marker for a cancelled flow.
 const CANCELLED: &str = "\u{0}cancelled";
 
@@ -297,13 +383,23 @@ fn finish(
     tone: MessageTone,
     detail: &str,
     root: &Path,
+    created: Option<(String, String)>,
 ) {
     // A loader install adds a version directory; refresh the picker data.
     let installed = sealy_core::version::installed(root);
-    let detail = detail.to_owned();
+    let mut detail = detail.to_owned();
     let _ = this.update(cx, |shell, cx| {
         shell.state.install = None;
         shell.state.installed = installed;
+        if let Some((_name, version_id)) = created {
+            let instance = shell.state.instances.create(&version_id);
+            let name = instance.name.clone();
+            shell.state.instances.selected = Some(name.clone());
+            shell.state.save_instances();
+            let dir = sealy_core::instances::directory(&shell.state.paths.game, &name);
+            let _ = std::fs::create_dir_all(&dir);
+            detail = format!("已创建实例 {name} · {version_id}");
+        }
         shell.state.update_message(id, |row| {
             row.tone = tone;
             row.progress = if tone == MessageTone::Done {

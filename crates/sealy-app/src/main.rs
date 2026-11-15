@@ -5,6 +5,16 @@
 mod window_icon;
 
 fn main() {
+    if let Some(url) = open_url_argument() {
+        match sealy_core::shell::open_url(&url) {
+            Ok(()) => std::process::exit(0),
+            Err(err) => {
+                eprintln!("{err}");
+                std::process::exit(1);
+            }
+        }
+    }
+
     if let Some(path) = open_folder_argument() {
         match sealy_core::shell::open_folder(std::path::Path::new(&path)) {
             Ok(()) => std::process::exit(0),
@@ -54,9 +64,19 @@ fn main() {
 
 /// Reads the --open-folder <path> helper invocation, if any.
 fn open_folder_argument() -> Option<String> {
+    argument_after(sealy_core::shell::OPEN_FOLDER_FLAG)
+}
+
+/// Reads the --open-url <url> helper invocation, if any.
+fn open_url_argument() -> Option<String> {
+    argument_after(sealy_core::shell::OPEN_URL_FLAG)
+}
+
+/// Returns the argument following lag.
+fn argument_after(flag: &str) -> Option<String> {
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
-        if arg == sealy_core::shell::OPEN_FOLDER_FLAG {
+        if arg == flag {
             return args.next();
         }
     }

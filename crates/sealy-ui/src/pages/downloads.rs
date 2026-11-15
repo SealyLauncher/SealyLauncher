@@ -10,9 +10,6 @@ use crate::kit::*;
 use crate::state::{ShellState, VersionFilter};
 use crate::theme::{self, ThemeTokens};
 
-/// Rows rendered per screen batch; the manifest holds hundreds of versions.
-const MAX_ROWS: usize = 60;
-
 pub(crate) fn render(state: &mut ShellState, cx: &mut Context<SealyShell>) -> AnyElement {
     ensure_loaded(state, cx);
 
@@ -20,19 +17,39 @@ pub(crate) fn render(state: &mut ShellState, cx: &mut Context<SealyShell>) -> An
     let lang = state.language();
     let filter = state.downloads.filter;
 
+    let visible = state.downloads.limit.max(60);
     let mut list = div()
         .id("version-list")
         .flex_1()
         .min_h(px(0.0))
         .overflow_y_scroll()
         .flex()
-        .flex_col();
+        .flex_col()
+        .on_scroll(cx.listener(|shell, _, _, cx| {
+            let total = shell
+                .state
+                .downloads
+                .manifest
+                .as_ref()
+                .map(|manifest| {
+                    manifest
+                        .versions
+                        .iter()
+                        .filter(|version| matches(shell.state.downloads.filter, version.kind))
+                        .count()
+                })
+                .unwrap_or(0);
+            if shell.state.downloads.limit < total {
+                shell.state.downloads.limit = (shell.state.downloads.limit + 40).min(total);
+                cx.notify();
+            }
+        }));
     if let Some(manifest) = state.downloads.manifest.clone() {
         let rows = manifest
             .versions
             .iter()
             .filter(|version| matches(filter, version.kind))
-            .take(MAX_ROWS)
+            .take(visible)
             .enumerate()
             .map(|(index, version)| row(&*state, index, version, lang, &t, cx))
             .collect::<Vec<_>>();
@@ -119,6 +136,7 @@ pub(crate) fn render(state: &mut ShellState, cx: &mut Context<SealyShell>) -> An
                             shell.state.downloads.loading = false;
                             shell.state.downloads.manifest = None;
                             shell.state.downloads.error = None;
+                            shell.state.downloads.limit = 60;
                             cx.notify();
                         })),
                 ),
@@ -327,40 +345,6 @@ fn row(
                             .child(mono(tr(lang, "已安装", "installed"), t)),
                     )
                 })
-                .child(
-                    quiet_button(tr(lang, "Fabric", "Fabric"), t)
-                        .id(("fabric", index))
-                        .role(Role::Button)
-                        .aria_label(format!("fabric {}", version.id))
-                        .on_click(cx.listener({
-                            let id = version.id.clone();
-                            move |shell, _, _, cx| {
-                                crate::install_flow::start_loader(
-                                    &mut shell.state,
-                                    id.clone(),
-                                    sealy_core::loader::LoaderKind::Fabric,
-                                    cx,
-                                );
-                            }
-                        })),
-                )
-                .child(
-                    quiet_button(tr(lang, "Quilt", "Quilt"), t)
-                        .id(("quilt", index))
-                        .role(Role::Button)
-                        .aria_label(format!("quilt {}", version.id))
-                        .on_click(cx.listener({
-                            let id = version.id.clone();
-                            move |shell, _, _, cx| {
-                                crate::install_flow::start_loader(
-                                    &mut shell.state,
-                                    id.clone(),
-                                    sealy_core::loader::LoaderKind::Quilt,
-                                    cx,
-                                );
-                            }
-                        })),
-                )
                 .when(!installed, |this| {
                     this.child(
                         quiet_button(tr(lang, "安装", "Install"), t)

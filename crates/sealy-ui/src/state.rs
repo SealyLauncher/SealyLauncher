@@ -50,6 +50,8 @@ pub struct DownloadsState {
     pub filter: VersionFilter,
     /// Version picked for a loader install.
     pub choice: Option<String>,
+    /// Rows currently materialised by the infinite scroll list.
+    pub limit: usize,
 }
 
 /// Live view of the running install.
@@ -286,6 +288,8 @@ pub struct ShellState {
     pub account_draft: Option<String>,
     /// Whether the new-instance version picker is open.
     pub new_instance_open: bool,
+    /// Choices made in the new-instance picker.
+    pub new_instance: NewInstanceState,
     /// Inline instance rename buffer.
     pub rename_draft: Option<RenameDraft>,
     /// authlib-injector login form.
@@ -310,12 +314,76 @@ pub struct ShellState {
     pub logs_lines: Vec<String>,
     /// Last instance row click, used to detect double clicks.
     pub last_instance_click: Option<(String, std::time::Instant)>,
-    /// Inline input for importing an addon into the selected instance.
-    pub addon_draft: Option<(sealy_core::addons::AddonKind, String)>,
     /// Whether the delete-instance confirmation is open.
     pub delete_confirm_open: bool,
+    /// Sidebar section shown on the instance detail page.
+    pub instance_section: InstanceSection,
 }
 
+/// Sidebar sections of the instance detail page.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum InstanceSection {
+    /// Overview, launch settings and icon.
+    #[default]
+    Overview,
+    /// Installed mods.
+    Mods,
+    /// Resource packs.
+    ResourcePacks,
+    /// Shader packs.
+    Shaders,
+}
+
+impl InstanceSection {
+    /// Every section, in sidebar order.
+    pub const ALL: [Self; 4] = [
+        Self::Overview,
+        Self::Mods,
+        Self::ResourcePacks,
+        Self::Shaders,
+    ];
+
+    /// Sidebar label.
+    pub fn label(self, lang: sealy_core::config::Language) -> &'static str {
+        use crate::i18n::tr;
+        match self {
+            Self::Overview => tr(lang, "概览", "Overview"),
+            Self::Mods => tr(lang, "模组", "Mods"),
+            Self::ResourcePacks => tr(lang, "资源包", "Resource packs"),
+            Self::Shaders => tr(lang, "光影", "Shaders"),
+        }
+    }
+}
+/// Choices made in the new-instance picker.
+#[derive(Debug, Clone, Default)]
+pub struct NewInstanceState {
+    /// Installed version the instance is based on.
+    pub game: Option<String>,
+    /// Loader to install, or `None` for a vanilla instance.
+    pub loader: Option<sealy_core::loader::LoaderKind>,
+    /// Loader build picked by the user; `None` means the newest stable one.
+    pub loader_version: Option<String>,
+    /// Loader builds fetched for the selected game version.
+    pub loader_choices: Vec<sealy_core::loader::LoaderChoice>,
+    /// Whether the loader build list is being fetched.
+    pub loader_loading: bool,
+    /// Failure while fetching loader builds.
+    pub loader_error: Option<String>,
+    /// Local OptiFine installer picked by the user.
+    pub optifine_jar: Option<std::path::PathBuf>,
+}
+
+impl NewInstanceState {
+    /// Clears the loader picks; used when the base version changes.
+    pub fn reset_loaders(&mut self) {
+        self.loader = None;
+        self.loader_version = None;
+        self.loader_choices.clear();
+        self.loader_loading = false;
+        self.loader_error = None;
+        self.optifine_jar = None;
+    }
+}
 /// Editable copy of one instance's launch overrides.
 #[derive(Debug, Clone, Default)]
 pub struct InstanceLaunchDraft {
@@ -369,6 +437,8 @@ pub struct MicrosoftLogin {
     pub verification_uri: String,
     /// Cooperative cancel flag for the polling task.
     pub cancel: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    /// Whether the code was copied for the user already.
+    pub code_copied: bool,
 }
 
 impl ShellState {
@@ -392,7 +462,10 @@ impl ShellState {
             toast_deadline: None,
             pending_undo: None,
             oobe_step: first_run.then_some(0),
-            downloads: DownloadsState::default(),
+            downloads: DownloadsState {
+                limit: 60,
+                ..DownloadsState::default()
+            },
             install: None,
             messages: Vec::new(),
             message_open: false,
@@ -403,6 +476,7 @@ impl ShellState {
             accounts,
             account_draft: None,
             new_instance_open: false,
+            new_instance: NewInstanceState::default(),
             rename_draft: None,
             authlib_draft: None,
             java_path_draft: None,
@@ -415,8 +489,8 @@ impl ShellState {
             logs_path: None,
             logs_lines: Vec::new(),
             last_instance_click: None,
-            addon_draft: None,
             delete_confirm_open: false,
+            instance_section: InstanceSection::default(),
         }
     }
 
@@ -425,6 +499,30 @@ impl ShellState {
         self.oobe_step.is_some()
     }
 
+    /// Opens the new-instance picker with a clean slate.
+    pub fn begin_new_instance(&mut self) {
+        self.new_instance = NewInstanceState::default();
+        self.new_instance_open = true;
+    }
+
+    /// Picks the Minecraft version an instance is based on.
+    pub fn pick_new_instance_game(&mut self, game: &str) {
+        if self.new_instance.game.as_deref() == Some(game) {
+            return;
+        }
+        self.new_instance.game = Some(game.to_owned());
+        self.new_instance.reset_loaders();
+    }
+
+    /// Picks the loader to install, keeping any previous version choice.
+    pub fn set_new_instance_loader(&mut self, loader: Option<sealy_core::loader::LoaderKind>) {
+        if self.new_instance.loader == loader {
+            return;
+        }
+        self.new_instance.loader = loader;
+        self.new_instance.loader_version = None;
+        self.new_instance.loader_error = None;
+    }
     /// Persists the instance book.
     pub fn save_instances(&mut self) {
         if let Err(err) = self.instances.save(&self.paths.instances_file()) {
@@ -792,43 +890,28 @@ impl ShellState {
         }
     }
 
-    /// Opens the inline import input for one addon kind.
-    pub fn begin_addon_import(&mut self, kind: sealy_core::addons::AddonKind) {
-        self.addon_draft = Some((kind, String::new()));
-    }
-
-    /// Appends a character to the addon import path.
-    pub fn addon_draft_push_char(&mut self, ch: char) {
-        if let Some((_, draft)) = &mut self.addon_draft
-            && draft.chars().count() < 400
-        {
-            draft.push(ch);
-        }
-    }
-
-    /// Removes the last character from the addon import path.
-    pub fn addon_draft_pop_char(&mut self) {
-        if let Some((_, draft)) = &mut self.addon_draft {
-            draft.pop();
-        }
-    }
-
-    /// Imports the typed path into the selected instance.
-    pub fn commit_addon_import(&mut self) -> Result<String, String> {
-        let Some((kind, raw)) = self.addon_draft.take() else {
-            return Ok(String::new());
-        };
-        let trimmed = raw.trim();
-        if trimmed.is_empty() {
-            return Ok(String::new());
-        }
+    /// Imports files or folders into one addon folder of the selected instance.
+    pub fn import_addons(
+        &mut self,
+        kind: sealy_core::addons::AddonKind,
+        paths: &[std::path::PathBuf],
+    ) -> Result<usize, String> {
         let dir = self
             .current_instance_dir()
             .ok_or_else(|| "没有选中的实例".to_owned())?;
-        sealy_core::addons::import(&dir, kind, std::path::Path::new(trimmed))
-            .map_err(|err| err.to_string())
+        let mut imported = 0_usize;
+        let mut last_error = None;
+        for path in paths {
+            match sealy_core::addons::import(&dir, kind, path) {
+                Ok(_) => imported += 1,
+                Err(err) => last_error = Some(err.to_string()),
+            }
+        }
+        if imported == 0 {
+            return Err(last_error.unwrap_or_else(|| "没有可导入的文件".to_owned()));
+        }
+        Ok(imported)
     }
-
     /// Enables or disables one addon.
     pub fn toggle_addon(
         &mut self,
@@ -856,6 +939,7 @@ impl ShellState {
     /// Opens the detail page for the selected instance.
     pub fn open_instance_detail(&mut self) {
         if self.instances.current().is_some() {
+            self.instance_section = InstanceSection::Overview;
             self.route = Route::Instance;
         }
     }

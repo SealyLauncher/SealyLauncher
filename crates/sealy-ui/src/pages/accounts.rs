@@ -7,7 +7,7 @@ use crate::app::SealyShell;
 use crate::components::{action_bar, avatar, head_band_back, mono, quiet_button};
 use crate::i18n::tr;
 use crate::kit::*;
-use crate::state::{MessageTone, ShellState};
+use crate::state::ShellState;
 use crate::theme::{self, ThemeTokens};
 
 pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyElement {
@@ -269,6 +269,16 @@ fn authlib_form(
             )
             .child(
                 div()
+                    .id(("authlib-field", index))
+                    .role(Role::Button)
+                    .aria_label(format!("authlib-field-{index}"))
+                    .cursor_pointer()
+                    .on_click(cx.listener(move |shell, _, _, cx| {
+                        if let Some(draft) = &mut shell.state.authlib_draft {
+                            draft.field = index;
+                        }
+                        cx.notify();
+                    }))
                     .h(px(46.0))
                     .px(px(14.0))
                     .flex()
@@ -350,88 +360,13 @@ fn authlib_form(
         .into_any_element()
 }
 
-/// Device-code card shown while waiting for the browser sign-in.
 fn login_card(
     login: &crate::state::MicrosoftLogin,
     t: &ThemeTokens,
     lang: Language,
     cx: &mut Context<SealyShell>,
 ) -> AnyElement {
-    let code = if login.user_code.is_empty() {
-        "……".to_owned()
-    } else {
-        login.user_code.clone()
-    };
-    let url = if login.verification_uri.is_empty() {
-        "microsoft.com/link".to_owned()
-    } else {
-        login
-            .verification_uri
-            .trim_start_matches("https://")
-            .to_owned()
-    };
-
-    div()
-        .flex_1()
-        .flex()
-        .flex_col()
-        .items_center()
-        .justify_center()
-        .gap(px(12.0))
-        .child(
-            div()
-                .text_size(px(13.0))
-                .font_weight(FontWeight::SEMIBOLD)
-                .text_color(rgb(t.text))
-                .child(tr(lang, "在浏览器中打开", "Open in your browser")),
-        )
-        .child(div().text_size(px(18.0)).text_color(rgb(t.text)).child(url))
-        .child(
-            div()
-                .mt(px(6.0))
-                .px(px(22.0))
-                .h(px(64.0))
-                .flex()
-                .items_center()
-                .rounded(px(theme::RADIUS_TILE))
-                .border_1()
-                .border_color(rgb(t.line))
-                .bg(rgb(t.surface))
-                .child(
-                    div()
-                        .text_size(px(28.0))
-                        .font_weight(FontWeight::BOLD)
-                        .text_color(rgb(t.text))
-                        .child(code),
-                ),
-        )
-        .child(div().text_size(px(11.0)).text_color(rgb(t.muted)).child(tr(
-            lang,
-            "输入上方代码并完成登录",
-            "Enter the code above to finish",
-        )))
-        .child(
-            quiet_button(tr(lang, "取消登录", "Cancel"), t)
-                .id("microsoft-cancel")
-                .role(Role::Button)
-                .aria_label("microsoft-cancel")
-                .on_click(cx.listener(|shell, _, _, cx| {
-                    if let Some(login) = &shell.state.microsoft_login {
-                        login
-                            .cancel
-                            .store(true, std::sync::atomic::Ordering::Relaxed);
-                        let message_id = login.message_id;
-                        shell.state.update_message(message_id, |row| {
-                            row.tone = MessageTone::Failed;
-                            row.progress = None;
-                            row.detail = "已取消登录".to_owned();
-                        });
-                    }
-                    shell.state.microsoft_login = None;
-                    cx.notify();
-                })),
-        )
-        .into_any_element()
+    crate::components::microsoft_login_card(login, t, lang, cx)
 }
 
 /// Starts the device-code flow and mirrors it into the message center.
