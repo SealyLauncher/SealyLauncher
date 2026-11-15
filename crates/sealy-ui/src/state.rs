@@ -310,6 +310,10 @@ pub struct ShellState {
     pub logs_lines: Vec<String>,
     /// Last instance row click, used to detect double clicks.
     pub last_instance_click: Option<(String, std::time::Instant)>,
+    /// Inline input for importing an addon into the selected instance.
+    pub addon_draft: Option<(sealy_core::addons::AddonKind, String)>,
+    /// Whether the delete-instance confirmation is open.
+    pub delete_confirm_open: bool,
 }
 
 /// Editable copy of one instance's launch overrides.
@@ -411,6 +415,8 @@ impl ShellState {
             logs_path: None,
             logs_lines: Vec::new(),
             last_instance_click: None,
+            addon_draft: None,
+            delete_confirm_open: false,
         }
     }
 
@@ -731,6 +737,120 @@ impl ShellState {
         self.save_instances();
         self.show_toast("实例启动设置已保存", None);
         Ok(())
+    }
+
+    /// Directory of the selected instance inside the game folder.
+    pub fn current_instance_dir(&self) -> Option<std::path::PathBuf> {
+        self.instances
+            .current()
+            .map(|instance| sealy_core::instances::directory(&self.paths.game, &instance.name))
+    }
+
+    /// Sets or clears the icon key of the selected instance.
+    pub fn set_instance_icon(&mut self, key: Option<&str>) {
+        let Some(name) = self
+            .instances
+            .current()
+            .map(|instance| instance.name.clone())
+        else {
+            return;
+        };
+        self.instances.set_icon(&name, key.map(str::to_owned));
+        self.save_instances();
+    }
+
+    /// Deletes the selected instance, optionally removing its game directory.
+    pub fn delete_selected_instance(&mut self, delete_files: bool) {
+        self.delete_confirm_open = false;
+        let Some(instance) = self.instances.current().cloned() else {
+            return;
+        };
+        let name = instance.name.clone();
+
+        if delete_files {
+            let dir = sealy_core::instances::directory(&self.paths.game, &name);
+            if let Err(err) = std::fs::remove_dir_all(&dir) {
+                tracing::warn!(path = %dir.display(), error = %err, "could not remove instance folder");
+            }
+        }
+
+        let removed = self.remove_instance(&name);
+        if delete_files {
+            // Nothing is left to restore, so no undo offer.
+            self.pending_undo = None;
+            self.show_toast(format!("已删除实例 {name} 及其文件"), None);
+        } else if let Some(pending) = removed {
+            self.pending_undo = Some(pending);
+            let lang = self.language();
+            self.show_toast(
+                format!(
+                    "{} {name}",
+                    crate::i18n::tr(lang, "已删除实例", "Deleted instance")
+                ),
+                Some(ToastAction::Undo),
+            );
+        }
+    }
+
+    /// Opens the inline import input for one addon kind.
+    pub fn begin_addon_import(&mut self, kind: sealy_core::addons::AddonKind) {
+        self.addon_draft = Some((kind, String::new()));
+    }
+
+    /// Appends a character to the addon import path.
+    pub fn addon_draft_push_char(&mut self, ch: char) {
+        if let Some((_, draft)) = &mut self.addon_draft
+            && draft.chars().count() < 400
+        {
+            draft.push(ch);
+        }
+    }
+
+    /// Removes the last character from the addon import path.
+    pub fn addon_draft_pop_char(&mut self) {
+        if let Some((_, draft)) = &mut self.addon_draft {
+            draft.pop();
+        }
+    }
+
+    /// Imports the typed path into the selected instance.
+    pub fn commit_addon_import(&mut self) -> Result<String, String> {
+        let Some((kind, raw)) = self.addon_draft.take() else {
+            return Ok(String::new());
+        };
+        let trimmed = raw.trim();
+        if trimmed.is_empty() {
+            return Ok(String::new());
+        }
+        let dir = self
+            .current_instance_dir()
+            .ok_or_else(|| "没有选中的实例".to_owned())?;
+        sealy_core::addons::import(&dir, kind, std::path::Path::new(trimmed))
+            .map_err(|err| err.to_string())
+    }
+
+    /// Enables or disables one addon.
+    pub fn toggle_addon(
+        &mut self,
+        kind: sealy_core::addons::AddonKind,
+        name: &str,
+    ) -> Result<bool, String> {
+        let dir = self
+            .current_instance_dir()
+            .ok_or_else(|| "没有选中的实例".to_owned())?;
+        sealy_core::addons::toggle(&dir, kind, name).map_err(|err| err.to_string())
+    }
+
+    /// Deletes one addon from the instance.
+    pub fn remove_addon(
+        &mut self,
+        kind: sealy_core::addons::AddonKind,
+        name: &str,
+    ) -> Result<(), String> {
+        let dir = self
+            .current_instance_dir()
+            .ok_or_else(|| "没有选中的实例".to_owned())?;
+        sealy_core::addons::remove(&dir, kind, name).map_err(|err| err.to_string())
     }
 
     /// Opens the detail page for the selected instance.

@@ -2,13 +2,14 @@
 
 use crate::app::SealyShell;
 use crate::components::{
-    action_bar, field_row, head_band_back_to, mono, primary_button, quiet_button,
+    action_bar, choice_button, field_row, head_band_back_to, mono, primary_button, quiet_button,
 };
 use crate::i18n::tr;
 use crate::kit::*;
 use crate::launch_flow;
 use crate::state::{Route, ShellState};
 use crate::theme::{self, ThemeTokens};
+use gpui_kit::ExternalPaths;
 
 /// Renders the detail page of the selected instance.
 pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyElement {
@@ -44,6 +45,28 @@ pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyEle
         .last_played
         .map(played_label)
         .unwrap_or_else(|| tr(lang, "从未启动", "Never launched").to_owned());
+
+    let icon_choices = sealy_core::instances::ICON_KEYS
+        .into_iter()
+        .enumerate()
+        .map(|(index, key)| {
+            let selected = instance.icon.as_deref() == Some(key);
+            let label = match key {
+                "layers" => tr(lang, "层叠", "Layers"),
+                "package" => tr(lang, "包裹", "Package"),
+                "server" => tr(lang, "服务器", "Server"),
+                _ => tr(lang, "盒子", "Box"),
+            };
+            choice_button(label, selected, &t)
+                .id(("instance-icon", index))
+                .role(Role::Button)
+                .aria_label(format!("instance-icon-{key}"))
+                .on_click(cx.listener(move |shell, _, _, cx| {
+                    shell.state.set_instance_icon(Some(key));
+                    cx.notify();
+                }))
+        })
+        .collect::<Vec<_>>();
 
     let body = div()
         .flex_1()
@@ -122,7 +145,29 @@ pub(crate) fn render(state: &ShellState, cx: &mut Context<SealyShell>) -> AnyEle
                     format!("{memory} MB · {width} × {height}"),
                     &t,
                 ))
-                .child(field_row(tr(lang, "JVM 参数", "JVM arguments"), jvm, &t)),
+                .child(field_row(tr(lang, "JVM 参数", "JVM arguments"), jvm, &t))
+                .child(
+                    div()
+                        .h(px(52.0))
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .border_b_1()
+                        .border_color(rgb(t.line_soft))
+                        .child(div().text_size(px(13.0)).text_color(rgb(t.text)).child(tr(
+                            lang,
+                            "实例图标",
+                            "Instance icon",
+                        )))
+                        .child(div().flex().gap(px(8.0)).children(icon_choices)),
+                ),
+        )
+        .child(
+            div().flex().flex_col().gap(px(14.0)).children(
+                sealy_core::addons::AddonKind::ALL
+                    .into_iter()
+                    .map(|kind| addon_section(state, kind, &t, lang, cx)),
+            ),
         )
         .into_any_element();
 
@@ -232,6 +277,219 @@ fn empty(
                     "No instance to show",
                 ))),
         )
+        .into_any_element()
+}
+
+/// One addon section: title, count, import action and the entry list.
+fn addon_section(
+    state: &ShellState,
+    kind: sealy_core::addons::AddonKind,
+    t: &ThemeTokens,
+    lang: sealy_core::config::Language,
+    cx: &mut Context<SealyShell>,
+) -> AnyElement {
+    let title = match kind {
+        sealy_core::addons::AddonKind::Mod => tr(lang, "模组", "Mods"),
+        sealy_core::addons::AddonKind::ResourcePack => tr(lang, "资源包", "Resource packs"),
+        sealy_core::addons::AddonKind::Shader => tr(lang, "光影", "Shaders"),
+    };
+
+    let folder = state.current_instance_dir();
+    let items = folder
+        .as_ref()
+        .map(|dir| sealy_core::addons::list(dir, kind))
+        .unwrap_or_default();
+    let draft = state
+        .addon_draft
+        .as_ref()
+        .filter(|(draft_kind, _)| *draft_kind == kind)
+        .map(|(_, text)| text.clone());
+
+    let rows = items
+        .iter()
+        .enumerate()
+        .map(|(index, addon)| {
+            let name = addon.name.clone();
+            let toggle_name = name.clone();
+            let remove_name = name.clone();
+            let state_label = if addon.enabled {
+                tr(lang, "禁用", "Disable")
+            } else {
+                tr(lang, "启用", "Enable")
+            };
+            let size = if addon.is_dir {
+                tr(lang, "目录", "Folder").to_owned()
+            } else {
+                format!("{} KB", addon.bytes.div_ceil(1024).max(1))
+            };
+            div()
+                .h(px(44.0))
+                .flex()
+                .items_center()
+                .gap(px(10.0))
+                .border_b_1()
+                .border_color(rgb(t.line_soft))
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w(px(0.0))
+                        .flex()
+                        .flex_col()
+                        .child(
+                            div()
+                                .text_size(px(12.0))
+                                .text_color(rgb(if addon.enabled { t.text } else { t.faint }))
+                                .child(name),
+                        )
+                        .child(
+                            div()
+                                .text_size(px(10.0))
+                                .text_color(rgb(t.faint))
+                                .child(size),
+                        ),
+                )
+                .child(
+                    quiet_button(state_label, t)
+                        .id(("addon-toggle", (kind as usize) * 100 + index))
+                        .role(Role::Button)
+                        .aria_label(format!("toggle-addon-{index}"))
+                        .on_click(cx.listener(move |shell, _, _, cx| {
+                            match shell.state.toggle_addon(kind, &toggle_name) {
+                                Ok(enabled) => {
+                                    let text = if enabled {
+                                        tr(lang, "已启用", "Enabled").to_owned()
+                                    } else {
+                                        tr(lang, "已禁用", "Disabled").to_owned()
+                                    };
+                                    shell.state.notify(format!("{text} {toggle_name}"));
+                                }
+                                Err(err) => shell.state.notify(err),
+                            }
+                            cx.notify();
+                        })),
+                )
+                .child(
+                    quiet_button(tr(lang, "删除", "Delete"), t)
+                        .id(("addon-remove", (kind as usize) * 100 + index))
+                        .role(Role::Button)
+                        .aria_label(format!("remove-addon-{index}"))
+                        .on_click(cx.listener(move |shell, _, _, cx| {
+                            match shell.state.remove_addon(kind, &remove_name) {
+                                Ok(()) => shell.state.notify(format!("已删除 {}", remove_name)),
+                                Err(err) => shell.state.notify(err),
+                            }
+                            cx.notify();
+                        })),
+                )
+        })
+        .collect::<Vec<_>>();
+
+    let body = if rows.is_empty() {
+        div()
+            .py(px(10.0))
+            .text_size(px(11.0))
+            .text_color(rgb(t.faint))
+            .child(tr(lang, "还没有内容", "Nothing here yet"))
+            .into_any_element()
+    } else {
+        div().flex().flex_col().children(rows).into_any_element()
+    };
+
+    div()
+        .flex()
+        .flex_col()
+        .on_drop(cx.listener(move |shell, paths: &ExternalPaths, _, cx| {
+            let Some(dir) = shell.state.current_instance_dir() else {
+                return;
+            };
+            let mut imported = 0_usize;
+            let mut last_error = None;
+            for path in paths.paths() {
+                match sealy_core::addons::import(&dir, kind, path) {
+                    Ok(_) => imported += 1,
+                    Err(err) => last_error = Some(err.to_string()),
+                }
+            }
+            if imported > 0 {
+                shell.state.notify(format!("已导入 {imported} 个文件"));
+            } else if let Some(err) = last_error {
+                shell.state.notify(err);
+            }
+            cx.notify();
+        }))
+        .child(
+            div()
+                .h(px(40.0))
+                .flex()
+                .items_center()
+                .gap(px(10.0))
+                .border_b_1()
+                .border_color(rgb(t.line))
+                .child(
+                    div()
+                        .flex_1()
+                        .text_size(px(13.0))
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_color(rgb(t.text))
+                        .child(title),
+                )
+                .child(mono(items.len().to_string(), t))
+                .child(
+                    quiet_button(tr(lang, "导入", "Import"), t)
+                        .id(("addon-import", kind as usize))
+                        .role(Role::Button)
+                        .aria_label(format!("import-addons-{}", kind.folder()))
+                        .on_click(cx.listener(move |shell, _, _, cx| {
+                            shell.state.begin_addon_import(kind);
+                            cx.notify();
+                        })),
+                ),
+        )
+        .child(if let Some(text) = draft {
+            div()
+                .h(px(40.0))
+                .flex()
+                .items_center()
+                .gap(px(8.0))
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w(px(0.0))
+                        .h(px(28.0))
+                        .px(px(8.0))
+                        .flex()
+                        .items_center()
+                        .rounded(px(theme::RADIUS_TILE))
+                        .border_1()
+                        .border_color(rgb(t.text))
+                        .text_size(px(11.0))
+                        .text_color(rgb(if text.is_empty() { t.faint } else { t.text }))
+                        .child(if text.is_empty() {
+                            tr(
+                                lang,
+                                "粘贴文件或文件夹路径，回车导入",
+                                "Paste a file or folder path, then Enter",
+                            )
+                            .to_owned()
+                        } else {
+                            text
+                        }),
+                )
+                .child(
+                    quiet_button(tr(lang, "取消", "Cancel"), t)
+                        .id(("addon-cancel", kind as usize))
+                        .role(Role::Button)
+                        .aria_label("cancel-addon-import")
+                        .on_click(cx.listener(|shell, _, _, cx| {
+                            shell.state.addon_draft = None;
+                            cx.notify();
+                        })),
+                )
+                .into_any_element()
+        } else {
+            div().into_any_element()
+        })
+        .child(body)
         .into_any_element()
 }
 

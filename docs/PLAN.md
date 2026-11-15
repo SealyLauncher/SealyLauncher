@@ -977,11 +977,11 @@ pub trait SkinProvider: Send + Sync;
 
 | 功能 | HMCL 参考 | 我们 | 优先级 | 量 |
 | --- | --- | --- | --- | --- |
-| 模组列表（启用/禁用、删除、拖入安装） | `ui/instances/ModListPage`、`addon/*` | ❌ | **P0** | M |
+| 模组列表（启用/禁用、删除、拖入安装） | `ui/instances/ModListPage`、`addon/*` | ✅ B2 | **P0** | M |
 | 模组在线下载（CurseForge/Modrinth 搜索） | `LocalizedRemoteAddonRepository` | ❌ | P1 | L |
 | 模组更新检查 | `addon/update/AddonCheckUpdatesTask` | ❌ | P2 | L |
-| 资源包管理 | `ui/instances/ResourcePackListPage` | ❌ | P1 | M |
-| 光影包管理 | — | ❌ | P2 | M |
+| 资源包管理 | `ui/instances/ResourcePackListPage` | ✅ B2 | P1 | M |
+| 光影包管理 | — | ✅ B2 | P2 | M |
 | 数据包管理 | `ui/instances/DataPackListPage` | ❌ | P2 | M |
 | 世界列表 / 备份 / 导出 | `ui/instances/World*` | ❌ | P2 | L |
 | NBT 编辑器 | `ui/nbt/NBTEditorPage` | ❌ | P3 | L |
@@ -1041,13 +1041,20 @@ pub trait SkinProvider: Send + Sync;
 | 批次 | 内容 | 依赖 | 完成标志 |
 | --- | --- | --- | --- |
 | **B1（已完成）** | ~~Java 管理页~~ ✅ → ~~游戏日志查看器~~ ✅ → ~~实例启动设置~~ ✅ | — | 可在 UI 里选 Java、看日志、改参数并启动 |
-| B2 | 模组/资源包/光影列表（启用禁用、拖入、删除）+ 实例图标/删除文件 | B1 的实例目录抽象 | 实例页出现「模组/资源包」入口 |
+| B2 | 模组/资源包/光影列表（启用禁用、拖入、删除）+ 实例图标/删除文件 | B1 的实例目录抽象 | 已完成：详情页三个分区、图标选择、删除确认面板（见 20.12） |
 | B3 | Forge / NeoForge / OptiFine 安装 + 加载器版本列表 | 版本继承（已完成） | 能装 Forge 并启动 |
 | B4 | 整合包导入（mrpack/zip/curse）与导出 | B3 的加载器安装 | 导入整合包即得可玩实例 |
 | B5 | 自更新、崩溃分析、代理、`ui_scale`、多游戏目录 | — | 设置页功能齐 |
 | B6 | 主题包/背景、皮肤、Quick Play、世界管理 | B5 | 对标 HMCL 体验 |
 | 不做 | Terracotta 联机、NBT 编辑器、整合包在线更新 | — | 记录在案 |
 
+### 20.12 B2 交付记录（2026-11-15）
+
+- sealy-core::addons：AddonKind（Mod/ResourcePack/Shader）、list、	oggle、emove、import，禁用约定为文件名追加 .disabled，并覆盖文件与文件夹两种形态；3 个单元测试。
+- 实例详情页（pages/instance.rs）：概览（版本 / 目录 / 最后启动 / Java / 内存与窗口 / JVM 参数）+ 三个内容分区，分区内支持启用禁用、删除、粘贴路径导入、把文件或文件夹拖到分区上导入。
+- 实例图标：Instance.icon 保存 ox / layers / package / server 之一，详情页选择，列表与详情页共用 instance_icon() 渲染。
+- 删除实例：确认面板提供「仅移除记录」（可撤销）与「连同文件删除」（删除整个实例目录，不可恢复）。
+- 已知限制：导入路径输入需要粘贴绝对路径（暂无系统文件选择器）；拖放依赖 GPUI 的 on_drop 外部路径载荷，鼠标拖拽在自动化环境无法回放，仅做了编译与逻辑核对。
 ### 20.11 与 v1 的关系
 
 §2.3 的 v1 验收标准**不包含**上表的 `P1` 及以下项；v1 仍以「三种登录 + 原版/Fabric/Quilt + 三平台便携包」为准。本节的 `P0` 三项（Java 管理、日志查看器、整合包导入）建议在 v1.1 补齐，因为它们直接决定「装不上/玩不了/查不了」。

@@ -297,9 +297,39 @@ impl SealyShell {
             return;
         }
 
+        // The delete confirmation closes on Escape.
+        if keystroke.key == "escape" && self.state.delete_confirm_open {
+            self.state.delete_confirm_open = false;
+            cx.notify();
+            return;
+        }
+
         // The log viewer closes on Escape.
         if keystroke.key == "escape" && self.state.logs_open {
             self.state.close_logs();
+            cx.notify();
+            return;
+        }
+
+        // The addon import input captures typing while it is open.
+        if self.state.addon_draft.is_some() {
+            match keystroke.key.as_str() {
+                "escape" => self.state.addon_draft = None,
+                "enter" => match self.state.commit_addon_import() {
+                    Ok(name) if !name.is_empty() => {
+                        self.state.notify(format!("已导入 {name}"));
+                    }
+                    Ok(_) => {}
+                    Err(err) => self.state.notify(err),
+                },
+                "backspace" => self.state.addon_draft_pop_char(),
+                key if key.chars().count() == 1 => {
+                    if let Some(ch) = key.chars().next() {
+                        self.state.addon_draft_push_char(ch);
+                    }
+                }
+                _ => {}
+            }
             cx.notify();
             return;
         }

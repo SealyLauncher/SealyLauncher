@@ -4,6 +4,7 @@
 //! presentation-layer crate.
 
 pub mod accounts;
+pub mod addons;
 pub mod assets;
 pub mod auth;
 pub mod authlib;

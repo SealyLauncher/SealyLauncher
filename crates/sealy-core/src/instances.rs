@@ -20,6 +20,9 @@ pub struct Instance {
     /// Per-instance launch overrides; empty fields fall back to global settings.
     #[serde(default)]
     pub launch: LaunchOverrides,
+    /// Optional icon key shown in lists.
+    #[serde(default)]
+    pub icon: Option<String>,
 }
 
 /// Launch overrides stored in `instances.json` for one instance.
@@ -38,6 +41,9 @@ pub struct LaunchOverrides {
     #[serde(default)]
     pub jvm_args: String,
 }
+
+/// Icon keys an instance may reference; the UI maps them to built-in icons.
+pub const ICON_KEYS: [&str; 4] = ["box", "layers", "package", "server"];
 
 /// `SealyData/instances.json`.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -77,10 +83,18 @@ impl InstanceBook {
             version_id: version_id.to_owned(),
             last_played: None,
             launch: LaunchOverrides::default(),
+            icon: None,
         };
         self.instances.push(instance.clone());
         self.selected = Some(name);
         instance
+    }
+
+    /// Replaces the icon key of one instance.
+    pub fn set_icon(&mut self, name: &str, icon: Option<String>) {
+        if let Some(instance) = self.instances.iter_mut().find(|item| item.name == name) {
+            instance.icon = icon;
+        }
     }
 
     /// Replaces the launch overrides of one instance.
@@ -148,6 +162,7 @@ impl InstanceBook {
             version_id: source.version_id,
             last_played: None,
             launch: source.launch,
+            icon: source.icon,
         };
         self.instances.push(copy.clone());
         self.selected = Some(copy_name);
