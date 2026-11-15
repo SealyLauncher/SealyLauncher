@@ -1055,6 +1055,7 @@ pub trait SkinProvider: Send + Sync;
 - 实例图标：Instance.icon 保存 ox / layers / package / server 之一，详情页选择，列表与详情页共用 instance_icon() 渲染。
 - 删除实例：确认面板提供「仅移除记录」（可撤销）与「连同文件删除」（删除整个实例目录，不可恢复）。
 - 已知限制：导入路径输入需要粘贴绝对路径（暂无系统文件选择器）；拖放依赖 GPUI 的 on_drop 外部路径载荷，鼠标拖拽在自动化环境无法回放，仅做了编译与逻辑核对。
+- 目录打开改为 helper 进程（sealy-launcher --open-folder <路径>）：UI 线程不再调用 shell，修复点击后 RefCell already borrowed 刷屏、窗口停止绘制的问题；helper 依次尝试 cmd /c start、explorer.exe、ShellExecuteW，失败原因写入 %TEMP%\sealy-open-folder.log。
 ### 20.11 与 v1 的关系
 
 §2.3 的 v1 验收标准**不包含**上表的 `P1` 及以下项；v1 仍以「三种登录 + 原版/Fabric/Quilt + 三平台便携包」为准。本节的 `P0` 三项（Java 管理、日志查看器、整合包导入）建议在 v1.1 补齐，因为它们直接决定「装不上/玩不了/查不了」。
