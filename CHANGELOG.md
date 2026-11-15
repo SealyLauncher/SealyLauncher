@@ -16,6 +16,15 @@
 
 ## [Unreleased]
 
+- 2026-11-15 — B4 整合包导入/导出复核与失败回滚：
+  - 修复失败导入留下空实例：新增 `instances::discard`（删实例目录 + 从实例簿移除 + 持久化），headless `--import-modpack` 与 UI 导入流程在下载失败或取消时回滚，并新增单测。
+  - 修复导入失败时 UI 卡在“进行中”：`poll` 之前只等 `Progress.finished`，后台任务报错后永远不会结束；现在各阶段用 `done` 原子标志，任务返回即结束进度等待，错误正常上报到消息中心。
+  - 实机 e2e（Windows，本地 HTTP 8123 服务）：Modrinth `.mrpack` 导入（1 文件、SHA-1 与包内一致、1 个 override、自动建实例）、CurseForge manifest 包（0 文件 / 1 override）、无元数据 zip 明确拒绝、不可达下载回滚（CLI 与 UI 均验证：实例数不变、目录删除、消息中心显示失败）、实例详情页导出 `.mrpack`（index + overrides）后再导入并通过 SHA-1 比对。
+  - 验证：`cargo fmt --all`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace` 全绿（80 通过 / 2 忽略）；截图 design/preview/gpui-modpack-{import,export,rollback}.png。
+  - 已知问题：CurseForge 包的远端文件仍需要 API key 才能下载，当前只导入元数据与 overrides（与 §20.14 一致）。
+
+
+
 - 2026-11-15 — 输入框全部改为 GPUI 组件编辑引擎（含 B4 复核）：
   - 新增 `crates/sealy-ui/src/inputs.rs`：用 gpui-component 的 `InputState`/`Input` 为 13 个字段各建一个共享编辑实体，统一占位符、无障碍标签（`input-*`）、密码掩码与语言切换刷新；`gpui-kit` 已内置该组件，无需新增依赖。
   - 替换所有手写输入：设置页 HTTP 代理 / 游戏目录 / Java 路径 / 内存数字，账号页离线账号名 / authlib 服务器与用户名密码，实例页重命名 / 启动设置宽度、高度、内存、JVM 参数，引导页离线账号名。

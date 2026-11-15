@@ -176,6 +176,13 @@ fn import_modpack_headless(bootstrap: &sealy_core::Bootstrap, archive: &std::pat
     ) {
         Ok(summary) => summary,
         Err(err) => {
+            // A failed download must not leave an empty instance in the list.
+            sealy_core::instances::discard(
+                &root,
+                &mut book,
+                &bootstrap.paths.instances_file(),
+                &instance.name,
+            );
             eprintln!("{err}");
             return 1;
         }

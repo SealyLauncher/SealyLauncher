@@ -261,6 +261,17 @@ pub fn directory(game_dir: &Path, name: &str) -> PathBuf {
     game_dir.join("instances").join(sanitize(name))
 }
 
+/// Rolls back a just-created instance after a failed import.
+///
+/// Modpack imports create the instance record and directory before downloading
+/// the pack files. If that download fails or is cancelled, leaving an empty
+/// instance behind is confusing, so callers discard it again.
+pub fn discard(root: &Path, book: &mut InstanceBook, book_path: &Path, name: &str) {
+    let _ = std::fs::remove_dir_all(directory(root, name));
+    book.remove(name);
+    let _ = book.save(book_path);
+}
+
 /// Keeps instance names safe as directory names.
 fn sanitize(name: &str) -> String {
     let cleaned: String = name
@@ -281,6 +292,40 @@ fn sanitize(name: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn test_dir() -> tempfile::TempDir {
+        let base = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("..")
+            .join("target")
+            .join("test-tmp");
+        std::fs::create_dir_all(&base).expect("test temp root");
+        tempfile::tempdir_in(base).expect("tempdir")
+    }
+
+    #[test]
+    fn discard_rolls_back_a_failed_import() {
+        let temp = test_dir();
+        let root = temp.path().join("game");
+        let book_path = temp.path().join("instances.json");
+        let mut book = InstanceBook::default();
+        let instance = book.create_named("Imported", "1.21.11");
+        book.save(&book_path).expect("save book");
+        let dir = directory(&root, &instance.name);
+        std::fs::create_dir_all(&dir).expect("instance dir");
+        std::fs::write(dir.join("partial.jar"), b"partial").expect("partial file");
+        assert!(dir.exists());
+
+        discard(&root, &mut book, &book_path, &instance.name);
+
+        assert!(!dir.exists(), "instance directory must be removed");
+        assert!(book.instances.is_empty());
+        let reloaded = InstanceBook::load(&book_path);
+        assert!(
+            reloaded.instances.is_empty(),
+            "book must persist the rollback"
+        );
+    }
 
     #[test]
     fn creates_unique_names() {

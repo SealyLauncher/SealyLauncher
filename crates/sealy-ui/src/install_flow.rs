@@ -411,27 +411,47 @@ async fn run_modpack(
     // Phase three: files and overrides.
     let instance_dir = sealy_core::instances::directory(root, &instance_name);
     let progress = Arc::new(Mutex::new(sealy_core::install::Progress::default()));
+    let done = Arc::new(AtomicBool::new(false));
     let task = cx.background_executor().spawn({
         let progress = progress.clone();
         let flag = cancel.clone();
         let archive = archive.clone();
         let plan = plan.clone();
         let instance_dir = instance_dir.clone();
+        let done = done.clone();
         async move {
-            sealy_core::modpack::import_files(&instance_dir, &archive, &plan, &progress, &flag)
+            let result =
+                sealy_core::modpack::import_files(&instance_dir, &archive, &plan, &progress, &flag);
+            done.store(true, Ordering::Relaxed);
+            result
         }
     });
 
-    poll(
+    let poll_result = poll(
         this,
         cx,
         message_id,
         "整合包文件",
         &progress,
+        &done,
         cancel.clone(),
     )
-    .await?;
-    let summary = task.await.map_err(|err| err.to_string())?;
+    .await;
+    let imported = match poll_result {
+        Ok(()) => task.await.map_err(|err| err.to_string()),
+        Err(err) => {
+            // Let the worker observe the cancel flag before deleting its files.
+            let _ = task.await;
+            Err(err)
+        }
+    };
+    let summary = match imported {
+        Ok(summary) => summary,
+        Err(err) => {
+            rollback_modpack_instance(this, cx, &instance_name, &instance_dir);
+            return Err(err);
+        }
+    };
 
     let title = format!("整合包 · {}", plan.name);
     let detail = if summary.skipped > 0 {
@@ -455,6 +475,25 @@ async fn run_modpack(
     Ok(())
 }
 
+/// Removes the half-created instance after a failed modpack import.
+fn rollback_modpack_instance(
+    this: &gpui_kit::WeakEntity<SealyShell>,
+    cx: &mut gpui_kit::AsyncApp,
+    name: &str,
+    directory: &Path,
+) {
+    let _ = std::fs::remove_dir_all(directory);
+    let name = name.to_owned();
+    let _ = this.update(cx, |shell, cx| {
+        shell.state.instances.remove(&name);
+        shell.state.save_instances();
+        if shell.state.route == crate::state::Route::Instance {
+            shell.state.route = crate::state::Route::Instances;
+        }
+        cx.notify();
+    });
+}
+
 /// Marker for a cancelled flow.
 const CANCELLED: &str = "\u{0}cancelled";
 
@@ -469,33 +508,66 @@ async fn run_version(
 ) -> Result<(), String> {
     // Phase one: version jar, libraries, natives.
     let files = Arc::new(Mutex::new(sealy_core::install::Progress::default()));
+    let done = Arc::new(AtomicBool::new(false));
     let task = cx.background_executor().spawn({
         let progress = files.clone();
         let flag = cancel.clone();
         let root = root.to_path_buf();
         let id = id.clone();
+        let done = done.clone();
         async move {
-            sealy_core::install::install(&root, &id, opts.policy, opts.concurrency, progress, flag)
+            let result = sealy_core::install::install(
+                &root,
+                &id,
+                opts.policy,
+                opts.concurrency,
+                progress,
+                flag,
+            );
+            done.store(true, Ordering::Relaxed);
+            result
         }
     });
 
-    poll(this, cx, message_id, "版本文件", &files, cancel.clone()).await?;
+    poll(
+        this,
+        cx,
+        message_id,
+        "版本文件",
+        &files,
+        &done,
+        cancel.clone(),
+    )
+    .await?;
     let installed = task.await.map_err(|err| err.to_string())?;
 
     // Phase two: asset objects referenced by the version.
     if let Some((index_id, index_url)) = installed.assets.clone() {
         let assets = Arc::new(Mutex::new(sealy_core::install::Progress::default()));
-        let assets_task =
-            cx.background_executor().spawn({
-                let progress = assets.clone();
-                let flag = cancel.clone();
-                let root = root.to_path_buf();
-                async move {
-                    sealy_core::assets::install(&root, &index_url, &index_id, &progress, &flag)
-                }
-            });
+        let done = Arc::new(AtomicBool::new(false));
+        let assets_task = cx.background_executor().spawn({
+            let progress = assets.clone();
+            let flag = cancel.clone();
+            let root = root.to_path_buf();
+            let done = done.clone();
+            async move {
+                let result =
+                    sealy_core::assets::install(&root, &index_url, &index_id, &progress, &flag);
+                done.store(true, Ordering::Relaxed);
+                result
+            }
+        });
 
-        poll(this, cx, message_id, "资源文件", &assets, cancel.clone()).await?;
+        poll(
+            this,
+            cx,
+            message_id,
+            "资源文件",
+            &assets,
+            &done,
+            cancel.clone(),
+        )
+        .await?;
         assets_task
             .await
             .map_err(|err| format!("资源文件下载失败：{err}"))?;
@@ -507,14 +579,20 @@ async fn run_version(
     };
 
     let java = Arc::new(Mutex::new(sealy_core::install::Progress::default()));
+    let done = Arc::new(AtomicBool::new(false));
     let java_task = cx.background_executor().spawn({
         let progress = java.clone();
         let flag = cancel.clone();
         let root = root.to_path_buf();
-        async move { sealy_core::java::ensure(&root, &component, major, &progress, &flag) }
+        let done = done.clone();
+        async move {
+            let result = sealy_core::java::ensure(&root, &component, major, &progress, &flag);
+            done.store(true, Ordering::Relaxed);
+            result
+        }
     });
 
-    poll(this, cx, message_id, "Java", &java, cancel.clone()).await?;
+    poll(this, cx, message_id, "Java", &java, &done, cancel.clone()).await?;
     let java = java_task
         .await
         .map_err(|err| format!("Java 准备失败：{err}"))?;
@@ -533,6 +611,7 @@ async fn poll(
     message_id: u64,
     label: &str,
     progress: &Arc<Mutex<sealy_core::install::Progress>>,
+    done: &Arc<AtomicBool>,
     cancel: Arc<AtomicBool>,
 ) -> Result<(), String> {
     loop {
@@ -548,7 +627,9 @@ async fn poll(
             .lock()
             .map(|progress| progress.clone())
             .unwrap_or_default();
-        let finished = snapshot.finished;
+        // A failed job never sets `finished`, so stop as soon as it returns and
+        // let the caller surface the error.
+        let finished = snapshot.finished || done.load(Ordering::Relaxed);
 
         let _ = this.update(cx, |shell, cx| {
             let detail = format!(

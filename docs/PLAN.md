@@ -1064,6 +1064,18 @@ pub trait SkinProvider: Send + Sync;
 - 失败恢复与清理：`write_pending`/`reconcile_pending`/`clear_update_cache`；更新脚本删除安装包与暂存目录。
 - 启动检查：`update.auto_check`（默认开）+ 设置页开关；发现新版本用 toast 提示并预填更新卡片。
 - 签名：新增 `docs/SIGNING.md`（Windows OV/EV、Azure Trusted Signing、SignPath/Certum；macOS Developer ID + notarytool；Linux GPG 校验）。当前发布仍未做商业签名。
+### 20.19 B4 复核与导入失败回滚（2026-11-15）
+
+- 失败回滚：新增 `sealy_core::instances::discard`（删实例目录 + 从实例簿移除 + 持久化）；headless `--import-modpack` 和 UI `install_flow::run_modpack` 在文件下载失败或取消时调用，不再留下没有内容的“空实例”。`modpack` 导入会在下载前建实例，之前失败会残留条目，现补上回滚并有单测。
+- 卡死修复：`install_flow::poll` 原先只在 `Progress.finished` 为真时结束；后台任务返回错误时进度不会标完成，消息中心会一直转圈。现在每个后台任务带 `done` 原子标志，任务返回（成功或失败）即结束等待，错误交回调用方显示。
+- e2e（Windows，本地 HTTP 8123 托管测试文件）：
+  - Modrinth `.mrpack`（1 mod + overrides）：CLI 与 UI 各导入一次，均生成实例；`mods/*.jar` SHA-1 与包内声明一致，override 解压正确。
+  - CurseForge manifest 包：元数据解析、overrides 解压、0 个远端文件，实例正常创建。
+  - 无 `modrinth.index.json`/`manifest.json` 的合法 zip：明确拒绝并提示。
+  - 不可达下载：CLI 退出码 1；UI 回到实例列表，实例总数不变、失败实例目录删除、消息中心显示失败原因。
+  - 导出：实例详情页“导出整合包”得到含 `modrinth.index.json` + `overrides/` 的 `.mrpack`，再次导入成功，解出文件 SHA-1 与源实例一致。
+- 验证：`cargo fmt`/`clippy -D warnings`/`test` 全绿（80 通过）；截图 `design/preview/gpui-modpack-{import,export,rollback}.png`。
+- 限制：CurseForge 远端文件仍需 API key（同 §20.14）；通用 zip 仍不支持（无版本/加载器元数据）。
 ### 20.18 输入框统一为 GPUI 组件（2026-11-15）
 
 - 组件选型：`gpui-component` 自带 `input` 模块（`InputState` 单行编辑引擎、`Input` 元素、`InputEvent::{Change, PressEnter, Focus, Blur}` 与编辑动作/按键绑定，另有 `NumberInput`/`Textarea`/`Editor`/`Search`），随 `gpui-kit` 一并引入，未新增 crate；此前手写 div + 键盘拦截无法提供光标、点选插入、拖拽选择与水平滚动。
@@ -1088,6 +1100,7 @@ pub trait SkinProvider: Send + Sync;
 - UI：实例页「导入整合包」、实例详情页「导出整合包」；headless：`sealy-launcher --import-modpack <path>`（供自动化/CI 使用）。
 - 实测：本地 HTTP 服务的 `.mrpack` 导入得到 1 个模组 + 1 个 override，SHA-1 与包内声明一致；导出的 `.mrpack` 含 `modrinth.index.json` 与 `overrides/mods/testmod.jar`。
 - 已知限制：CurseForge 包的远端文件需要 CurseForge API key，当前只导入元数据与 overrides，缺失条目在结果里提示数量；通用 zip（无 index/manifest）会被拒绝并提示。
+- 复核（2026-11-15）：实机 e2e、导出再导入与失败回滚修复见 §20.19。
 ### 20.13 B3 交付记录（2026-11-15）
 
 - `sealy-core::loader`：`LoaderKind` 扩到 Fabric / Quilt / Forge / NeoForge / OptiFine；`versions()` 拉取 Forge promotions、NeoForge Maven 元数据（含 1.20.1 的 `net.neoforged.forge` 旧坐标）、Fabric/Quilt 构建列表。
